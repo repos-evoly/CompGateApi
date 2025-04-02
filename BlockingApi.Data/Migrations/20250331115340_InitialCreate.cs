@@ -61,6 +61,7 @@ namespace BlockingApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     TransactionAmount = table.Column<int>(type: "int", nullable: false),
+                    TransactionAmountForeign = table.Column<int>(type: "int", nullable: false),
                     TransactionTimeTo = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     TimeToIdle = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -338,10 +339,14 @@ namespace BlockingApi.Data.Migrations
                     Nr2 = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    Initiator = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CurrentParty = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    InitiatorUserId = table.Column<int>(type: "int", nullable: false),
+                    CurrentPartyUserId = table.Column<int>(type: "int", nullable: true),
                     ApprovedByUserId = table.Column<int>(type: "int", nullable: true),
-                    ApprovedById = table.Column<int>(type: "int", nullable: true),
+                    TrxTagCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    TrxTag = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    TrxSeq = table.Column<int>(type: "int", nullable: false),
+                    ReconRef = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    EventKey = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     CustomerId = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
@@ -353,10 +358,23 @@ namespace BlockingApi.Data.Migrations
                         principalTable: "Customers",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_Transactions_Users_ApprovedById",
-                        column: x => x.ApprovedById,
+                        name: "FK_Transactions_Users_ApprovedByUserId",
+                        column: x => x.ApprovedByUserId,
                         principalTable: "Users",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Transactions_Users_CurrentPartyUserId",
+                        column: x => x.CurrentPartyUserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Transactions_Users_InitiatorUserId",
+                        column: x => x.InitiatorUserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -559,14 +577,24 @@ namespace BlockingApi.Data.Migrations
                 column: "TransactionId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Transactions_ApprovedById",
+                name: "IX_Transactions_ApprovedByUserId",
                 table: "Transactions",
-                column: "ApprovedById");
+                column: "ApprovedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Transactions_CurrentPartyUserId",
+                table: "Transactions",
+                column: "CurrentPartyUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_CustomerId",
                 table: "Transactions",
                 column: "CustomerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Transactions_InitiatorUserId",
+                table: "Transactions",
+                column: "InitiatorUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserActivities_UserId",

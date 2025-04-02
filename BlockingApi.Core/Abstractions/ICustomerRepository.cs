@@ -9,5 +9,7 @@ namespace BlockingApi.Core.Abstractions
         Task<List<Customer>> GetBlockedCustomers();
         Task<List<Customer>> GetUnblockedCustomers();
         Task<List<Customer>> SearchCustomers(string searchTerm);
+        Task<int> GetBlockedAccountsCountAsync();
+        Task<int> GetBlockedUsersTodayCountAsync();
     }
 }

@@ -103,5 +103,21 @@ namespace BlockingApi.Core.Repositories
                     .ThenInclude(b => b.Source)
                 .ToListAsync();
         }
+
+        public async Task<int> GetBlockedAccountsCountAsync()
+        {
+            return await _context.Customers
+                .Where(c => c.BlockRecords.Any(b => b.Status == "Blocked"))
+                .CountAsync();
+        }
+
+        public async Task<int> GetBlockedUsersTodayCountAsync()
+        {
+            var today = DateTime.UtcNow.Date;
+            return await _context.Customers
+                .Where(c => c.BlockRecords
+                    .Any(b => b.Status == "Blocked" && b.BlockDate.Date == today))
+                .CountAsync();
+        }
     }
 }

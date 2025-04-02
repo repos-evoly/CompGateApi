@@ -25,13 +25,13 @@ public class TransactionEndpoints : IEndpoints
 
         // Escalate transaction: accepts from and to user IDs
         transactions.MapPost("/escalate", EscalateTransaction)
-            .RequireAuthorization("EscalateTransaction")
+            .RequireAuthorization("EscalateTransactions")
             .Produces(200)
             .Produces(400);
 
         // Return escalated transaction: reverses the escalation
         transactions.MapPost("/return-escalation", ReturnEscalatedTransaction)
-            .RequireAuthorization("EscalateEscalation")
+            .RequireAuthorization("EscalateTransactions")
             .Produces(200)
             .Produces(400);
 
@@ -39,6 +39,24 @@ public class TransactionEndpoints : IEndpoints
               .Produces<TransactionWithFlowDto>(200)
               .Produces(404)
               .RequireAuthorization("ManageTransactions");
+
+        transactions.MapPost("/edit-party", EditTransactionParty)
+                .RequireAuthorization("ManageTransactions")
+                .Produces(200)
+                .Produces(400)
+                .Produces(404);
+
+        transactions.MapPost("/delete", DeleteTransaction)
+                .RequireAuthorization("ManageTransactions")
+                .Produces(200)
+                .Produces(400)
+                .Produces(404);
+
+        transactions.MapPost("/approve-deny", ApproveOrDenyTransaction)
+                .RequireAuthorization("ManageTransactions")
+                .Produces(200)
+                .Produces(400)
+                .Produces(404);
     }
 
     private static async Task<bool> UserHasPermission(ClaimsPrincipal user, string permission, IRoleRepository roleRepository, ILogger logger)
@@ -57,6 +75,10 @@ public class TransactionEndpoints : IEndpoints
     public static async Task<IResult> BatchAddTransactions(
         [FromBody] BatchAddTransactionsDto batchDto,
         [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] IUserRepository userRepository,
+        [FromServices] IBranchRepository branchRepository,
+         [FromServices] INotificationRepository notificationRepository,
+        HttpContext context,
         ILogger<TransactionEndpoints> logger)
     {
         if (batchDto.Transactions == null || !batchDto.Transactions.Any())
@@ -64,8 +86,48 @@ public class TransactionEndpoints : IEndpoints
             return Results.BadRequest("No transactions provided.");
         }
 
+        var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
+
+        if (currentUser == null)
+            return Results.BadRequest("Invalid user");
+
         foreach (var dto in batchDto.Transactions)
         {
+            var initiatorId = currentUser.UserId;
+            int? currentPartyId = null;
+            bool createEscalationFlow = false;
+
+            var isEscalated = dto.Escalate && dto.CurrentPartyUserId.HasValue;
+
+            if (isEscalated)
+            {
+                // Maker or Manager can escalate explicitly
+                initiatorId = dto.InitiatorUserId ?? currentUser.UserId;
+                currentPartyId = dto.CurrentPartyUserId;
+                createEscalationFlow = true;
+            }
+            else
+            {
+                // If not escalated, determine role logic
+                var roleName = currentUser.Role?.ToLower() ?? string.Empty;
+
+                if (roleName.Contains("auditor") || roleName.Contains("checker"))
+                {
+                    // Auditor/checker can only mark as pending (no escalation)
+                    initiatorId = currentUser.UserId;
+                    var branch = await branchRepository.GetBranchById(currentUser.BranchId.ToString());
+                    currentPartyId = branch?.Area?.HeadOfSectionId;
+                }
+                else if (roleName.Contains("maker") || roleName.Contains("manager") || roleName.Contains("admin") || roleName.Contains("assistantmanager") || roleName.Contains("deputymanager"))
+                {
+                    // Maker/Manager can assign to self for pending
+                    initiatorId = currentUser.UserId;
+                    currentPartyId = currentUser.UserId;
+                }
+            }
+
             var transaction = new Transaction
             {
                 BranchCode = dto.BranchCode,
@@ -82,11 +144,42 @@ public class TransactionEndpoints : IEndpoints
                 Nr2 = dto.Nr2,
                 Timestamp = dto.Timestamp,
                 Status = string.IsNullOrEmpty(dto.Status) ? "Pending" : dto.Status,
-                Initiator = dto.Initiator,
-                CurrentParty = dto.CurrentParty ?? ""
+                InitiatorUserId = initiatorId,
+                CurrentPartyUserId = currentPartyId,
+                TrxTagCode = dto.TrxTagCode ?? string.Empty,
+                TrxTag = dto.TrxTag ?? string.Empty,
+                TrxSeq = dto.TrxSeq ?? 0,
+                ReconRef = dto.ReconRef,
+                EventKey = dto.EventKey
             };
 
             await transactionRepository.AddTransactionAsync(transaction);
+
+            if (createEscalationFlow)
+            {
+                var flow = new TransactionFlow
+                {
+                    TransactionId = transaction.Id,
+                    FromUserId = initiatorId,
+                    ToUserId = currentPartyId,
+                    Action = "Escalated",
+                    ActionDate = DateTime.UtcNow,
+                    Remark = dto.Remark ?? string.Empty,
+                    CanReturn = true
+                };
+                await transactionRepository.AddTransactionFlowAsync(flow);
+                // Send notification for the escalated transaction
+                var notification = new Notification
+                {
+                    FromUserId = initiatorId,
+                    ToUserId = currentPartyId ?? throw new InvalidOperationException("currentPartyId cannot be null when escalation is true"), // Ensure currentPartyId is not null when escalation is true
+                    Subject = "Transaction Escalated",
+                    Message = $"Transaction {transaction.Id} has been escalated to you for further action.",
+                    Link = $"transactions/{transaction.Id}?100"
+                }
+                ;
+                await notificationRepository.AddNotificationAsync(notification);
+            }
         }
 
         return Results.Ok("Transactions added successfully.");
@@ -109,10 +202,10 @@ public class TransactionEndpoints : IEndpoints
 
     // Escalate a transaction: from a user to a user.
     public static async Task<IResult> EscalateTransaction(
-    [FromBody] EscalateTransactionDto escalateDto,
-    [FromServices] ITransactionRepository transactionRepository,
-    [FromServices] INotificationRepository notificationRepository,
-    ILogger<TransactionEndpoints> logger)
+        [FromBody] EscalateTransactionDto escalateDto,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] INotificationRepository notificationRepository,
+        ILogger<TransactionEndpoints> logger)
     {
         // Retrieve the transaction.
         var transaction = await transactionRepository.GetTransactionByIdAsync(escalateDto.TransactionId);
@@ -123,9 +216,8 @@ public class TransactionEndpoints : IEndpoints
         }
 
         // Update the transaction: mark as escalated.
-        transaction.Status = "Escalated";
-        transaction.Initiator = escalateDto.FromUserId.ToString();
-        transaction.CurrentParty = escalateDto.ToUserId.ToString();
+        transaction.InitiatorUserId = escalateDto.FromUserId;
+        transaction.CurrentPartyUserId = escalateDto.ToUserId;
         await transactionRepository.UpdateTransactionAsync(transaction);
 
         // Create a new notification for the escalated user
@@ -148,7 +240,7 @@ public class TransactionEndpoints : IEndpoints
             ToUserId = escalateDto.ToUserId,
             Action = "Escalated",
             ActionDate = DateTime.UtcNow,
-            Remark = $"Escalated from user {escalateDto.FromUserId} to user {escalateDto.ToUserId}",
+            Remark = escalateDto.Remark,  // Store the remark
             CanReturn = true
         };
 
@@ -158,10 +250,11 @@ public class TransactionEndpoints : IEndpoints
     }
 
     public static async Task<IResult> ReturnEscalatedTransaction(
-     [FromBody] ReturnEscalationDto returnDto,
-     [FromServices] ITransactionRepository transactionRepository,
-     [FromServices] INotificationRepository notificationRepository,
-     ILogger<TransactionEndpoints> logger)
+        [FromBody] ReturnEscalationDto returnDto,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] ITransactionFlowRepository transactionFlowRepository,
+        [FromServices] INotificationRepository notificationRepository,
+        ILogger<TransactionEndpoints> logger)
     {
         // Retrieve the transaction.
         var transaction = await transactionRepository.GetTransactionByIdAsync(returnDto.TransactionId);
@@ -171,9 +264,8 @@ public class TransactionEndpoints : IEndpoints
             return Results.NotFound("Transaction not found");
         }
 
-        // Update the transaction: mark as "Returned".
-        transaction.Status = "Returned";
-        transaction.CurrentParty = returnDto.ToUserId.ToString();
+        // Mark the current party as the user to return the escalation
+        transaction.CurrentPartyUserId = returnDto.ToUserId;
         await transactionRepository.UpdateTransactionAsync(transaction);
 
         // Create a new notification for the user who is returning the escalation
@@ -196,23 +288,39 @@ public class TransactionEndpoints : IEndpoints
             ToUserId = returnDto.ToUserId,
             Action = "Return",
             ActionDate = DateTime.UtcNow,
-            Remark = $"Transaction returned from user {returnDto.FromUserId} to user {returnDto.ToUserId}",
-            CanReturn = false
+            Remark = returnDto.Remark,  // Store the remark
+            CanReturn = false // Mark that the transaction can't be returned anymore
         };
 
-        await transactionRepository.AddTransactionFlowAsync(transactionFlow);
+        await transactionFlowRepository.UpdateTransactionFlowAsync(transactionFlow);  // Correct repository call
+
+        // Update the first escalation flow's CanReturn to false
+        var firstEscalationFlow = await transactionFlowRepository.GetTransactionFlowByTransactionIdAsync(transaction.Id);
+        var escalationFlow = firstEscalationFlow?.FirstOrDefault(tf => tf.Action == "Escalated");
+
+        if (escalationFlow != null)
+        {
+            escalationFlow.CanReturn = false;
+            await transactionFlowRepository.UpdateTransactionFlowAsync(escalationFlow);  // Update the escalation flow
+        }
 
         return Results.Ok("Transaction returned successfully");
     }
 
     public static async Task<IResult> GetTransactionWithFlow(
-    int transactionId,
-    [FromServices] ITransactionRepository transactionRepository,
-    [FromServices] IUserRepository userRepository,
-    [FromServices] IBranchRepository branchRepository,
-    ILogger<TransactionEndpoints> logger,
-    [FromHeader(Name = "Authorization")] string authToken) // Get the token from headers
+        int transactionId,
+        HttpContext context,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] IUserRepository userRepository,
+        [FromServices] IBranchRepository branchRepository,
+        ILogger<TransactionEndpoints> logger)
     {
+        // Extract the Authorization token from the request header
+        var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+
+        // Log the information for debugging
+        logger.LogInformation("Fetching transaction with ID {TransactionId} using token {AuthToken}", transactionId, authToken);
+
         // Retrieve the transaction by transactionId
         var transaction = await transactionRepository.GetTransactionByIdAsync(transactionId);
         if (transaction == null)
@@ -225,7 +333,7 @@ public class TransactionEndpoints : IEndpoints
 
         // Fetch user and branch details for the transaction and its flow
         var fromUser = await userRepository.GetUserById(transaction.ApprovedByUserId ?? 0, authToken);
-        var toUser = await userRepository.GetUserById(transaction.CurrentParty != null ? int.Parse(transaction.CurrentParty) : 0, authToken);
+        var toUser = await userRepository.GetUserById(transaction.CurrentPartyUserId.HasValue ? transaction.CurrentPartyUserId.Value : 0, authToken);
         var branch = await branchRepository.GetBranchById(transaction.BranchCode);
 
         // Prepare the response DTO
@@ -248,8 +356,8 @@ public class TransactionEndpoints : IEndpoints
                 Nr2 = transaction.Nr2,
                 Timestamp = transaction.Timestamp,
                 Status = transaction.Status,
-                Owner = fromUser?.FirstName ?? "Unknown",
-                CurrentParty = toUser?.FirstName ?? "Unknown"
+                Initiator = fromUser?.UserId ?? 0,
+                CurrentParty = toUser?.UserId ?? 0
             },
             TransactionFlows = transactionFlows.Select(tf => new TransactionFlowDto
             {
@@ -268,5 +376,160 @@ public class TransactionEndpoints : IEndpoints
         return Results.Ok(transactionWithFlowDto);
     }
 
+    public static async Task<IResult> EditTransactionParty(
+        [FromBody] TransactionEditDto editDto,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] ITransactionFlowRepository transactionFlowRepository,
+        [FromServices] IUserRepository userRepository,
+        HttpContext context,
+        ILogger<TransactionEndpoints> logger)
+    {
+        var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        // Retrieve the transaction by ID
+        var transaction = await transactionRepository.GetTransactionByIdAsync(editDto.TransactionId);
+        if (transaction == null)
+        {
+            return Results.NotFound("Transaction not found.");
+        }
 
+        // Get the current user using the auth token and name identifier
+        var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
+        if (currentUser == null)
+        {
+            return Results.BadRequest("Invalid user");
+        }
+
+        if (transaction.InitiatorUserId != currentUser.UserId)
+        {
+            return Results.Json(new { error = "You are not authorized to modify this transaction." }, statusCode: 401);
+        }
+
+        // Update the currentParty in the transaction
+        transaction.CurrentPartyUserId = editDto.CurrentPartyId;
+        await transactionRepository.UpdateTransactionAsync(transaction);
+
+        // Retrieve the associated transaction flow (get the first flow, assuming only one flow exists)
+        var transactionFlow = await transactionFlowRepository.GetTransactionFlowByTransactionIdAsync(editDto.TransactionId);
+        var singleFlow = transactionFlow.FirstOrDefault(); // Get the first flow from the collection
+
+        if (singleFlow == null)
+        {
+            return Results.NotFound("Transaction flow not found.");
+        }
+
+        // Update the ToUserId in the transaction flow
+        singleFlow.ToUserId = editDto.ToUserId;
+        await transactionFlowRepository.UpdateTransactionFlowAsync(singleFlow);
+
+        // Log the update
+        logger.LogInformation($"Transaction {editDto.TransactionId} currentParty and ToUserId updated successfully.");
+
+        return Results.Ok("Transaction updated successfully.");
+    }
+
+    public static async Task<IResult> DeleteTransaction(
+        [FromBody] DeleteTransactionDto deleteDto,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] ITransactionFlowRepository transactionFlowRepository,
+        [FromServices] IUserRepository userRepository,
+        HttpContext context,
+        ILogger<TransactionEndpoints> logger)
+    {
+        var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        // Retrieve the transaction by ID
+        var transaction = await transactionRepository.GetTransactionByIdAsync(deleteDto.TransactionId);
+        if (transaction == null)
+        {
+            return Results.NotFound($"Transaction with Id {deleteDto.TransactionId} not found.");
+        }
+
+        // Get the current user using the auth token and name identifier
+        var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
+        if (currentUser == null)
+        {
+            return Results.BadRequest("Invalid user");
+        }
+
+        if (transaction.InitiatorUserId != currentUser.UserId)
+        {
+            return Results.Unauthorized();
+        }
+
+        // Retrieve the associated transaction flows (ensure it's a collection)
+        var transactionFlows = await transactionFlowRepository.GetTransactionFlowByTransactionIdAsync(deleteDto.TransactionId);
+
+        // Check if the transaction flow exists, has exactly one flow, and its status is "Escalated"
+        if (transactionFlows == null || transactionFlows.Count() != 1 || transactionFlows.First().Action != "Escalated")
+        {
+            return Results.BadRequest("Transaction cannot be deleted. It either has more than one flow or is not in 'Escalated' status.");
+        }
+
+        // Delete the transaction (cascade delete will remove associated flows)
+        await transactionRepository.DeleteTransactionAsync(deleteDto.TransactionId);
+
+        // Log the deletion
+        logger.LogInformation($"Transaction with Id {deleteDto.TransactionId} and its flow deleted successfully.");
+
+        return Results.Ok("Transaction and its flow deleted successfully.");
+    }
+
+    public static async Task<IResult> ApproveOrDenyTransaction(
+        [FromBody] ApproveOrDenyTransactionDto approveOrDenyDto,
+        [FromServices] ITransactionRepository transactionRepository,
+        [FromServices] ITransactionFlowRepository transactionFlowRepository,
+        [FromServices] IUserRepository userRepository,
+        HttpContext context,
+        ILogger<TransactionEndpoints> logger)
+    {
+        var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+        // Retrieve the transaction by ID
+        var transaction = await transactionRepository.GetTransactionByIdAsync(approveOrDenyDto.TransactionId);
+        if (transaction == null)
+        {
+            return Results.NotFound($"Transaction with Id {approveOrDenyDto.TransactionId} not found.");
+        }
+
+        // Get the current user using the auth token and name identifier
+        var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+        var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
+        if (currentUser == null)
+        {
+            return Results.BadRequest("Invalid user");
+        }
+
+        if (transaction.InitiatorUserId != currentUser.UserId)
+        {
+            return Results.Json(new { error = "You are not authorized to approve/deny this transaction." }, statusCode: 401);
+        }
+
+        // Update the transaction status to either "Approved" or "Denied"
+        transaction.Status = approveOrDenyDto.Action == "Approved" ? "Approved" : "Denied";
+
+        // Set the ApprovedByUserId to the current user (the one who is approving/denying)
+        transaction.ApprovedByUserId = currentUser.UserId;
+
+        await transactionRepository.UpdateTransactionAsync(transaction);
+
+        // Retrieve the associated transaction flow (get the first flow, assuming only one flow exists)
+        // Create a new transaction flow for marking the transaction as done
+        var newTransactionFlow = new TransactionFlow
+        {
+            TransactionId = transaction.Id,
+            FromUserId = currentUser.UserId,
+            ToUserId = currentUser.UserId, // Adjust if necessary for your business logic
+            Action = "Done",
+            ActionDate = DateTime.UtcNow,
+            Remark = "Transaction approved/denied and marked as done."
+        };
+
+        await transactionRepository.AddTransactionFlowAsync(newTransactionFlow);
+
+
+        // Log the update
+        logger.LogInformation($"Transaction {approveOrDenyDto.TransactionId} status set to {transaction.Status}, flow marked as 'Done', and ApprovedByUserId set to {currentUser.UserId}.");
+
+        return Results.Ok("Transaction successfully approved/denied and flow marked as 'Done'.");
+    }
 }

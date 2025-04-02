@@ -35,5 +35,11 @@ namespace BlockingApi.Data.Abstractions
 
         Task<List<TransactionFlow>> GetTransactionFlowsByTransactionIdAsync(int transactionId);
 
+        Task<IEnumerable<Transaction>> GetEscalatedTransactionsAsync();
+
+        Task<int> GetFlaggedTransactionsCountAsync();
+        Task<int> GetHighValueTransactionsCountAsync();
+
+
     }
 }

@@ -41,6 +41,18 @@ namespace BlockingApi.Endpoints
             var settings = await settingsRepository.GetFirstSettingsAsync(); // Fetch the first row
             if (settings == null) return TypedResults.NotFound("Settings not found.");
 
+            // Validation for TransactionAmount: It cannot be less than 50,000
+            if (settingsDto.TransactionAmount.HasValue && settingsDto.TransactionAmount.Value < 50000)
+            {
+                return TypedResults.BadRequest("TransactionAmount cannot be less than 50,000.");
+            }
+
+            // Validation for TransactionTimeTo: It cannot be greater than 15
+            if (!string.IsNullOrEmpty(settingsDto.TransactionTimeTo) && int.TryParse(settingsDto.TransactionTimeTo, out var timeTo) && timeTo > 15)
+            {
+                return TypedResults.BadRequest("TransactionTimeTo cannot be greater than 15.");
+            }
+
             // Only update the fields that are provided
             if (settingsDto.TransactionAmount.HasValue)
                 settings.TransactionAmount = settingsDto.TransactionAmount.Value;
@@ -58,3 +70,4 @@ namespace BlockingApi.Endpoints
         }
     }
 }
+

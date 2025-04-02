@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BlockingApi.Data.Models;
 
 namespace BlockingApi.Core.Dtos
 {
@@ -51,18 +52,35 @@ namespace BlockingApi.Core.Dtos
 
     public class UserDetailsDto
     {
+        public int UserId { get; set; }
         public int AuthUserId { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
-        public string Role { get; set; } = "Unknown";
-        public int RoleId { get; set; } = 0;
-        public int BranchId { get; set; } = 0;
-        public string Branch { get; set; } = "Unknown";
+        // Instead of a string, include the Role as an object or at least the needed role name:
+        public string Role { get; set; } = string.Empty;
+        public int RoleId { get; set; }
+        // Return the full Branch object so that you can access AreaId:
+        public Branch? Branch { get; set; }
+        // You can include BranchId separately if needed:
+        public string? BranchId { get; set; }
+        // New property for the branch's area:
+        public Area? Area { get; set; }
+        public int AreaId { get; set; }
         public bool IsTwoFactorEnabled { get; set; }
         public string? PasswordResetToken { get; set; }
+        public List<string> Permissions { get; set; } = new List<string>();
     }
+
+    public class BasicUserDto
+    {
+        public int UserId { get; set; }
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+    }
+
 
     public class AuthUserDto
     {
@@ -85,7 +103,7 @@ namespace BlockingApi.Core.Dtos
     public class UserRegistrationDto
     {
         public string FirstName { get; set; } = string.Empty;
-        public string  LastName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public int RoleId { get; set; }

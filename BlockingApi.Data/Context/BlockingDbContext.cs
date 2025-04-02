@@ -183,6 +183,28 @@ namespace BlockingApi.Data.Context
                 .HasForeignKey(urp => urp.PermissionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Transaction - InitiatorUser Relationship
+            builder.Entity<Transaction>()
+                .HasOne(t => t.InitiatorUser)
+                .WithMany()
+                .HasForeignKey(t => t.InitiatorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Transaction - CurrentPartyUser Relationship
+            builder.Entity<Transaction>()
+                .HasOne(t => t.CurrentPartyUser)
+                .WithMany()
+                .HasForeignKey(t => t.CurrentPartyUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Transaction - ApprovedByUser Relationship
+            builder.Entity<Transaction>()
+                .HasOne(t => t.ApprovedBy)
+                .WithMany()
+                .HasForeignKey(t => t.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
             // Document: configure conversion for DocumentType.
             builder.Entity<Document>()
                 .Property(d => d.DocumentType)

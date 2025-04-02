@@ -12,6 +12,8 @@ namespace BlockingApi.Core.Dtos
         public int TransactionId { get; set; }
         public int FromUserId { get; set; }
         public int ToUserId { get; set; }
+        public string Remark { get; set; } = string.Empty;
+
     }
 
     public class ReturnEscalationDto
@@ -19,6 +21,8 @@ namespace BlockingApi.Core.Dtos
         public int TransactionId { get; set; }
         public int FromUserId { get; set; }
         public int ToUserId { get; set; }
+        public string Remark { get; set; } = string.Empty;
+
     }
 
 
@@ -38,12 +42,18 @@ namespace BlockingApi.Core.Dtos
         public string Nr1 { get; set; } = string.Empty;
         public string? Nr2 { get; set; }
         public DateTime Timestamp { get; set; }
-        // Optional status; if not provided, default to "Pending"
         public string? Status { get; set; }
-        // Owner provided from the request (as string representation of userId)
-        public string Initiator { get; set; } = string.Empty;
-        // Optional: current party handling the transaction
-        public string? CurrentParty { get; set; }
+        public int? InitiatorUserId { get; set; }
+        public int? CurrentPartyUserId { get; set; }
+        public string? TrxTagCode { get; set; } = string.Empty;
+        public string? TrxTag { get; set; } = string.Empty;
+        public int? TrxSeq { get; set; }
+        public string? ReconRef { get; set; }
+        public string? EventKey { get; set; }
+        public string? Remark { get; set; }
+
+        public bool Escalate { get; set; } = false;
+
     }
 
     public class BatchAddTransactionsDto
@@ -74,8 +84,8 @@ namespace BlockingApi.Core.Dtos
         public string? Nr2 { get; set; }
         public DateTime Timestamp { get; set; }
         public string? Status { get; set; }
-        public string? Owner { get; set; }
-        public string? CurrentParty { get; set; }
+        public int? Initiator { get; set; }
+        public int? CurrentParty { get; set; }
     }
 
     public class TransactionFlowDto
@@ -90,6 +100,25 @@ namespace BlockingApi.Core.Dtos
         public string? FromUserName { get; set; }
         public string? ToUserName { get; set; }
     }
+
+    public class TransactionEditDto
+    {
+        public int TransactionId { get; set; }
+        public int CurrentPartyId { get; set; }
+        public int ToUserId { get; set; }
+    }
+
+    public class DeleteTransactionDto
+    {
+        public int TransactionId { get; set; }
+    }
+
+    public class ApproveOrDenyTransactionDto
+    {
+        public int TransactionId { get; set; }
+        public required string Action { get; set; } // "Approved" or "Denied"
+    }
+
 
 
 }

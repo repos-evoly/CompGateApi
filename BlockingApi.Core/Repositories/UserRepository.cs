@@ -83,26 +83,26 @@ namespace BlockingApi.Core.Repositories
 
         public async Task<List<PermissionStatusDto>> GetUserPermissions(int userId)
         {
-            // Get all permissions from the database
+            // Retrieve all permissions from the database
             var allPermissions = await _context.Permissions.ToListAsync();
 
-            // Get the user's current permissions
-            var userPermissions = await _context.UserRolePermissions
+            // Retrieve the user's assigned permission Ids from the join table
+            var userPermissionIds = await _context.UserRolePermissions
                 .Where(urp => urp.UserId == userId)
                 .Select(urp => urp.PermissionId)
                 .ToListAsync();
 
-            // Prepare the result with permission status
+            // Map to PermissionStatusDto: if the permission is assigned, mark HasPermission as 1; otherwise, 0.
             var permissionStatusList = allPermissions.Select(p => new PermissionStatusDto
             {
                 PermissionId = p.Id,
                 PermissionName = p.Name,
-                // If the user has the permission, return 1, else 0
-                HasPermission = userPermissions.Contains(p.Id) ? 1 : 0
+                HasPermission = userPermissionIds.Contains(p.Id) ? 1 : 0
             }).ToList();
 
             return permissionStatusList;
         }
+
 
 
 
@@ -135,7 +135,7 @@ namespace BlockingApi.Core.Repositories
                     Email = user.Email,
                     Phone = user.Phone,
                     Role = user.Role?.NameLT ?? "Unknown",
-                    Branch = user.Branch?.Name ?? "Unknown",
+                    Branch = user.Branch,
                     IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                     PasswordResetToken = authUser?.PasswordResetToken
                 };
@@ -149,13 +149,26 @@ namespace BlockingApi.Core.Repositories
         public async Task<UserDetailsDto?> GetUserById(int userId, string authToken)
         {
             var user = await _context.Users
-                .Include(u => u.Role)
-                .Include(u => u.Branch)
-                .FirstOrDefaultAsync(u => u.Id == userId);
+                        .Include(u => u.Role)
+                        .Include(u => u.Branch)
+                        .FirstOrDefaultAsync(u => u.Id == userId);
 
-            if (user == null) return null;
+            if (user == null)
+                return null;
 
             var authUser = await FetchAuthUserDetails(userId, authToken);
+
+            // Get the permission Ids assigned to the user via the join table
+            var userPermissionIds = await _context.UserRolePermissions
+                .Where(urp => urp.UserId == user.Id)
+                .Select(urp => urp.PermissionId)
+                .ToListAsync();
+
+            // Retrieve the names of permissions the user has
+            var userPermissionNames = await _context.Permissions
+                .Where(p => userPermissionIds.Contains(p.Id))
+                .Select(p => p.Name)
+                .ToListAsync();
 
             return new UserDetailsDto
             {
@@ -165,11 +178,60 @@ namespace BlockingApi.Core.Repositories
                 Email = user.Email,
                 Phone = user.Phone,
                 Role = user.Role?.NameLT ?? "Unknown",
-                Branch = user.Branch?.Name ?? "Unknown",
-                BranchId = user.Branch?.Id ?? 0,
+                Branch = user.Branch,
+                BranchId = user.Branch?.CABBN ?? string.Empty,
                 RoleId = user.Role?.Id ?? 0,
+                Area = user.Branch?.Area,
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
-                PasswordResetToken = authUser?.PasswordResetToken
+                PasswordResetToken = authUser?.PasswordResetToken,
+                Permissions = userPermissionNames
+            };
+        }
+
+        public async Task<UserDetailsDto?> GetUserByAuthId(int authId, string authToken)
+        {
+            // Query by the AuthUserId (authId)
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .Include(u => u.Branch)
+                .FirstOrDefaultAsync(u => u.AuthUserId == authId);
+
+            if (user == null)
+                return null;
+
+            // Get the auth system details (if needed)
+            var authUser = await FetchAuthUserDetails(user.Id, authToken);
+
+            // Get the permission Ids assigned to the user via the join table
+            var userPermissionIds = await _context.UserRolePermissions
+                .Where(urp => urp.UserId == user.Id)
+                .Select(urp => urp.PermissionId)
+                .ToListAsync();
+
+            // Retrieve the names of permissions the user has
+            var userPermissionNames = await _context.Permissions
+                .Where(p => userPermissionIds.Contains(p.Id))
+                .Select(p => p.Name)
+                .ToListAsync();
+
+            return new UserDetailsDto
+            {
+                // Return both the local user id and the auth user id.
+                UserId = user.Id,
+                AuthUserId = user.AuthUserId,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email,
+                Phone = user.Phone,
+                Role = user.Role?.NameLT ?? "Unknown",
+                RoleId = user.Role?.Id ?? 0,
+                Branch = user.Branch,
+                BranchId = user.Branch?.CABBN,
+                Area = user.Branch?.Area,
+                AreaId = user.Branch?.AreaId ?? 0,
+                IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
+                PasswordResetToken = authUser?.PasswordResetToken,
+                Permissions = userPermissionNames
             };
         }
 
@@ -235,6 +297,25 @@ namespace BlockingApi.Core.Repositories
         public async Task<List<Permission>> GetPermissions()
         {
             return await _context.Permissions.ToListAsync();
+        }
+
+        public async Task<List<BasicUserDto>> GetManagementUsersAsync()
+        {
+            // Define the management role names you want to filter by.
+            var managementRoles = new List<string> { "Manager", "DeputyManager", "AssistantManager" };
+
+            // Query the database for users whose Role.NameLT is one of the management roles.
+            return await _context.Users
+                .Include(u => u.Role)
+                .Where(u => managementRoles.Contains(u.Role.NameLT))
+                .Select(u => new BasicUserDto
+                {
+                    UserId = u.Id,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    Email = u.Email
+                })
+                .ToListAsync();
         }
     }
 }

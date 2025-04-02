@@ -11,6 +11,8 @@ namespace BlockingApi.Data.Models
 
         public int TransactionAmount { get; set; }
 
+        public int TransactionAmountForeign { get; set; }
+
         public string TransactionTimeTo { get; set; } = string.Empty;
 
         public string TimeToIdle { get; set; } = string.Empty;

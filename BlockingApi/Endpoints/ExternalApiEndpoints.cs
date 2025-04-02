@@ -35,15 +35,28 @@ namespace BlockingApi.Endpoints
 
         private static async Task<bool> UserHasPermission(ClaimsPrincipal user, string permission, IRoleRepository roleRepository, ILogger logger)
         {
-            var userId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+            // Extract AuthUserId from the JWT token
+            var authUserId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
 
-            // ✅ Only check `UserRolePermissions` since permissions are already assigned when the user was created.
-            var userPermissions = await roleRepository.GetUserPermissions(userId);
+            // Fetch the user using AuthUserId to get UserId
+            var userEntity = await roleRepository.GetUserByAuthUserId(authUserId); // Ensure this method returns a user entity
+            if (userEntity == null)
+            {
+                logger.LogWarning("User with AuthUserId {AuthUserId} not found.", authUserId);
+                return false;
+            }
+
+            // Now we have the UserId from the userEntity
+            var userId = userEntity.Id;
+
+            // Retrieve the user's permissions
+            var userPermissions = await roleRepository.GetUserPermissions(userId); // Assuming this method returns a list of permissions for the user
 
             logger.LogInformation("User {UserId} has permissions: {Permissions}", userId, string.Join(", ", userPermissions));
 
             return userPermissions.Contains(permission);
         }
+
 
 
 
@@ -141,9 +154,9 @@ namespace BlockingApi.Endpoints
                     {
                         CID = kycCustomer.CID ?? "No CID provided",
                         FirstName = kycCustomer.CNAME ?? "No name provided",
-                        LastName = kycCustomer.LastName ?? string.Empty,  // Ensure LastName is not null
-                        Address = kycCustomer.BNAME ?? "No address provided",  // Default value if no address is returned
-                        NationalId = kycCustomer.NationalId ?? "No NationalId provided", // Default value if no NationalId is returned
+                        LastName = kycCustomer.LastName ?? string.Empty,  
+                        Address = kycCustomer.BNAME ?? "No address provided",  
+                        NationalId = kycCustomer.NationalId ?? "No NationalId provided", 
                         BranchId = branch.Id,
                         CreatedAt = DateTime.UtcNow
                     };
@@ -245,40 +258,51 @@ namespace BlockingApi.Endpoints
         }
 
         public static async Task<IResult> BlockCustomer(
-             [FromBody] BlockCustomerDto blockDto,
-             ClaimsPrincipal user,
-             [FromServices] IExternalApiRepository externalApiRepository,
-             [FromServices] BlockingApiDbContext context,
-             [FromServices] IRoleRepository roleRepository,
-             ILogger<ExternalApiEndpoints> logger)
+    [FromBody] BlockCustomerDto blockDto,
+    [FromServices] BlockingApiDbContext context,
+    [FromServices] IExternalApiRepository externalApiRepository,
+    [FromServices] IRoleRepository roleRepository,
+    ILogger<ExternalApiEndpoints> logger)
         {
-            if (!await UserHasPermission(user, "BlockCustomer", roleRepository, logger))
-                return Results.Forbid();
+            // Validate BlockedByUserId to ensure it exists in the database
+            var blockedByUser = await context.Users.FirstOrDefaultAsync(u => u.Id == blockDto.BlockedByUserId);
+            if (blockedByUser == null)
+            {
+                logger.LogError("User with ID {BlockedByUserId} not found.", blockDto.BlockedByUserId);
+                return Results.BadRequest("Invalid user for blocking operation.");
+            }
 
-            logger.LogInformation("Blocking customer CID: {CustomerId}", blockDto.CustomerId);
+            // Log information about the user performing the block
+            logger.LogInformation("Received BlockCustomer request from user {BlockedByUserId}", blockDto.BlockedByUserId);
 
+            // Fetch the customer to block
             var customer = await context.Customers
                 .Include(c => c.BlockRecords)
                 .FirstOrDefaultAsync(c => c.CID == blockDto.CustomerId);
 
             if (customer == null)
+            {
+                logger.LogError("Customer {CustomerId} not found.", blockDto.CustomerId);
                 return Results.NotFound($"Customer {blockDto.CustomerId} not found.");
+            }
 
+            // Check if the customer is already blocked
             var lastBlock = customer.BlockRecords?.OrderByDescending(b => b.BlockDate).FirstOrDefault();
             if (lastBlock != null && lastBlock.ActualUnblockDate == null)
             {
+                logger.LogWarning("Customer {CustomerId} is already blocked.", blockDto.CustomerId);
                 return Results.BadRequest("Customer is already blocked.");
             }
 
-            // ✅ Get UserId from JWT Token
-            var blockedByUserId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+            // Log the block attempt
+            logger.LogInformation("Attempting to block customer {CustomerId} by user {BlockedByUserId}", blockDto.CustomerId, blockDto.BlockedByUserId);
 
-            // ✅ Call external API to block customer
+            // Call external API to block the customer
             var blockSuccess = await externalApiRepository.BlockCustomer(
                 blockDto.CustomerId,
                 blockDto.ReasonId,
                 blockDto.SourceId,
-                blockedByUserId,
+                blockDto.BlockedByUserId, // Use the BlockedByUserId directly from the DTO
                 blockDto.ToBlockDate, // Optional unblock date
                 blockDto.DecisionFromPublicProsecution,
                 blockDto.DecisionFromCentralBankGovernor,
@@ -288,11 +312,17 @@ namespace BlockingApi.Endpoints
 
             if (!blockSuccess)
             {
+                logger.LogError("Failed to block customer {CustomerId} in external system.", blockDto.CustomerId);
                 return Results.Problem("Failed to block customer in bank system.");
             }
 
+            // Log success
+            logger.LogInformation("Customer {CustomerId} blocked successfully by user {BlockedByUserId}.", blockDto.CustomerId, blockDto.BlockedByUserId);
+
             return Results.Ok("Customer blocked successfully.");
         }
+
+
 
 
 
@@ -304,7 +334,7 @@ namespace BlockingApi.Endpoints
              [FromServices] IRoleRepository roleRepository,
              ILogger<ExternalApiEndpoints> logger)
         {
-            if (!await UserHasPermission(user, "UnblockCustomer", roleRepository, logger))
+            if (!await UserHasPermission(user, "UnblockPermission", roleRepository, logger))
                 return Results.Forbid();
 
             logger.LogInformation("Unblocking customer CID: {CustomerId}", unblockDto.CustomerId);

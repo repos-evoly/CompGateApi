@@ -22,9 +22,10 @@ namespace BlockingApi.Endpoints
                 .Produces(200)
                 .Produces(400);
 
-            activity.MapGet("/{userId:int}", GetUserActivity)
+            activity.MapGet("/user", GetUserActivities)
                 .Produces<UserActivityDto>(200)
                 .Produces(404);
+
 
             activity.MapGet("/all", GetAllUserActivities)
                 .Produces<List<UserActivityDto>>(200);
@@ -42,32 +43,65 @@ namespace BlockingApi.Endpoints
         }
 
 
-        public static async Task<IResult> GetUserActivity(
-    [FromRoute] int userId,
-    [FromServices] IUserActivityRepository userActivityRepository)
+        public static async Task<IResult> GetUserActivities(
+       HttpContext context,
+       [FromServices] IUserRepository userRepository,
+       [FromServices] IUserActivityRepository userActivityRepository,
+       // Optional filters
+       [FromQuery] string? branchId,
+       [FromQuery] int? areaId,
+       ILogger<UserActivityEndpoints> logger)
         {
-            var activity = await userActivityRepository.GetUserActivity(userId);
-            if (activity == null)
-                return Results.NotFound("User activity not found.");
+            // Retrieve the current user from the token
+            var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+            var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
+            if (currentUser == null)
+                return Results.BadRequest("Invalid user.");
 
-            return Results.Ok(new
+            // Determine role (assuming Role.Name is available)
+            var roleName = currentUser.Role.ToLower();
+
+            List<UserActivity> activities = new List<UserActivity>();
+
+            if (roleName.Contains("manager") || roleName.Contains("deputymanager") || roleName.Contains("assistantmanager"))
             {
-                activity.UserId,
-                activity.Status,
-                activity.LastActivityTime,
+                // For Manager-like roles, retrieve all activities.
+                // (Assumes you have implemented GetAllActivities in your repository)
+                activities = await userActivityRepository.GetAllActivities();
 
-                User = new
+                // Apply branch or area filters if provided
+                if (branchId != null)
                 {
-                    activity.User.FirstName,
-                    activity.User.LastName,
-                    activity.User.Email
-                },
-
-                Branch = new
-                {
-                    activity.User.Branch.Name
+                    activities = activities.Where(a => a.User.Branch.CABBN == branchId).ToList();
                 }
-            });
+                else if (areaId.HasValue)
+                {
+                    activities = activities.Where(a => a.User.Branch.AreaId == areaId.Value).ToList();
+                }
+            }
+            else if (roleName.Contains("maker"))
+            {
+                // For Maker, only allow activities from his own area.
+                int makerAreaId = currentUser.Branch.AreaId;
+                // (Assumes you have implemented GetActivitiesByArea in your repository)
+                activities = await userActivityRepository.GetActivitiesByArea(makerAreaId);
+
+                // If a branch filter is provided, further filter the result.
+                if (branchId != null)
+                {
+                    activities = activities.Where(a => a.User.Branch.CABBN == branchId).ToList();
+                }
+            }
+            else
+            {
+                // Fallback: only return the current user's activity.
+                var activity = await userActivityRepository.GetUserActivity(currentUser.UserId);
+                if (activity != null)
+                    activities.Add(activity);
+            }
+
+            return Results.Ok(activities);
         }
 
 

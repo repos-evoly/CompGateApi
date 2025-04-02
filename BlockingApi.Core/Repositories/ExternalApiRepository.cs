@@ -70,12 +70,16 @@ namespace BlockingApi.Core.Repositories
             var url = "mobile/CustomerLockUnlock";
             var inflag = "Y"; // "Y" to block
 
+            // Generate a unique referenceId for each request
+            var refId = $"202408{Guid.NewGuid():N}".Substring(0, 12); // Unique reference ID
+
+            // Update the payload to use the correct key 'USRID' and unique referenceId
             var payload = new
             {
                 Header = new
                 {
                     system = "MOBILE",
-                    referenceId = $"202408121234BU05",
+                    referenceId = refId, // Unique referenceId
                     userName = "TEDMOB",
                     customerNumber = customerId,
                     requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -83,7 +87,7 @@ namespace BlockingApi.Core.Repositories
                 },
                 Details = new
                 {
-                    USRID = "HADI",
+                    USRID = "HADI", // This should be the correct parameter key expected by the API.
                     ACCOUNT = customerId,
                     INFLAG = inflag
                 }
@@ -91,10 +95,12 @@ namespace BlockingApi.Core.Repositories
 
             _logger.LogInformation("🔹 Sending BlockCustomer request: {Payload}", JsonConvert.SerializeObject(payload));
 
-            using HttpResponseMessage response = await _client.PostAsJsonAsync(url, payload);
-            var responseContent = await response.Content.ReadAsStringAsync();
+            var jsonPayload = JsonConvert.SerializeObject(payload);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await _client.PostAsync(url, content);
 
-            _logger.LogInformation("🔹 BlockCustomer API Response: {StatusCode} - {ResponseContent}", response.StatusCode, responseContent);
+
+            _logger.LogInformation("🔹 BlockCustomer API Response: {StatusCode} - {ResponseContent}", response.StatusCode, response);
 
             if (!response.IsSuccessStatusCode) return false;
 
@@ -131,7 +137,6 @@ namespace BlockingApi.Core.Repositories
                 OtherDecision = otherDecision
             };
 
-
             _context.BlockRecords.Add(blockRecord);
 
             // ✅ Ensure SaveChanges is only called once
@@ -144,17 +149,19 @@ namespace BlockingApi.Core.Repositories
 
 
 
+
         public async Task<bool> UnblockCustomer(string customerId, int unblockedByUserId)
         {
             var url = "mobile/CustomerLockUnlock";
             var inflag = "N"; // "N" to unblock
+            var refId = $"202408{Guid.NewGuid():N}".Substring(0, 12); // Unique reference ID
 
             var payload = new
             {
                 Header = new
                 {
                     system = "MOBILE",
-                    referenceId = $"202408121234BU05",
+                    referenceId = refId,
                     userName = "TEDMOB",
                     customerNumber = customerId,
                     requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -170,10 +177,12 @@ namespace BlockingApi.Core.Repositories
 
             _logger.LogInformation("🔹 Sending UnblockCustomer request: {Payload}", JsonConvert.SerializeObject(payload));
 
-            using HttpResponseMessage response = await _client.PostAsJsonAsync(url, payload);
-            var responseContent = await response.Content.ReadAsStringAsync();
+            var jsonPayload = JsonConvert.SerializeObject(payload);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            using HttpResponseMessage response = await _client.PostAsync(url, content);
 
-            _logger.LogInformation("🔹 UnblockCustomer API Response: {StatusCode} - {ResponseContent}", response.StatusCode, responseContent);
+
+            _logger.LogInformation("🔹 UnblockCustomer API Response: {StatusCode} - {ResponseContent}", response.StatusCode, response);
 
             if (!response.IsSuccessStatusCode) return false;
 

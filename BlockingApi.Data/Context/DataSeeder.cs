@@ -36,15 +36,17 @@ namespace BlockingApi.Data.Seeding
             if (!_context.Roles.Any())
             {
                 var roles = new List<Role>
-                {
-                    new() { NameLT = "SuperAdmin", Description = "Full control over the system" },
-                    new() { NameLT = "Admin", Description = "Manages users, roles, and transactions" },
-                    new() { NameLT = "AreaManager", Description = "Oversees multiple branches" },
-                    new() { NameLT = "BranchManager", Description = "Manages a single branch" },
-                    new() { NameLT = "Employee", Description = "Handles customer requests" },
-                    new() { NameLT = "Auditor", Description = "Can only view audit logs and transactions" },
-                    new() { NameLT = "Customer", Description = "Regular customer, no system access" }
-                };
+        {
+            new() { NameLT = "SuperAdmin", Description = "Full control over the system" },
+            new() { NameLT = "Admin", Description = "Manages users, roles, and transactions" },
+            new() { NameLT = "Manager", Description = "Manages a specific area or department" },
+            new() { NameLT = "AssistantManager", Description = "Assists the Manager in overseeing operations" },
+            new() { NameLT = "DeputyManager", Description = "Assists with managerial tasks and decision-making" },
+            new() { NameLT = "Maker", Description = "Handles transaction creation and data entry" },
+            new() { NameLT = "Checker", Description = "Reviews and approves transactions" },
+            new() { NameLT = "Viewer", Description = "Can only view information, no modification rights" },
+            new() { NameLT = "Auditor", Description = "Can only view audit logs and system changes" }
+        };
 
                 _context.Roles.AddRange(roles);
                 _context.SaveChanges();
@@ -59,15 +61,24 @@ namespace BlockingApi.Data.Seeding
             if (!_context.Permissions.Any())
             {
                 var permissions = new List<Permission>
-                {
-                    new() { Name = "ManageUsers", Description = "Can add, edit, and delete users" },
-                    new() { Name = "ManageRoles", Description = "Can assign and modify roles" },
-                    new() { Name = "ViewCustomers", Description = "Can view customer details" },
-                    new() { Name = "BlockCustomer", Description = "Can block a customer" },
-                    new() { Name = "UnblockCustomer", Description = "Can unblock a customer" },
-                    new() { Name = "ApproveTransactions", Description = "Can approve high-value transactions" },
-                    new() { Name = "ViewAuditLogs", Description = "Can view audit logs and system changes" }
-                };
+        {
+            new() { Name = "BlockPermission", Description = "Can block a customer" },
+            new() { Name = "UnblockPermission", Description = "Can unblock a customer" },
+            new() { Name = "ViewBlockedCustomers", Description = "Can view blocked customers" },
+            new() { Name = "ViewUnblockedCustomers", Description = "Can view unblocked customers" },
+            new() { Name = "ViewCustomers", Description = "Can view customer details" },
+            new() { Name = "ManageUsers", Description = "Can add, edit, and delete users" },
+            new() { Name = "ManageAreas", Description = "Can manage areas" },
+            new() { Name = "ManageBranches", Description = "Can manage branches" },
+            new() { Name = "ManageReasons", Description = "Can manage reasons for actions" },
+            new() { Name = "ManageSources", Description = "Can manage sources of transactions" },
+            new() { Name = "ApproveTransactions", Description = "Can approve transactions" },
+            new() { Name = "ViewAuditLogs", Description = "Can view audit logs" },
+            new() { Name = "ManageDocuments", Description = "Can manage documents" },
+            new() { Name = "ViewDocuments", Description = "Can view documents" },
+            new() { Name = "ManageTransactions", Description = "Can manage transactions" },
+            new() { Name = "EscalateTransactions", Description = "Can escalate transactions" }
+        };
 
                 _context.Permissions.AddRange(permissions);
                 _context.SaveChanges();
@@ -87,9 +98,9 @@ namespace BlockingApi.Data.Seeding
 
                 foreach (var role in roles)
                 {
+                    // SuperAdmin gets ALL permissions
                     if (role.NameLT == "SuperAdmin")
                     {
-                        // SuperAdmin gets ALL permissions
                         foreach (var perm in permissions)
                         {
                             rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
@@ -97,34 +108,91 @@ namespace BlockingApi.Data.Seeding
                     }
                     else if (role.NameLT == "Admin")
                     {
-                        // Admin (Manager, Assistant Manager, Deputy Manager)
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ManageUsers").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ManageRoles").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ViewCustomers").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "BlockCustomer").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "UnblockCustomer").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ApproveTransactions").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "RejectTransactions").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ReturnEscalation").Id });
+                        var manageUsersPermission = permissions.FirstOrDefault(p => p.Name == "ManageUsers");
+                        if (manageUsersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageUsersPermission.Id });
+
+                        var manageRolesPermission = permissions.FirstOrDefault(p => p.Name == "ManageRoles");
+                        if (manageRolesPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageRolesPermission.Id });
+
+                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
+                        if (viewCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
+
+                        var blockPermission = permissions.FirstOrDefault(p => p.Name == "BlockPermission");
+                        if (blockPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = blockPermission.Id });
+
+                        var unblockPermission = permissions.FirstOrDefault(p => p.Name == "UnblockPermission");
+                        if (unblockPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = unblockPermission.Id });
+
+                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
+                        if (approveTransactionsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
+
+                        var escalateTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "EscalateTransactions");
+                        if (escalateTransactionsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = escalateTransactionsPermission.Id });
                     }
-                    else if (role.NameLT == "Head")
+                    else if (role.NameLT == "Manager" || role.NameLT == "AssistantManager" || role.NameLT == "DeputyManager")
                     {
-                        // Head of Section (Escalation and Return)
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "EscalateTransaction").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ApproveTransactions").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "RejectTransactions").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ReturnEscalation").Id });
-                    }
-                    else if (role.NameLT == "Auditor")
-                    {
-                        // Auditor (can only mark as pending)
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "ViewAuditLogs").Id });
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "MarkTransactionAsPending").Id });
+                        var manageAreasPermission = permissions.FirstOrDefault(p => p.Name == "ManageAreas");
+                        if (manageAreasPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageAreasPermission.Id });
+
+                        var manageBranchesPermission = permissions.FirstOrDefault(p => p.Name == "ManageBranches");
+                        if (manageBranchesPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageBranchesPermission.Id });
+
+                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
+                        if (viewCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
+
+                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
+                        if (approveTransactionsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
                     }
                     else if (role.NameLT == "Maker")
                     {
-                        // Maker (only mark as pending)
-                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = permissions.First(p => p.Name == "MarkTransactionAsPending").Id });
+                        var manageTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ManageTransactions");
+                        if (manageTransactionsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageTransactionsPermission.Id });
+
+                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
+                        if (viewCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
+                    }
+                    else if (role.NameLT == "Checker")
+                    {
+                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
+                        if (approveTransactionsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
+
+                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
+                        if (viewCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
+                    }
+                    else if (role.NameLT == "Viewer")
+                    {
+                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
+                        if (viewCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
+
+                        var viewBlockedCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewBlockedCustomers");
+                        if (viewBlockedCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewBlockedCustomersPermission.Id });
+
+                        var viewUnblockedCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewUnblockedCustomers");
+                        if (viewUnblockedCustomersPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewUnblockedCustomersPermission.Id });
+                    }
+                    else if (role.NameLT == "Auditor")
+                    {
+                        var viewAuditLogsPermission = permissions.FirstOrDefault(p => p.Name == "ViewAuditLogs");
+                        if (viewAuditLogsPermission != null)
+                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewAuditLogsPermission.Id });
                     }
                 }
 
@@ -132,6 +200,7 @@ namespace BlockingApi.Data.Seeding
                 _context.SaveChanges();
             }
         }
+
 
 
         #region Area Seeding

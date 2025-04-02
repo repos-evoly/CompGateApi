@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BlockingApi.Data.Migrations
 {
     [DbContext(typeof(BlockingApiDbContext))]
-    [Migration("20250326074125_InitialCreate")]
+    [Migration("20250331115340_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -462,6 +462,9 @@ namespace BlockingApi.Data.Migrations
                     b.Property<int>("TransactionAmount")
                         .HasColumnType("int");
 
+                    b.Property<int>("TransactionAmountForeign")
+                        .HasColumnType("int");
+
                     b.Property<string>("TransactionTimeTo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -512,9 +515,6 @@ namespace BlockingApi.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int?>("ApprovedById")
-                        .HasColumnType("int");
-
                     b.Property<int?>("ApprovedByUserId")
                         .HasColumnType("int");
 
@@ -538,9 +538,8 @@ namespace BlockingApi.Data.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("nvarchar(3)");
 
-                    b.Property<string>("CurrentParty")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int?>("CurrentPartyUserId")
+                        .HasColumnType("int");
 
                     b.Property<int?>("CustomerId")
                         .HasColumnType("int");
@@ -550,9 +549,12 @@ namespace BlockingApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("Initiator")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<string>("EventKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("InitiatorUserId")
+                        .HasColumnType("int");
 
                     b.Property<string>("InputBranch")
                         .IsRequired()
@@ -576,6 +578,10 @@ namespace BlockingApi.Data.Migrations
                     b.Property<int>("PostingDate")
                         .HasColumnType("int");
 
+                    b.Property<string>("ReconRef")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -589,11 +595,28 @@ namespace BlockingApi.Data.Migrations
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("TrxSeq")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TrxTag")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TrxTagCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ApprovedById");
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("CurrentPartyUserId");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("InitiatorUserId");
 
                     b.ToTable("Transactions");
                 });
@@ -896,13 +919,29 @@ namespace BlockingApi.Data.Migrations
                 {
                     b.HasOne("BlockingApi.Data.Models.User", "ApprovedBy")
                         .WithMany()
-                        .HasForeignKey("ApprovedById");
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("BlockingApi.Data.Models.User", "CurrentPartyUser")
+                        .WithMany()
+                        .HasForeignKey("CurrentPartyUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("BlockingApi.Data.Models.Customer", null)
                         .WithMany("Transactions")
                         .HasForeignKey("CustomerId");
 
+                    b.HasOne("BlockingApi.Data.Models.User", "InitiatorUser")
+                        .WithMany()
+                        .HasForeignKey("InitiatorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("ApprovedBy");
+
+                    b.Navigation("CurrentPartyUser");
+
+                    b.Navigation("InitiatorUser");
                 });
 
             modelBuilder.Entity("BlockingApi.Data.Models.TransactionFlow", b =>

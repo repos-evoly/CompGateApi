@@ -25,5 +25,13 @@ namespace BlockingApi.Core.Repositories
                 .ToListAsync();
         }
 
+        public async Task<User> GetUserByAuthUserId(int authUserId)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.AuthUserId == authUserId) 
+                ?? throw new InvalidOperationException("User not found.");
+        }
+
+
     }
 }

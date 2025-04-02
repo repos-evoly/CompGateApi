@@ -7,6 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.RegisterServices();
 builder.Logging.ClearProviders();
 builder.Host.ConfigureSerilog();
+builder.Services.AddHostedService<EscalationTimeoutService>();
+
 
 var app = builder.Build();
 
@@ -26,6 +28,8 @@ app.UseAuthorization();
 app.UseAuthentication();
 
 app.RegisterEndpoints();
+
+
 
 app.Run();
 

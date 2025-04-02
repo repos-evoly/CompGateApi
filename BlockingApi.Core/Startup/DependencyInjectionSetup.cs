@@ -127,25 +127,182 @@ namespace BlockingApi.Core.Startup
              .RequireAuthenticatedUser());
 
 
-       a.AddPolicy("BlockPermission", b => b.RequireRole("SuperAdmin", "Admin", "Maker"));
-       a.AddPolicy("UnblockPermission", b => b.RequireRole("SuperAdmin", "Admin", "Checker"));
-       a.AddPolicy("ViewBlockedCustomers", b => b.RequireRole("SuperAdmin", "Admin", "Viewer"));
-       a.AddPolicy("ViewUnblockedCustomers", b => b.RequireRole("SuperAdmin", "Admin", "Viewer"));
-       a.AddPolicy("ViewCustomers", b => b.RequireRole("SuperAdmin", "Admin", "Viewer", "Maker", "Checker"));
-       a.AddPolicy("ManageUsers", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ManageAreas", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ManageBranches", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ManageReasons", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ManageSources", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ApproveTransactions", b => b.RequireRole("SuperAdmin", "Admin", "Checker"));
-       a.AddPolicy("ViewAuditLogs", b => b.RequireRole("SuperAdmin", "Admin", "Auditor"));
-       a.AddPolicy("ManageDocuments", b => b.RequireRole("SuperAdmin", "Admin"));
-       a.AddPolicy("ViewDocuments", b => b.RequireRole("SuperAdmin", "Admin", "Auditor"));
-       a.AddPolicy("ManageTransactions", b => b.RequireRole("SuperAdmin", "Admin", "Auditor"));
-       a.AddPolicy("EscalateTransactions", b => b.RequireRole("SuperAdmin", "Admin", "Auditor"));
+       a.AddPolicy("BlockPermission", b => b.RequireRole(
+      "SuperAdmin",
+      "Admin",
+      "Maker",
+      "Manager",
+      "AssistantManager",
+      "DeputyManager",
+      "Checker",
+      "Viewer",
+      "Auditor"));
+
+       a.AddPolicy("UnblockPermission", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ViewBlockedCustomers", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ViewUnblockedCustomers", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ViewCustomers", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageUsers", b => b.RequireRole(
+            "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageAreas", b => b.RequireRole(
+            "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageBranches", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageReasons", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageSources", b => b.RequireRole(
+          "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ApproveTransactions", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ViewAuditLogs", b => b.RequireRole(
+          "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageDocuments", b => b.RequireRole(
+          "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ViewDocuments", b => b.RequireRole(
+          "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("ManageTransactions", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
+
+       a.AddPolicy("EscalateTransactions", b => b.RequireRole(
+           "SuperAdmin",
+           "Admin",
+           "Maker",
+           "Manager",
+           "AssistantManager",
+           "DeputyManager",
+           "Checker",
+           "Viewer",
+           "Auditor"));
      });
-
-
       return auth;
     }
 
@@ -175,13 +332,24 @@ namespace BlockingApi.Core.Startup
       services.AddScoped<ISettingsRepository, SettingsRepository>();
       services.AddScoped<IBranchRepository, BranchRepository>();
       services.AddScoped<INotificationRepository, NotificationRepository>();
+      services.AddScoped<ITransactionFlowRepository, TransactionFlowRepository>();
       services.AddHttpClient<IUserRepository, UserRepository>();
+      services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+
 
 
       services.AddTransient<IUnitOfWork, UnitOfWork>();
 
       return services;
     }
+
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+    Host.CreateDefaultBuilder(args)
+        .ConfigureServices((hostContext, services) =>
+        {
+          //services.AddHostedService<EscalationTimeoutService>();
+          // Add other services, repositories, etc.
+        });
 
 
     public static IServiceCollection RegisterSwagger(this IServiceCollection services)

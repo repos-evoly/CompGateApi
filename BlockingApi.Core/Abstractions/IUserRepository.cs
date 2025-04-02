@@ -14,9 +14,13 @@ namespace BlockingApi.Core.Abstractions
         Task<bool> RemoveRolePermissions(int userId);
         Task<List<UserDetailsDto>> GetUsers(string authToken);
         Task<UserDetailsDto?> GetUserById(int userId, string authToken);
+        Task<UserDetailsDto?> GetUserByAuthId(int userId, string authToken);
         Task<List<PermissionStatusDto>> GetUserPermissions(int userId);
         Task<bool> EditUser(int userId, EditUserDto editUserDto);
         Task<List<Role>> GetRoles();
         Task<List<Permission>> GetPermissions();
+        Task<List<BasicUserDto>> GetManagementUsersAsync();
+
+
     }
 }

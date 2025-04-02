@@ -16,7 +16,6 @@ namespace BlockingApi.Core.Repositories
       _mapper = mapper;
     }
 
-     
 
   }
 }

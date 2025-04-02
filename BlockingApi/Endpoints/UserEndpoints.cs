@@ -62,6 +62,15 @@ namespace BlockingApi.Endpoints
                 .Produces<List<string>>(200)
                 .Produces(404);
 
+            users.MapGet("/by-auth/{authId:int}", GetUserByAuthId)
+                .RequireAuthorization("ManageUsers")
+                .Produces(200)
+                .Produces(404);
+
+            users.MapGet("/management", GetManagementUsers)
+                .RequireAuthorization("ManageUsers")
+                .Produces<List<UserDetailsDto>>(200);
+
         }
 
         public static async Task<IResult> AddUser(
@@ -191,6 +200,29 @@ namespace BlockingApi.Endpoints
             return user != null ? Results.Ok(user) : Results.NotFound("User not found.");
         }
 
+        public static async Task<IResult> GetManagementUsers(
+             [FromServices] IUserRepository userRepository,
+             ILogger<UserEndpoints> logger)
+        {
+            var managementUsers = await userRepository.GetManagementUsersAsync();
+            logger.LogInformation("Retrieved {Count} management users.", managementUsers.Count);
+            return Results.Ok(managementUsers);
+        }
+
+
+        public static async Task<IResult> GetUserByAuthId(
+          int authId,
+          HttpContext context,
+          [FromServices] IUserRepository userRepository,
+          ILogger<UserEndpoints> logger)
+        {
+            var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            logger.LogInformation("Fetching user with AuthUserId {AuthId}", authId);
+            var user = await userRepository.GetUserByAuthId(authId, authToken);
+            return user != null ? Results.Ok(user) : Results.NotFound("User not found.");
+        }
+
+
 
         public static async Task<IResult> EditUser(
             int userId,
@@ -219,9 +251,9 @@ namespace BlockingApi.Endpoints
 
 
         public static async Task<IResult> GetUserPermissions(
-     int userId,
-     [FromServices] IUserRepository userRepository,
-     ILogger<UserEndpoints> logger)
+            int userId,
+            [FromServices] IUserRepository userRepository,
+            ILogger<UserEndpoints> logger)
         {
             logger.LogInformation("Fetching permissions for UserId {UserId}", userId);
 

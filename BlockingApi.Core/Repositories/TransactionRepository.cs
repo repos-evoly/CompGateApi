@@ -146,9 +146,31 @@ namespace BlockingApi.Data.Repositories
         {
             return await _context.TransactionFlows
                 .Where(tf => tf.TransactionId == transactionId)
-                .Include(tf => tf.FromUser) // Include FromUser to get user details
-                .Include(tf => tf.ToUser)   // Include ToUser to get user details
+                .Include(tf => tf.FromUser)
+                .Include(tf => tf.ToUser)
                 .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Transaction>> GetEscalatedTransactionsAsync()
+        {
+            return await _context.Transactions
+                .Where(t => t.Status == "Escalated")
+                .ToListAsync();
+        }
+
+        public async Task<int> GetFlaggedTransactionsCountAsync()
+        {
+            return await _context.Transactions
+                .Where(t => t.Status != null)
+                .CountAsync();
+        }
+
+
+        public async Task<int> GetHighValueTransactionsCountAsync()
+        {
+            return await _context.Transactions
+                .Where(t => t.Amount > 10000)
+                .CountAsync();
         }
     }
 }

@@ -50,10 +50,27 @@ namespace BlockingApi.Data.Models
         [MaxLength(20)]
         public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
 
-        public string Initiator { get; set; } = string.Empty; // User who owns the transaction
-        public string CurrentParty { get; set; } = string.Empty; // Party currently handling the transaction
+        public int InitiatorUserId { get; set; }
+        public User? InitiatorUser { get; set; }  // Navigation property for Initiator (User who owns the transaction)
+
+        public int? CurrentPartyUserId { get; set; }
+        public User? CurrentPartyUser { get; set; }
         // Foreign Key to User (who approved/rejected)
         public int? ApprovedByUserId { get; set; }
         public User? ApprovedBy { get; set; } // Navigation property for approval by a user
+        // New Fields
+        [MaxLength(50)]
+        public string TrxTagCode { get; set; } = string.Empty; // Transaction Tag Code
+
+        [MaxLength(50)]
+        public string TrxTag { get; set; } = string.Empty; // Transaction Tag
+
+        public int TrxSeq { get; set; } // Transaction Sequence
+
+        [MaxLength(50)]
+        public string? ReconRef { get; set; } // Reconciliation Reference
+
+        [MaxLength(50)]
+        public string? EventKey { get; set; }
     }
 }
