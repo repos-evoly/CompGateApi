@@ -30,7 +30,7 @@ namespace BlockingApi.Data.Repositories
                     referenceId = $"202503121234AT10",  // This should ideally be dynamically generated
                     userName = "TEDMOB",
                     customerNumber = "102030",
-                    requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    requestTime = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     language = "AR"
                 },
                 Details = new
@@ -71,7 +71,7 @@ namespace BlockingApi.Data.Repositories
             }
             else
             {
-                
+
                 Console.WriteLine($"Error: {response.StatusCode}");
 
                 return new List<Transaction>();

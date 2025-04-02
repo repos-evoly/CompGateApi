@@ -20,38 +20,53 @@ namespace BlockingApi.Endpoints
                 .Produces<List<Transaction>>(200);
         }
 
-        // Endpoint logic to fetch transactions from the external bank API
-        public static async Task<IResult> FetchExternalTransactions([FromServices] IExternalTransactionRepository externalTransactionRepository, [FromBody] ExternalTransactionRequestDto requestDto)
+        // Endpoint logic to fetch transactions from the external bank API,
+        // and then filter out those whose eventKey already exists in the database.
+        public static async Task<IResult> FetchExternalTransactions(
+            [FromServices] IExternalTransactionRepository externalTransactionRepository,
+            [FromServices] ITransactionRepository transactionRepository,
+            [FromBody] ExternalTransactionRequestDto requestDto)
         {
             // Convert FromDate and ToDate to the required integer format (CCYYMMDD)
             int fromDate = FormatDate(requestDto.FromDate);
             int toDate = FormatDate(requestDto.ToDate);
 
-            // Log the formatted dates for debugging
             Console.WriteLine($"FromDate: {fromDate}, ToDate: {toDate}");
 
-            var transactions = await externalTransactionRepository.GetExternalTransactionsAsync(
+            // Fetch external transactions from the bank API
+            var externalTransactions = await externalTransactionRepository.GetExternalTransactionsAsync(
                 fromDate,
                 toDate,
                 requestDto.Limit,
                 requestDto.BranchCode,
                 requestDto.LocalCCY);
 
-            // Return transactions or a 404 if not found
-            if (transactions.Any())
-            {
-                return TypedResults.Ok(transactions);
-            }
-            else
-            {
-                return TypedResults.NotFound("No transactions found.");
-            }
+            // Extract distinct event keys from the external transactions (ignoring null/empty values)
+            var externalEventKeys = externalTransactions
+                .Select(et => et.EventKey)
+                .Where(ek => !string.IsNullOrEmpty(ek))
+                .Distinct()
+                .ToList();
+
+            // Query the database to get only the event keys that already exist
+            var existingEventKeys = await transactionRepository.GetExistingEventKeysAsync(externalEventKeys);
+
+            // Filter out external transactions whose eventKey already exists locally
+            var newTransactions = externalTransactions
+                .Where(et => string.IsNullOrEmpty(et.EventKey) || !existingEventKeys.Contains(et.EventKey))
+                .ToList();
+
+            Console.WriteLine($"Fetched {externalTransactions.Count} external transactions, filtered to {newTransactions.Count} new transactions based on eventKey.");
+
+            return newTransactions.Any()
+                ? TypedResults.Ok(newTransactions)
+                : TypedResults.NotFound("No new transactions found.");
         }
 
         // Helper method to format dates as integers in the required format (CCYYMMDD)
-        private static int FormatDate(DateTime date)
+        private static int FormatDate(DateTimeOffset date)
         {
-            // Format the date as CCYYMMDD (e.g., 1241001 for 2024-10-01)
+            // Format the date as CCYYMMDD (e.g., for 2024-10-01, returns 1241001)
             return int.Parse($"1{date.Year.ToString().Substring(2)}{date.Month:D2}{date.Day:D2}");
         }
     }

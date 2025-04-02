@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("Roles")]
-    public class Role
+    public class Role:Auditable
     {
         [Key]
         public int Id { get; set; }

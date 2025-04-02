@@ -108,8 +108,9 @@ namespace BlockingApi.Endpoints
                         Address = kycCustomer.BNAME ?? "No address provided",  // Default value if no address is returned
                         NationalId = kycCustomer.NationalId ?? "No NationalId provided", // Default value if no NationalId is returned
                         BranchId = branch.Id,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTimeOffset.Now
                     };
+
 
                     await context.Customers.AddAsync(newCustomer);
                     await context.SaveChangesAsync();
@@ -154,11 +155,11 @@ namespace BlockingApi.Endpoints
                     {
                         CID = kycCustomer.CID ?? "No CID provided",
                         FirstName = kycCustomer.CNAME ?? "No name provided",
-                        LastName = kycCustomer.LastName ?? string.Empty,  
-                        Address = kycCustomer.BNAME ?? "No address provided",  
-                        NationalId = kycCustomer.NationalId ?? "No NationalId provided", 
+                        LastName = kycCustomer.LastName ?? string.Empty,
+                        Address = kycCustomer.BNAME ?? "No address provided",
+                        NationalId = kycCustomer.NationalId ?? "No NationalId provided",
                         BranchId = branch.Id,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTimeOffset.Now
                     };
 
                     await context.Customers.AddAsync(newCustomer);
@@ -208,7 +209,7 @@ namespace BlockingApi.Endpoints
                         Address = kycCustomer.BNAME ?? "No address provided",
                         NationalId = kycCustomer.NationalId ?? "No NationalId provided",
                         BranchId = branch.Id,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTimeOffset.Now
                     };
 
                     await context.Customers.AddAsync(newCustomer);
@@ -238,7 +239,7 @@ namespace BlockingApi.Endpoints
                         FirstName = externalCustomer.CNAME ?? "No name provided",
                         Address = externalCustomer.BNAME,
                         BranchId = externalBranch.Id,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTimeOffset.Now
                     };
 
                     await context.Customers.AddAsync(newExternalCustomer);
@@ -353,7 +354,7 @@ namespace BlockingApi.Endpoints
                 return Results.Problem("Failed to unblock customer in bank system.");
             }
 
-            block.ActualUnblockDate = DateTime.UtcNow;
+            block.ActualUnblockDate = DateTimeOffset.Now;
             block.UnblockedByUserId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
             block.Status = "Unblocked";
 

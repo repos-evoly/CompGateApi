@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("TransactionFlows")]
-    public class TransactionFlow
+    public class TransactionFlow : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -25,7 +25,7 @@ namespace BlockingApi.Data.Models
         public string Action { get; set; } = "Pending";
 
         // Date and Time of the Action
-        public DateTime ActionDate { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset ActionDate { get; set; } = DateTimeOffset.Now;
 
         // Remark for the Action
         [MaxLength(500)]

@@ -1,5 +1,6 @@
 public class NotificationDto
 {
+    public int Id { get; set; }
     public int FromUserId { get; set; }
     public string FromUserName { get; set; } = string.Empty;
 
@@ -12,5 +13,5 @@ public class NotificationDto
     public string Link { get; set; } = string.Empty;
     public bool IsRead { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }

@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("Transactions")]
-    public class Transaction
+    public class Transaction:Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -44,7 +44,7 @@ namespace BlockingApi.Data.Models
         [MaxLength(100)]
         public string? Nr2 { get; set; }
 
-        public DateTime Timestamp { get; set; }
+        public DateTimeOffset Timestamp { get; set; }
 
         // Additional Fields
         [MaxLength(20)]

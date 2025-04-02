@@ -18,7 +18,9 @@ namespace BlockingApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -32,7 +34,9 @@ namespace BlockingApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     NameLT = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false),
-                    NameAR = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false)
+                    NameAR = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -47,7 +51,9 @@ namespace BlockingApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     NameAR = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     NameLT = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -79,7 +85,9 @@ namespace BlockingApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     NameLT = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    NameAR = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false)
+                    NameAR = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -93,7 +101,9 @@ namespace BlockingApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     RoleId = table.Column<int>(type: "int", nullable: false),
-                    PermissionId = table.Column<int>(type: "int", nullable: false)
+                    PermissionId = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -134,7 +144,9 @@ namespace BlockingApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
                     Action = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    Timestamp = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -154,13 +166,15 @@ namespace BlockingApi.Data.Migrations
                     DecisionFromCentralBankGovernor = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
                     DecisionFromFIU = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
                     OtherDecision = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
-                    BlockDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    ScheduledUnblockDate = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    ActualUnblockDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    BlockDate = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    ScheduledUnblockDate = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    ActualUnblockDate = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     BlockedByUserId = table.Column<int>(type: "int", nullable: false),
                     UnblockedByUserId = table.Column<int>(type: "int", nullable: true),
-                    UnblockedById = table.Column<int>(type: "int", nullable: true)
+                    UnblockedById = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -190,7 +204,9 @@ namespace BlockingApi.Data.Migrations
                     Address = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     Phone = table.Column<string>(type: "nvarchar(15)", maxLength: 15, nullable: false),
                     AreaId = table.Column<int>(type: "int", nullable: false),
-                    BranchManagerId = table.Column<int>(type: "int", nullable: true)
+                    BranchManagerId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -218,7 +234,8 @@ namespace BlockingApi.Data.Migrations
                     Address = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     BranchId = table.Column<int>(type: "int", nullable: true),
                     StatusCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -276,8 +293,10 @@ namespace BlockingApi.Data.Migrations
                     FileSize = table.Column<int>(type: "int", nullable: false),
                     FilePath = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     DocumentType = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    UploadedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UploadedByUserId = table.Column<int>(type: "int", nullable: false)
+                    UploadedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UploadedByUserId = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -302,7 +321,8 @@ namespace BlockingApi.Data.Migrations
                     Message = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     Link = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     IsRead = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -337,7 +357,7 @@ namespace BlockingApi.Data.Migrations
                     PostingDate = table.Column<int>(type: "int", nullable: false),
                     Nr1 = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Nr2 = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Timestamp = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     InitiatorUserId = table.Column<int>(type: "int", nullable: false),
                     CurrentPartyUserId = table.Column<int>(type: "int", nullable: true),
@@ -347,7 +367,9 @@ namespace BlockingApi.Data.Migrations
                     TrxSeq = table.Column<int>(type: "int", nullable: false),
                     ReconRef = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     EventKey = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    CustomerId = table.Column<int>(type: "int", nullable: true)
+                    CustomerId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -385,7 +407,9 @@ namespace BlockingApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastActivityTime = table.Column<DateTime>(type: "datetime2", nullable: false)
+                    LastActivityTime = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -406,7 +430,9 @@ namespace BlockingApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
                     RoleId = table.Column<int>(type: "int", nullable: false),
-                    PermissionId = table.Column<int>(type: "int", nullable: false)
+                    PermissionId = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -441,9 +467,11 @@ namespace BlockingApi.Data.Migrations
                     FromUserId = table.Column<int>(type: "int", nullable: false),
                     ToUserId = table.Column<int>(type: "int", nullable: true),
                     Action = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ActionDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ActionDate = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     Remark = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    CanReturn = table.Column<bool>(type: "bit", nullable: false)
+                    CanReturn = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
                 constraints: table =>
                 {

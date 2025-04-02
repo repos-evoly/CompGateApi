@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("Documents")]
-    public class Document
+    public class Document : Auditable
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -40,7 +40,7 @@ namespace BlockingApi.Data.Models
         public string DocumentType { get; set; } = "reports";
 
         [Required]
-        public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset UploadedAt { get; set; } = DateTimeOffset.Now;
 
         [Required]
         public int UploadedByUserId { get; set; }

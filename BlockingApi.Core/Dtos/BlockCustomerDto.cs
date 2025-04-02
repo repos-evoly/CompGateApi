@@ -23,6 +23,6 @@ namespace BlockingApi.Core.Dtos
         [Required]
         public int BlockedByUserId { get; set; }
 
-        public DateTime? ToBlockDate { get; set; }
+        public DateTimeOffset? ToBlockDate { get; set; }
     }
 }

@@ -163,7 +163,7 @@ public class TransactionEndpoints : IEndpoints
                     FromUserId = initiatorId,
                     ToUserId = currentPartyId,
                     Action = "Escalated",
-                    ActionDate = DateTime.UtcNow,
+                    ActionDate = DateTimeOffset.Now,
                     Remark = dto.Remark ?? string.Empty,
                     CanReturn = true
                 };
@@ -175,7 +175,7 @@ public class TransactionEndpoints : IEndpoints
                     ToUserId = currentPartyId ?? throw new InvalidOperationException("currentPartyId cannot be null when escalation is true"), // Ensure currentPartyId is not null when escalation is true
                     Subject = "Transaction Escalated",
                     Message = $"Transaction {transaction.Id} has been escalated to you for further action.",
-                    Link = $"transactions/{transaction.Id}?100"
+                    Link = $"transactions/{transaction.Id}"
                 }
                 ;
                 await notificationRepository.AddNotificationAsync(notification);
@@ -187,18 +187,27 @@ public class TransactionEndpoints : IEndpoints
 
     // Get transactions endpoint with optional status filter.
     public static async Task<IResult> GetTransactions(
-        [FromQuery] string? status,
-        [FromServices] ITransactionRepository transactionRepository)
+       [FromQuery] string? status,
+       [FromServices] ITransactionRepository transactionRepository,
+       HttpContext context)
     {
-        var transactions = await transactionRepository.GetAllTransactionsAsync();
+        // Extract the authenticated user's ID from the claims.
+        int userId = AuthUserId(context);
+
+        // Retrieve transactions relevant to the current user.
+        var transactions = await transactionRepository.GetUserTransactionsAsync(userId);
+
+        // Optionally filter by status if provided.
         if (!string.IsNullOrEmpty(status))
         {
             transactions = transactions
                 .Where(t => t.Status.Equals(status, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
+
         return Results.Ok(transactions);
     }
+
 
     // Escalate a transaction: from a user to a user.
     public static async Task<IResult> EscalateTransaction(
@@ -225,9 +234,9 @@ public class TransactionEndpoints : IEndpoints
         {
             FromUserId = escalateDto.FromUserId,
             ToUserId = escalateDto.ToUserId,
-            Subject = "Transaction Escalated",
+            Subject = "Escalated",
             Message = $"Transaction {transaction.Id} has been escalated to you for further action.",
-            Link = $"transactions/{transaction.Id}?100",  // Link to transaction details in frontend
+            Link = $"transactions/{transaction.Id}",  // Link to transaction details in frontend
         };
 
         await notificationRepository.AddNotificationAsync(notification);
@@ -239,7 +248,7 @@ public class TransactionEndpoints : IEndpoints
             FromUserId = escalateDto.FromUserId,
             ToUserId = escalateDto.ToUserId,
             Action = "Escalated",
-            ActionDate = DateTime.UtcNow,
+            ActionDate = DateTimeOffset.Now,
             Remark = escalateDto.Remark,  // Store the remark
             CanReturn = true
         };
@@ -273,9 +282,9 @@ public class TransactionEndpoints : IEndpoints
         {
             FromUserId = returnDto.FromUserId,
             ToUserId = returnDto.ToUserId,
-            Subject = "Transaction Return",
+            Subject = "Returned",
             Message = $"Transaction {transaction.Id} has been returned to you for review.",
-            Link = $"transactions/{transaction.Id}?100",  // Link to transaction details in frontend
+            Link = $"transactions/{transaction.Id}",  // Link to transaction details in frontend
         };
 
         await notificationRepository.AddNotificationAsync(notification);
@@ -287,7 +296,7 @@ public class TransactionEndpoints : IEndpoints
             FromUserId = returnDto.FromUserId,
             ToUserId = returnDto.ToUserId,
             Action = "Return",
-            ActionDate = DateTime.UtcNow,
+            ActionDate = DateTimeOffset.Now,
             Remark = returnDto.Remark,  // Store the remark
             CanReturn = false // Mark that the transaction can't be returned anymore
         };
@@ -356,8 +365,8 @@ public class TransactionEndpoints : IEndpoints
                 Nr2 = transaction.Nr2,
                 Timestamp = transaction.Timestamp,
                 Status = transaction.Status,
-                Initiator = fromUser?.UserId ?? 0,
-                CurrentParty = toUser?.UserId ?? 0
+                InitiatorUserId = transaction.InitiatorUserId,
+                CurrentPartyUserId = transaction.CurrentPartyUserId,
             },
             TransactionFlows = transactionFlows.Select(tf => new TransactionFlowDto
             {
@@ -406,7 +415,7 @@ public class TransactionEndpoints : IEndpoints
         }
 
         // Update the currentParty in the transaction
-        transaction.CurrentPartyUserId = editDto.CurrentPartyId;
+        transaction.CurrentPartyUserId = editDto.ToUserId;
         await transactionRepository.UpdateTransactionAsync(transaction);
 
         // Retrieve the associated transaction flow (get the first flow, assuming only one flow exists)
@@ -504,8 +513,8 @@ public class TransactionEndpoints : IEndpoints
             return Results.Json(new { error = "You are not authorized to approve/deny this transaction." }, statusCode: 401);
         }
 
-        // Update the transaction status to either "Approved" or "Denied"
-        transaction.Status = approveOrDenyDto.Action == "Approved" ? "Approved" : "Denied";
+        // Update the transaction status to either "Approved" or "Reejected"
+        transaction.Status = approveOrDenyDto.Action == "Approved" ? "Approved" : "Rejected";
 
         // Set the ApprovedByUserId to the current user (the one who is approving/denying)
         transaction.ApprovedByUserId = currentUser.UserId;
@@ -520,8 +529,8 @@ public class TransactionEndpoints : IEndpoints
             FromUserId = currentUser.UserId,
             ToUserId = currentUser.UserId, // Adjust if necessary for your business logic
             Action = "Done",
-            ActionDate = DateTime.UtcNow,
-            Remark = "Transaction approved/denied and marked as done."
+            ActionDate = DateTimeOffset.Now,
+            Remark = "Transaction approved/rejected and marked as done."
         };
 
         await transactionRepository.AddTransactionFlowAsync(newTransactionFlow);
@@ -530,6 +539,11 @@ public class TransactionEndpoints : IEndpoints
         // Log the update
         logger.LogInformation($"Transaction {approveOrDenyDto.TransactionId} status set to {transaction.Status}, flow marked as 'Done', and ApprovedByUserId set to {currentUser.UserId}.");
 
-        return Results.Ok("Transaction successfully approved/denied and flow marked as 'Done'.");
+        return Results.Ok("Transaction successfully approved/rejected and flow marked as 'Done'.");
+    }
+    private static int AuthUserId(HttpContext context)
+    {
+        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(userIdClaim, out int userId) ? userId : 0;
     }
 }

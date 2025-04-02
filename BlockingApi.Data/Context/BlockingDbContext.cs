@@ -214,19 +214,32 @@ namespace BlockingApi.Data.Context
         // Override SaveChangesAsync to track CreatedAt and UpdatedAt timestamps
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            var entries = ChangeTracker.Entries()
-                .Where(e => e.Entity is Auditable && (e.State == EntityState.Added || e.State == EntityState.Modified))
-                .Select(e => e.Entity as Auditable);
+            var insertedEntries = this.ChangeTracker.Entries()
+                         .Where(x => x.State == EntityState.Added)
+                         .Select(x => x.Entity);
 
-            foreach (var entry in entries)
+            foreach (var insertedEntry in insertedEntries)
             {
-                if (entry != null)
+                var auditableEntity = insertedEntry as Auditable;
+                //If the inserted object is an Auditable. 
+                if (auditableEntity != null)
                 {
-                    entry.UpdatedAt = DateTime.UtcNow;
-                    if (entry.CreatedAt == default)
-                    {
-                        entry.CreatedAt = DateTime.UtcNow;
-                    }
+                    auditableEntity.CreatedAt = DateTimeOffset.Now;
+                    auditableEntity.UpdatedAt = DateTimeOffset.Now;
+                }
+            }
+
+            var modifiedEntries = this.ChangeTracker.Entries()
+                   .Where(x => x.State == EntityState.Modified)
+                   .Select(x => x.Entity);
+
+            foreach (var modifiedEntry in modifiedEntries)
+            {
+                //If the inserted object is an Auditable. 
+                var auditableEntity = modifiedEntry as Auditable;
+                if (auditableEntity != null)
+                {
+                    auditableEntity.UpdatedAt = DateTimeOffset.Now;
                 }
             }
 

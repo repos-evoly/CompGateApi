@@ -161,5 +161,12 @@ namespace BlockingApi.Endpoints
             }));
         }
 
+        private static int AuthUserId(HttpContext context)
+        {
+            // Assumes the ClaimTypes.NameIdentifier contains the user id.
+            var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(userIdClaim, out int userId) ? userId : 0;
+        }
+
     }
 }

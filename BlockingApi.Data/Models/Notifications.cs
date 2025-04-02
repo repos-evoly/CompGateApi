@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("Notifications")]
-    public class Notification
+    public class Notification : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -34,6 +34,6 @@ namespace BlockingApi.Data.Models
         public bool IsRead { get; set; } = false;
 
         // Date and time when the notification was created
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     }
 }

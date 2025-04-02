@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("UserActivities")]
-    public class UserActivity
+    public class UserActivity : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -19,6 +19,6 @@ namespace BlockingApi.Data.Models
         [Required]
         public string Status { get; set; } = "Offline";
 
-        public DateTime LastActivityTime { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset LastActivityTime { get; set; } = DateTimeOffset.Now;
     }
 }

@@ -27,7 +27,7 @@ namespace BlockingApi.Core.Dtos
         public string FileMimeType { get; set; } = string.Empty;
         public int FileSize { get; set; }
         public string FilePath { get; set; } = string.Empty;
-        public DateTime UploadedAt { get; set; }
+        public DateTimeOffset UploadedAt { get; set; }
         public int UploadedByUserId { get; set; }
         public string UploadedBy { get; set; } = string.Empty; // ✅ Store uploader's name
     }

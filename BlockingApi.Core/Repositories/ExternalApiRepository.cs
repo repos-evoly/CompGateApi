@@ -35,7 +35,7 @@ namespace BlockingApi.Core.Repositories
                     referenceId = $"20240607{Guid.NewGuid():N}".Substring(0, 12),
                     userName = "TEDMOB",
                     customerNumber = "102030",
-                    requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    requestTime = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     language = "AR"
                 },
                 details = new Dictionary<string, object> { { "@CID", cid } }
@@ -64,7 +64,7 @@ namespace BlockingApi.Core.Repositories
 
 
 
-        public async Task<bool> BlockCustomer(string customerId, int reasonId, int sourceId, int blockedByUserId, DateTime? toBlockDate = null,
+        public async Task<bool> BlockCustomer(string customerId, int reasonId, int sourceId, int blockedByUserId, DateTimeOffset? toBlockDate = null,
     string? decisionFromPublicProsecution = null, string? decisionFromCentralBankGovernor = null, string? decisionFromFIU = null, string? otherDecision = null)
         {
             var url = "mobile/CustomerLockUnlock";
@@ -82,7 +82,7 @@ namespace BlockingApi.Core.Repositories
                     referenceId = refId, // Unique referenceId
                     userName = "TEDMOB",
                     customerNumber = customerId,
-                    requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    requestTime = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     language = "AR"
                 },
                 Details = new
@@ -126,7 +126,7 @@ namespace BlockingApi.Core.Repositories
                 CustomerId = customer.Id,
                 ReasonId = reasonId,
                 SourceId = sourceId,
-                BlockDate = DateTime.UtcNow,
+                BlockDate = DateTimeOffset.Now,
                 ScheduledUnblockDate = toBlockDate,
                 ActualUnblockDate = null,
                 BlockedByUserId = blockedByUserId,
@@ -164,7 +164,7 @@ namespace BlockingApi.Core.Repositories
                     referenceId = refId,
                     userName = "TEDMOB",
                     customerNumber = customerId,
-                    requestTime = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    requestTime = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     language = "AR"
                 },
                 Details = new
@@ -193,7 +193,7 @@ namespace BlockingApi.Core.Repositories
 
             if (blockRecord != null)
             {
-                blockRecord.ActualUnblockDate = DateTime.UtcNow;
+                blockRecord.ActualUnblockDate = DateTimeOffset.Now;
                 blockRecord.Status = "Unblocked";
                 blockRecord.UnblockedByUserId = unblockedByUserId;
                 await _context.SaveChangesAsync();

@@ -73,7 +73,7 @@ namespace BlockingApi.Data.Repositories
                     TransactionId = transaction.Id,
                     FromUserId = userId,
                     Action = "Approved",
-                    ActionDate = DateTime.UtcNow,
+                    ActionDate = DateTimeOffset.Now,
                     Remark = $"Approved by user {userId}",
                     CanReturn = true
                 };
@@ -99,7 +99,7 @@ namespace BlockingApi.Data.Repositories
                     TransactionId = transaction.Id,
                     FromUserId = userId,
                     Action = "Rejected",
-                    ActionDate = DateTime.UtcNow,
+                    ActionDate = DateTimeOffset.Now,
                     Remark = $"Rejected by user {userId}",
                     CanReturn = false
                 };
@@ -125,7 +125,7 @@ namespace BlockingApi.Data.Repositories
                     TransactionId = transaction.Id,
                     FromUserId = userId,
                     Action = "Escalated",
-                    ActionDate = DateTime.UtcNow,
+                    ActionDate = DateTimeOffset.Now,
                     Remark = $"Escalated by user {userId}",
                     CanReturn = false
                 };
@@ -172,5 +172,29 @@ namespace BlockingApi.Data.Repositories
                 .Where(t => t.Amount > 10000)
                 .CountAsync();
         }
+
+        public async Task<List<Transaction>> GetUserTransactionsAsync(int userId)
+        {
+            return await _context.Transactions
+                .Where(t =>
+                    t.InitiatorUserId == userId ||
+                    t.CurrentPartyUserId == userId ||
+                    _context.TransactionFlows.Any(tf =>
+                        tf.TransactionId == t.Id &&
+                        (tf.FromUserId == userId || (tf.ToUserId.HasValue && tf.ToUserId.Value == userId))
+                    )
+                )
+                .ToListAsync();
+        }
+
+        public async Task<HashSet<string>> GetExistingEventKeysAsync(List<string> eventKeys)
+        {
+            var keys = await _context.Transactions
+                .Where(t => !string.IsNullOrEmpty(t.EventKey) && eventKeys.Contains(t.EventKey))
+                .Select(t => t.EventKey)
+                .ToListAsync();
+            return new HashSet<string>(keys);
+        }
+
     }
 }

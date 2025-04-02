@@ -4,8 +4,8 @@ namespace BlockingApi.Core.Dtos
 {
     public class ExternalTransactionRequestDto
     {
-        public DateTime FromDate { get; set; }
-        public DateTime ToDate { get; set; }
+        public DateTimeOffset FromDate { get; set; }
+        public DateTimeOffset ToDate { get; set; }
         public int Limit { get; set; }
         public string BranchCode { get; set; } = string.Empty;
         public bool LocalCCY { get; set; }

@@ -27,14 +27,14 @@ namespace BlockingApi.Core.Repositories
                 {
                     UserId = userId,
                     Status = status,
-                    LastActivityTime = DateTime.UtcNow
+                    LastActivityTime = DateTimeOffset.Now
                 };
                 _context.UserActivities.Add(activity);
             }
             else
             {
                 activity.Status = status;
-                activity.LastActivityTime = DateTime.UtcNow;
+                activity.LastActivityTime = DateTimeOffset.Now;
             }
             await _context.SaveChangesAsync();
             return true;

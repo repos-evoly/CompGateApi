@@ -39,6 +39,10 @@ namespace BlockingApi.Data.Abstractions
 
         Task<int> GetFlaggedTransactionsCountAsync();
         Task<int> GetHighValueTransactionsCountAsync();
+        Task<List<Transaction>> GetUserTransactionsAsync(int userId);
+        Task<HashSet<string>> GetExistingEventKeysAsync(List<string> eventKeys);
+
+
 
 
     }

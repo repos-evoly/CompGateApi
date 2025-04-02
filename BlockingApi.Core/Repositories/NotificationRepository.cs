@@ -27,6 +27,8 @@ namespace BlockingApi.Data.Repositories
         {
             return await _context.Notifications
                 .Where(n => n.ToUserId == userId)
+                .Include(n => n.FromUser)
+                .Include(n => n.ToUser)
                 .OrderByDescending(n => n.CreatedAt)
                 .ToListAsync();
         }
@@ -39,6 +41,17 @@ namespace BlockingApi.Data.Repositories
                 notification.IsRead = true;
                 await _context.SaveChangesAsync();
             }
+        }
+
+        // Get notifications by read status (filtered by true or false)
+        public async Task<List<Notification>> GetNotificationsByReadStatusAsync(bool isRead)
+        {
+            return await _context.Notifications
+                .Where(n => n.IsRead == isRead)
+                .Include(n => n.FromUser)
+                .Include(n => n.ToUser)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToListAsync();
         }
     }
 }

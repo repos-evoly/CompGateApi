@@ -12,7 +12,7 @@ namespace BlockingApi.Core.Abstractions
             int reasonId,
             int sourceId,
             int blockedByUserId,
-            DateTime? toBlockDate = null,
+            DateTimeOffset? toBlockDate = null,
             string? decisionFromPublicProsecution = null,
             string? decisionFromCentralBankGovernor = null,
             string? decisionFromFIU = null,

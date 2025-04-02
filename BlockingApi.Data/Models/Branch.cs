@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("Branches")]
-    public class Branch
+    public class Branch:Auditable
     {
         [Key]
         public int Id { get; set; }

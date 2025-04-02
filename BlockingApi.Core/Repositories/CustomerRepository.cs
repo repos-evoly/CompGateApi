@@ -27,7 +27,7 @@ namespace BlockingApi.Core.Repositories
                 CustomerId = customer.Id,
                 ReasonId = reasonId,
                 SourceId = sourceId,
-                BlockDate = DateTime.UtcNow,
+                BlockDate = DateTimeOffset.Now,
                 BlockedByUserId = blockedByUserId,
                 Status = "Blocked"
             };
@@ -48,7 +48,7 @@ namespace BlockingApi.Core.Repositories
 
             if (block == null) return false;
 
-            block.ActualUnblockDate = DateTime.UtcNow;
+            block.ActualUnblockDate = DateTimeOffset.Now;
             block.Status = "Unblocked";
             await _context.SaveChangesAsync();
 
@@ -113,7 +113,7 @@ namespace BlockingApi.Core.Repositories
 
         public async Task<int> GetBlockedUsersTodayCountAsync()
         {
-            var today = DateTime.UtcNow.Date;
+            var today = DateTimeOffset.Now.Date;
             return await _context.Customers
                 .Where(c => c.BlockRecords
                     .Any(b => b.Status == "Blocked" && b.BlockDate.Date == today))

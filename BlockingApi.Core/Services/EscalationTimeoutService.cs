@@ -28,7 +28,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
         _logger.LogInformation("EscalationTimeoutService is starting...");
 
         // Existing timers
-        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(15));
         _timerEscalation = new Timer(PerformEscalationCheck, null, TimeSpan.Zero, TimeSpan.FromMinutes(30));
 
         // New timer for scheduled unblock notifications (e.g., every 15 minutes)
@@ -49,7 +49,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
             // Find block records with a scheduled unblock date that has passed and not yet unblocked
             var blocksToNotify = context.BlockRecords
                 .Where(b => b.ScheduledUnblockDate != null &&
-                            b.ScheduledUnblockDate <= DateTime.UtcNow &&
+                            b.ScheduledUnblockDate <= DateTimeOffset.Now &&
                             b.ActualUnblockDate == null)
                 .ToList();
 
@@ -94,7 +94,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
             {
                 UserId = 1,  // ensure user #1 exists
                 Action = "EscalationTimeoutService Heartbeat",
-                Timestamp = DateTime.UtcNow
+                Timestamp = DateTimeOffset.Now
             };
 
             auditLogRepo.AddAuditLog(log).Wait();
@@ -123,7 +123,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
                 var flows = flowRepo.GetTransactionFlowByTransactionIdAsync(transaction.Id).Result;
                 var escalationFlow = flows.FirstOrDefault(tf => tf.Action == "Escalated" && tf.CanReturn);
 
-                if (escalationFlow != null && escalationFlow.ActionDate.AddHours(4) < DateTime.UtcNow)
+                if (escalationFlow != null && escalationFlow.ActionDate.AddHours(4) < DateTimeOffset.Now)
                 {
                     _logger.LogInformation("Transaction {TxId} escalated for >4 hours. Returning to escalator.", transaction.Id);
                     transaction.Status = "Pending";

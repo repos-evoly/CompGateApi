@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("BlockRecords")]
-    public class BlockRecord
+    public class BlockRecord : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -34,10 +34,10 @@ namespace BlockingApi.Data.Models
         public string? OtherDecision { get; set; } // قرارات أخري تذكر
 
 
-        public DateTime BlockDate { get; set; } = DateTime.UtcNow;
-        public DateTime? ScheduledUnblockDate { get; set; }
+        public DateTimeOffset BlockDate { get; set; } = DateTimeOffset.Now;
+        public DateTimeOffset? ScheduledUnblockDate { get; set; }
 
-        public DateTime? ActualUnblockDate { get; set; }
+        public DateTimeOffset? ActualUnblockDate { get; set; }
 
         [MaxLength(50)]
         public string Status { get; set; } = "Pending";

@@ -7,7 +7,7 @@ namespace BlockingApi.Core.Dtos
 
         public int UserId { get; set; }
         public string Status { get; set; } = "Offline";
-        public DateTime LastActivityTime { get; set; }
+        public DateTimeOffset LastActivityTime { get; set; }
 
     }
 }

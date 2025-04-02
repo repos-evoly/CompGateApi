@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace BlockingApi.Data.Models
 {
     [Table("Reasons")]
-    public class Reason
+    public class Reason:Auditable
     {
         [Key]
         public int Id { get; set; }

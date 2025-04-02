@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace BlockingApi.Data.Models
 {
     [Table("AuditLogs")]
-    public class AuditLog
+    public class AuditLog : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -16,6 +16,6 @@ namespace BlockingApi.Data.Models
         [MaxLength(200)]
         public string Action { get; set; } = string.Empty;
 
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.Now;
     }
 }

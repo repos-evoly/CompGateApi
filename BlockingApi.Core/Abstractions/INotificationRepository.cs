@@ -1,6 +1,6 @@
+using BlockingApi.Data.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using BlockingApi.Data.Models;
 
 namespace BlockingApi.Data.Abstractions
 {
@@ -14,5 +14,8 @@ namespace BlockingApi.Data.Abstractions
 
         // Mark a notification as read
         Task MarkAsReadAsync(int notificationId);
+
+        // Get notifications by read status
+        Task<List<Notification>> GetNotificationsByReadStatusAsync(bool isRead);
     }
 }

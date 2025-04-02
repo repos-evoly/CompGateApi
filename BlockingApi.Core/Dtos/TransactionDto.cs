@@ -41,7 +41,7 @@ namespace BlockingApi.Core.Dtos
         public int PostingDate { get; set; }
         public string Nr1 { get; set; } = string.Empty;
         public string? Nr2 { get; set; }
-        public DateTime Timestamp { get; set; }
+        public DateTimeOffset Timestamp { get; set; }
         public string? Status { get; set; }
         public int? InitiatorUserId { get; set; }
         public int? CurrentPartyUserId { get; set; }
@@ -82,17 +82,17 @@ namespace BlockingApi.Core.Dtos
         public int PostingDate { get; set; }
         public string? Nr1 { get; set; }
         public string? Nr2 { get; set; }
-        public DateTime Timestamp { get; set; }
+        public DateTimeOffset Timestamp { get; set; }
         public string? Status { get; set; }
-        public int? Initiator { get; set; }
-        public int? CurrentParty { get; set; }
+        public int? InitiatorUserId { get; set; }
+        public int? CurrentPartyUserId { get; set; }
     }
 
     public class TransactionFlowDto
     {
         public int Id { get; set; }
         public string? Action { get; set; }
-        public DateTime ActionDate { get; set; }
+        public DateTimeOffset ActionDate { get; set; }
         public int FromUserId { get; set; }
         public int ToUserId { get; set; }
         public string? Remark { get; set; }
@@ -116,7 +116,7 @@ namespace BlockingApi.Core.Dtos
     public class ApproveOrDenyTransactionDto
     {
         public int TransactionId { get; set; }
-        public required string Action { get; set; } // "Approved" or "Denied"
+        public required string Action { get; set; } // "Approved" or "D"
     }
 
 
