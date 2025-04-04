@@ -4,7 +4,9 @@ using BlockingApi.Core.Abstractions;
 using BlockingApi.Core.Dtos;
 using BlockingApi.Data.Abstractions;
 using BlockingApi.Data.Models;
+using BlockingApi.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 public class TransactionEndpoints : IEndpoints
 {
@@ -78,6 +80,7 @@ public class TransactionEndpoints : IEndpoints
         [FromServices] IUserRepository userRepository,
         [FromServices] IBranchRepository branchRepository,
          [FromServices] INotificationRepository notificationRepository,
+        [FromServices] IHubContext<NotificationHub> hubContext,
         HttpContext context,
         ILogger<TransactionEndpoints> logger)
     {
@@ -178,7 +181,17 @@ public class TransactionEndpoints : IEndpoints
                     Link = $"transactions/{transaction.Id}"
                 }
                 ;
+
                 await notificationRepository.AddNotificationAsync(notification);
+
+                await hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                {
+                    notification.Id,
+                    notification.Subject,
+                    notification.Message,
+                    notification.CreatedAt,
+                    UserId = notification.ToUserId
+                });
             }
         }
 
@@ -211,10 +224,11 @@ public class TransactionEndpoints : IEndpoints
 
     // Escalate a transaction: from a user to a user.
     public static async Task<IResult> EscalateTransaction(
-        [FromBody] EscalateTransactionDto escalateDto,
-        [FromServices] ITransactionRepository transactionRepository,
-        [FromServices] INotificationRepository notificationRepository,
-        ILogger<TransactionEndpoints> logger)
+       [FromBody] EscalateTransactionDto escalateDto,
+       [FromServices] ITransactionRepository transactionRepository,
+       [FromServices] INotificationRepository notificationRepository,
+       [FromServices] IHubContext<NotificationHub> hubContext,
+       ILogger<TransactionEndpoints> logger)
     {
         // Retrieve the transaction.
         var transaction = await transactionRepository.GetTransactionByIdAsync(escalateDto.TransactionId);
@@ -241,6 +255,15 @@ public class TransactionEndpoints : IEndpoints
 
         await notificationRepository.AddNotificationAsync(notification);
 
+        await hubContext.Clients.All.SendAsync("ReceiveNotification", new
+        {
+            NotificationId = notification.Id,
+            NotificationSubject = notification.Subject,
+            NotificationMessage = notification.Message,
+            Created = notification.CreatedAt,
+            UserId = notification.ToUserId  // Added user id field
+        });
+
         // Log the escalation in the transaction flow.
         var transactionFlow = new TransactionFlow
         {
@@ -263,6 +286,7 @@ public class TransactionEndpoints : IEndpoints
         [FromServices] ITransactionRepository transactionRepository,
         [FromServices] ITransactionFlowRepository transactionFlowRepository,
         [FromServices] INotificationRepository notificationRepository,
+        [FromServices] IHubContext<NotificationHub> hubContext,
         ILogger<TransactionEndpoints> logger)
     {
         // Retrieve the transaction.
@@ -288,6 +312,17 @@ public class TransactionEndpoints : IEndpoints
         };
 
         await notificationRepository.AddNotificationAsync(notification);
+
+        await hubContext.Clients.All.SendAsync("ReceiveNotification", new
+        {
+            NotificationId = notification.Id,
+            NotificationSubject = notification.Subject,
+            NotificationMessage = notification.Message,
+            Created = notification.CreatedAt,
+            UserId = notification.ToUserId  // Added user id field
+        });
+
+
 
         // Log the return in the transaction flow.
         var transactionFlow = new TransactionFlow

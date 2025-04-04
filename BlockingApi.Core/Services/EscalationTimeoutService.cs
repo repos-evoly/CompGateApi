@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using BlockingApi.Data.Abstractions;
 using BlockingApi.Data.Models;
 using BlockingApi.Data.Context;
+using Microsoft.AspNetCore.SignalR;
+using BlockingApi.Hubs;
 
 public class EscalationTimeoutService : IHostedService, IDisposable
 {
@@ -28,11 +30,11 @@ public class EscalationTimeoutService : IHostedService, IDisposable
         _logger.LogInformation("EscalationTimeoutService is starting...");
 
         // Existing timers
-        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(15));
+        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(100));
         _timerEscalation = new Timer(PerformEscalationCheck, null, TimeSpan.Zero, TimeSpan.FromMinutes(30));
 
-        // New timer for scheduled unblock notifications (e.g., every 15 minutes)
-        _timerUnblockReminder = new Timer(PerformUnblockReminderCheck, null, TimeSpan.Zero, TimeSpan.FromMinutes(15));
+        // New timer for scheduled unblock notifications (e.g., every 240 minutes)
+        _timerUnblockReminder = new Timer(PerformUnblockReminderCheck, null, TimeSpan.Zero, TimeSpan.FromMinutes(240));
 
         return Task.CompletedTask;
     }
@@ -45,33 +47,45 @@ public class EscalationTimeoutService : IHostedService, IDisposable
         {
             var context = scope.ServiceProvider.GetRequiredService<BlockingApiDbContext>();
             var notificationRepo = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
+            var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
 
-            // Find block records with a scheduled unblock date that has passed and not yet unblocked
+            // Find block records with a scheduled unblock date that has passed and not yet unblocked.
             var blocksToNotify = context.BlockRecords
                 .Where(b => b.ScheduledUnblockDate != null &&
                             b.ScheduledUnblockDate <= DateTimeOffset.Now &&
                             b.ActualUnblockDate == null)
                 .ToList();
 
-
             foreach (var block in blocksToNotify)
             {
-                // Construct the notification message
+                // Log the block for debugging purposes.
+                Console.WriteLine(block);
+
+                // Construct the notification message.
                 var notification = new Notification
                 {
-                    FromUserId = 0, // Use a system user ID or similar
+                    // Here, using BlockedByUserId for both FromUserId and ToUserId as an example.
+                    FromUserId = block.BlockedByUserId,
                     ToUserId = block.BlockedByUserId,
                     Subject = "Unblock Reminder",
-                    Message = $"The block on customer {block.Customer.CID} was scheduled to be lifted on {block.ScheduledUnblockDate:yyyy-MM-dd HH:mm} UTC. Please review and unblock if appropriate.",
-                    Link = "/unblock-customer" // Adjust the link as necessary
+                    Message = $"The block on customer {block.CustomerId} was scheduled to be lifted on {block.ScheduledUnblockDate:yyyy-MM-dd HH:mm} UTC. Please review and unblock if appropriate.",
+                    Link = $"unblock/{block.Customer.CID}",
                 };
 
-                // Send the notification
+                // Save the notification in the database.
                 notificationRepo.AddNotificationAsync(notification).Wait();
                 _logger.LogInformation("Sent unblock reminder notification for block record {BlockId}", block.Id);
 
-                // Optional: Mark as notified (if you add a flag like IsUnblockNotificationSent)
-                // block.IsUnblockNotificationSent = true;
+                // Broadcast the notification to all connected clients via SignalR.
+                // Since we're in a synchronous callback, use .GetAwaiter().GetResult()
+                hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                {
+                    notification.Id,
+                    notification.Subject,
+                    notification.Message,
+                    notification.CreatedAt,
+                    UserId = notification.ToUserId
+                }).GetAwaiter().GetResult();
             }
         }
         catch (Exception ex)
@@ -92,7 +106,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
 
             var log = new AuditLog
             {
-                UserId = 1,  // ensure user #1 exists
+                UserId = 1,  // Ensure user #1 exists
                 Action = "EscalationTimeoutService Heartbeat",
                 Timestamp = DateTimeOffset.Now
             };

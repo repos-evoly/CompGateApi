@@ -28,6 +28,7 @@ namespace BlockingApi.Data.Seeding
             SeedAdminUser();
             SeedCustomers();
             SeedRolePermissions();
+            SeedSettings();
         }
 
         #region Role Seeding
@@ -37,15 +38,15 @@ namespace BlockingApi.Data.Seeding
             {
                 var roles = new List<Role>
         {
-            new() { NameLT = "SuperAdmin", Description = "Full control over the system" },
-            new() { NameLT = "Admin", Description = "Manages users, roles, and transactions" },
-            new() { NameLT = "Manager", Description = "Manages a specific area or department" },
-            new() { NameLT = "AssistantManager", Description = "Assists the Manager in overseeing operations" },
-            new() { NameLT = "DeputyManager", Description = "Assists with managerial tasks and decision-making" },
-            new() { NameLT = "Maker", Description = "Handles transaction creation and data entry" },
-            new() { NameLT = "Checker", Description = "Reviews and approves transactions" },
-            new() { NameLT = "Viewer", Description = "Can only view information, no modification rights" },
-            new() { NameLT = "Auditor", Description = "Can only view audit logs and system changes" }
+            new() { NameLT = "SuperAdmin",  NameAR = "SuperAdminAR",Description = "Full control over the system" },
+            new() { NameLT = "Admin",NameAR = "AdminAR", Description = "Manages users, roles, and transactions" },
+            new() { NameLT = "Manager",NameAR = "ManagerAR", Description = "Manages a specific area or department" },
+            new() { NameLT = "AssistantManager",NameAR = "AssistantManagerAR", Description = "Assists the Manager in overseeing operations" },
+            new() { NameLT = "DeputyManager", NameAR = "DeputyManagerAR", Description = "Assists with managerial tasks and decision-making" },
+            new() { NameLT = "Maker",NameAR = "MakerAR", Description = "Handles transaction creation and data entry" },
+            new() { NameLT = "Checker", NameAR = "CheckerAR", Description = "Reviews and approves transactions" },
+            new() { NameLT = "Viewer",NameAR = "ViewerAR", Description = "Can only view information, no modification rights" },
+            new() { NameLT = "Auditor",NameAR = "AuditorAR", Description = "Can only view audit logs and system changes" }
         };
 
                 _context.Roles.AddRange(roles);
@@ -77,7 +78,23 @@ namespace BlockingApi.Data.Seeding
             new() { Name = "ManageDocuments", Description = "Can manage documents" },
             new() { Name = "ViewDocuments", Description = "Can view documents" },
             new() { Name = "ManageTransactions", Description = "Can manage transactions" },
-            new() { Name = "EscalateTransactions", Description = "Can escalate transactions" }
+            new() { Name = "CanDashboard", Description = "Can Dashboard" },
+            new() { Name = "CanTransactions", Description = "Can Transactions" },
+            new() { Name = "CanBlock", Description = "Can Block" },
+            new() { Name = "CanUnblock", Description = "Can Unblock" },
+            new() { Name = "CanUsers", Description = "Can Users" },
+            new() { Name = "CanDefinitions", Description = "Definitions" },
+            new() { Name = "CanArea", Description = "Can Area" },
+            new() { Name = "CanBranches", Description = "Can Branches" },
+            new() { Name = "CanReasons", Description = "Can Reasons" },
+            new() { Name = "CanSources", Description = "Can Sources" },
+            new() { Name = "CanRoles", Description = "Can Roles" },
+            new() { Name = "CanPermissions", Description = "Can Permissions" },
+            new() { Name = "CanDocuments", Description = "Can Documents" },
+            new() { Name = "CanBankDocuments", Description = "Can Bank Documents" },
+            new() { Name = "CanUserActivity", Description = "Can Activity" },
+            new() { Name = "CanSettings", Description = "Can Settings" },
+
         };
 
                 _context.Permissions.AddRange(permissions);
@@ -87,112 +104,84 @@ namespace BlockingApi.Data.Seeding
 
         #endregion
 
+        #region Settings Seeding
+        private void SeedSettings()
+        {
+            if (!_context.Settings.Any())
+            {
+                var settings = new Settings
+                {
+                    TransactionAmount = 50000,              // Adjust as needed
+                    TransactionAmountForeign = 10000,         // Adjust as needed
+                    TransactionTimeTo = "10",             // Example value
+                    TimeToIdle = "15"                        // Example: idle time in minutes
+                };
+
+                _context.Settings.Add(settings);
+                _context.SaveChanges();
+            }
+        }
+        #endregion
+
         private void SeedRolePermissions()
         {
             if (!_context.RolePermissions.Any())
             {
                 var roles = _context.Roles.ToList();
                 var permissions = _context.Permissions.ToList();
-
                 var rolePermissions = new List<RolePermission>();
+
+                // Define the exclusion sets for Maker and for Checker/Auditor/Viewer
+                var makerExclusions = new HashSet<string>(new[]
+                {
+            "blockpermission", "unblockpermission", "cansettings", "canusers", "cansources", "canreasons", "canarea", "canbranches", "canblock" , "canunblock" , "candefinitions"
+        });
+
+                var otherExclusions = new HashSet<string>(new[]
+                {
+            "blockpermission", "unblockpermission", "cansettings", "canusers", "cansources", "canreasons", "canuseractivity", "canarea", "canbranches", "canblock" , "canunblock"
+        });
 
                 foreach (var role in roles)
                 {
-                    // SuperAdmin gets ALL permissions
-                    if (role.NameLT == "SuperAdmin")
+                    // Normalize role name for comparison.
+                    string roleName = role.NameLT?.ToLower() ?? string.Empty;
+
+                    // For SuperAdmin, Admin, Manager, AssistantManager, DeputyManager: assign all permissions.
+                    if (roleName == "superadmin" ||
+                        roleName == "admin" ||
+                        roleName == "manager" ||
+                        roleName == "assistantmanager" ||
+                        roleName == "deputymanager")
                     {
                         foreach (var perm in permissions)
                         {
                             rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
                         }
                     }
-                    else if (role.NameLT == "Admin")
+                    else if (roleName == "maker")
                     {
-                        var manageUsersPermission = permissions.FirstOrDefault(p => p.Name == "ManageUsers");
-                        if (manageUsersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageUsersPermission.Id });
-
-                        var manageRolesPermission = permissions.FirstOrDefault(p => p.Name == "ManageRoles");
-                        if (manageRolesPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageRolesPermission.Id });
-
-                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
-                        if (viewCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
-
-                        var blockPermission = permissions.FirstOrDefault(p => p.Name == "BlockPermission");
-                        if (blockPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = blockPermission.Id });
-
-                        var unblockPermission = permissions.FirstOrDefault(p => p.Name == "UnblockPermission");
-                        if (unblockPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = unblockPermission.Id });
-
-                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
-                        if (approveTransactionsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
-
-                        var escalateTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "EscalateTransactions");
-                        if (escalateTransactionsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = escalateTransactionsPermission.Id });
+                        // Maker gets all permissions except those in makerExclusions.
+                        foreach (var perm in permissions)
+                        {
+                            if (!makerExclusions.Contains(perm.Name.ToLower()))
+                            {
+                                rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
+                            }
+                        }
                     }
-                    else if (role.NameLT == "Manager" || role.NameLT == "AssistantManager" || role.NameLT == "DeputyManager")
+                    else if (roleName == "checker" ||
+                             roleName == "auditor" ||
+                             roleName == "viewer")
                     {
-                        var manageAreasPermission = permissions.FirstOrDefault(p => p.Name == "ManageAreas");
-                        if (manageAreasPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageAreasPermission.Id });
-
-                        var manageBranchesPermission = permissions.FirstOrDefault(p => p.Name == "ManageBranches");
-                        if (manageBranchesPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageBranchesPermission.Id });
-
-                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
-                        if (viewCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
-
-                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
-                        if (approveTransactionsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
-                    }
-                    else if (role.NameLT == "Maker")
-                    {
-                        var manageTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ManageTransactions");
-                        if (manageTransactionsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = manageTransactionsPermission.Id });
-
-                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
-                        if (viewCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
-                    }
-                    else if (role.NameLT == "Checker")
-                    {
-                        var approveTransactionsPermission = permissions.FirstOrDefault(p => p.Name == "ApproveTransactions");
-                        if (approveTransactionsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = approveTransactionsPermission.Id });
-
-                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
-                        if (viewCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
-                    }
-                    else if (role.NameLT == "Viewer")
-                    {
-                        var viewCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewCustomers");
-                        if (viewCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewCustomersPermission.Id });
-
-                        var viewBlockedCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewBlockedCustomers");
-                        if (viewBlockedCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewBlockedCustomersPermission.Id });
-
-                        var viewUnblockedCustomersPermission = permissions.FirstOrDefault(p => p.Name == "ViewUnblockedCustomers");
-                        if (viewUnblockedCustomersPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewUnblockedCustomersPermission.Id });
-                    }
-                    else if (role.NameLT == "Auditor")
-                    {
-                        var viewAuditLogsPermission = permissions.FirstOrDefault(p => p.Name == "ViewAuditLogs");
-                        if (viewAuditLogsPermission != null)
-                            rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = viewAuditLogsPermission.Id });
+                        // Checker, Auditor, Viewer get all permissions except those in otherExclusions.
+                        foreach (var perm in permissions)
+                        {
+                            if (!otherExclusions.Contains(perm.Name.ToLower()))
+                            {
+                                rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
+                            }
+                        }
                     }
                 }
 
@@ -200,6 +189,7 @@ namespace BlockingApi.Data.Seeding
                 _context.SaveChanges();
             }
         }
+
 
 
 

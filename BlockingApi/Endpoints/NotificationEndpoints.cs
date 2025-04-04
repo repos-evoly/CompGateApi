@@ -1,10 +1,13 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using BlockingApi.Abstractions;
 using BlockingApi.Core.Abstractions;
+using BlockingApi.Core.Dtos;
 using BlockingApi.Data.Abstractions;
 using BlockingApi.Data.Models;
 using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
+using BlockingApi.Hubs;
 
 public class NotificationEndpoints : IEndpoints
 {
@@ -12,31 +15,47 @@ public class NotificationEndpoints : IEndpoints
     {
         var notifications = app.MapGroup("/api/notifications").RequireAuthorization("requireAuthUser");
 
-        // GET notifications for the authenticated user
+        // GET endpoint (existing)
         notifications.MapGet("/", GetNotifications)
             .Produces<List<NotificationDto>>(200);
 
-        // Mark a notification as read
+        // Mark a notification as read (existing)
         notifications.MapPost("/mark-as-read/{notificationId:int}", MarkAsRead)
             .Produces(200)
             .Produces(400);
 
-        // GET notifications for the authenticated user filtered by read status
-        notifications.MapGet("/filter/{readStatus}", GetFilteredNotifications)
-            .Produces<List<NotificationDto>>(200);
+        // New endpoint: Send notification and broadcast to all connected clients.
+        notifications.MapPost("/send", SendNotification)
+           .Produces(200)
+           .Produces(400);
     }
 
-    // Get all notifications for the authenticated user
+    // GET endpoint: retrieves notifications for the authenticated user.
     public static async Task<IResult> GetNotifications(
         [FromServices] INotificationRepository notificationRepository,
-        HttpContext context)
+        HttpContext context,
+        [FromQuery] string? readStatus)
     {
         int userId = GetUserIdFromClaims(context);
         var notifications = await notificationRepository.GetNotificationsByUserIdAsync(userId);
 
+        // If a readStatus is provided, filter the notifications accordingly.
+        if (!string.IsNullOrEmpty(readStatus))
+        {
+            string normalizedStatus = readStatus.ToLower();
+            if (normalizedStatus == "read")
+            {
+                notifications = notifications.Where(n => n.IsRead).ToList();
+            }
+            else if (normalizedStatus == "unread")
+            {
+                notifications = notifications.Where(n => !n.IsRead).ToList();
+            }
+        }
+
         var notificationDtos = notifications.Select(n => new NotificationDto
         {
-            Id = n.Id,  // Ensure Id is included
+            Id = n.Id,
             FromUserId = n.FromUserId,
             FromUserName = n.FromUser?.FirstName ?? "Unknown",
             ToUserId = n.ToUserId,
@@ -51,7 +70,7 @@ public class NotificationEndpoints : IEndpoints
         return Results.Ok(notificationDtos);
     }
 
-    // Mark a notification as read
+    // POST endpoint: marks a notification as read.
     public static async Task<IResult> MarkAsRead(
         int notificationId,
         [FromServices] INotificationRepository notificationRepository)
@@ -60,42 +79,45 @@ public class NotificationEndpoints : IEndpoints
         return Results.Ok("Notification marked as read.");
     }
 
-    // Get notifications for the authenticated user filtered by read status
-    public static async Task<IResult> GetFilteredNotifications(
-        string readStatus,
-        [FromServices] INotificationRepository notificationRepository,
-        HttpContext context)
+    // POST endpoint: Sends a notification and broadcasts it to all connected clients.
+    public static async Task<IResult> SendNotification(
+       [FromBody] NotificationSendDto notificationDto,
+       [FromServices] INotificationRepository notificationRepository,
+       [FromServices] IHubContext<NotificationHub> hubContext)
     {
-        // Convert readStatus to boolean (assumes "read" returns true, anything else returns false)
-        bool isRead = readStatus.ToLower() == "read";
-
-        int userId = GetUserIdFromClaims(context);
-        // First, get all notifications for the user
-        var notifications = await notificationRepository.GetNotificationsByUserIdAsync(userId);
-        // Then filter by read status
-        notifications = notifications.Where(n => n.IsRead == isRead).ToList();
-
-        var notificationDtos = notifications.Select(n => new NotificationDto
+        // Map the DTO to your Notification model.
+        var notification = new Notification
         {
-            Id = n.Id,  // Ensure Id is included
-            FromUserId = n.FromUserId,
-            FromUserName = n.FromUser?.FirstName ?? "Unknown",
-            ToUserId = n.ToUserId,
-            ToUserName = n.ToUser?.FirstName ?? "Unknown",
-            Subject = n.Subject,
-            Message = n.Message,
-            Link = n.Link,
-            IsRead = n.IsRead,
-            CreatedAt = n.CreatedAt
-        }).ToList();
+            FromUserId = notificationDto.FromUserId,
+            ToUserId = notificationDto.ToUserId,
+            Subject = notificationDto.Subject,
+            Message = notificationDto.Message,
+            Link = notificationDto.Link,
+            IsRead = false,
+            CreatedAt = DateTimeOffset.Now
+        };
 
-        return Results.Ok(notificationDtos);
+        // Save the notification to the database.
+        await notificationRepository.AddNotificationAsync(notification);
+
+        // Broadcast the notification to all connected clients.
+        await hubContext.Clients.All.SendAsync("ReceiveNotification", new
+        {
+            NotificationId = notification.Id,
+            NotificationSubject = notification.Subject,
+            NotificationMessage = notification.Message,
+            Created = notification.CreatedAt,
+            UserId = notification.ToUserId  // Added user id field
+
+        });
+
+        return Results.Ok("Notification sent successfully.");
     }
 
-    // Helper method to extract the authenticated user's ID from the HttpContext claims
+    // Helper method to extract the authenticated user's ID from the HttpContext claims.
     private static int GetUserIdFromClaims(HttpContext context)
     {
-        var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userIdClaim = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return int.TryParse(userIdClaim, out int userId) ? userId : 0;
     }
 }

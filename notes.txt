@@ -5,3 +5,40 @@ Recaptcha secret key: 6LdG2tUqAAAAAKgU0Znpa2dwT2Ol3bMN0LPiB163
     "DevConnection": "Server=DESKTOP-Q6SN24Q,1433;Database=BlockingDb;User Id=ccadmin;Password=ccadmin;Trusted_Connection=False;MultipleActiveResultSets=true;TrustServerCertificate=True;",
     "StagingConnection": "Data Source=tcp:10.3.3.11;Database=BlockingDb;User Id=ccadmin;Password=ccadmin;Trusted_Connection=False;MultipleActiveResultSets=true;TrustServerCertificate=True;"
   },
+
+User Seed Permission:
+INSERT INTO [Blocking].[dbo].[UserRolePermissions]
+    ([UserId], [RoleId], [PermissionId], [CreatedAt], [UpdatedAt])
+VALUES
+    (1, 2, 1, GETDATE(), GETDATE()),
+    (1, 2, 2, GETDATE(), GETDATE()),
+    (1, 2, 3, GETDATE(), GETDATE()),
+    (1, 2, 4, GETDATE(), GETDATE()),
+    (1, 2, 5, GETDATE(), GETDATE()),
+    (1, 2, 6, GETDATE(), GETDATE()),
+    (1, 2, 7, GETDATE(), GETDATE()),
+    (1, 2, 8, GETDATE(), GETDATE()),
+    (1, 2, 9, GETDATE(), GETDATE()),
+    (1, 2, 10, GETDATE(), GETDATE()),
+    (1, 2, 11, GETDATE(), GETDATE()),
+    (1, 2, 12, GETDATE(), GETDATE()),
+    (1, 2, 13, GETDATE(), GETDATE()),
+    (1, 2, 14, GETDATE(), GETDATE()),
+    (1, 2, 15, GETDATE(), GETDATE()),
+    (1, 2, 16, GETDATE(), GETDATE()),
+    (1, 2, 17, GETDATE(), GETDATE()),
+    (1, 2, 18, GETDATE(), GETDATE()),
+    (1, 2, 19, GETDATE(), GETDATE()),
+    (1, 2, 20, GETDATE(), GETDATE()),
+    (1, 2, 21, GETDATE(), GETDATE()),
+    (1, 2, 22, GETDATE(), GETDATE()),
+    (1, 2, 23, GETDATE(), GETDATE()),
+    (1, 2, 24, GETDATE(), GETDATE()),
+    (1, 2, 26, GETDATE(), GETDATE()),
+	  (1, 2, 27, GETDATE(), GETDATE()),
+	  (1, 2, 28, GETDATE(), GETDATE()),
+	  (1, 2, 29, GETDATE(), GETDATE()),
+	  (1, 2, 30, GETDATE(), GETDATE()),
+		(1, 2, 31, GETDATE(), GETDATE());
+		 
+

@@ -299,21 +299,24 @@ namespace BlockingApi.Core.Repositories
             return await _context.Permissions.ToListAsync();
         }
 
-        public async Task<List<BasicUserDto>> GetManagementUsersAsync()
+        public async Task<List<BasicUserDto>> GetManagementUsersAsync(string currentUserRole)
         {
-            // Define the management role names you want to filter by.
-            var managementRoles = new List<string> { "Manager", "DeputyManager", "AssistantManager" };
+            // Define the management role names (all management-related roles).
+            var managementRoles = new List<string> { "Manager", "DeputyManager", "AssistantManager", "Maker" };
 
-            // Query the database for users whose Role.NameLT is one of the management roles.
+            // Return only those users whose role is in the list but not equal to currentUserRole.
             return await _context.Users
                 .Include(u => u.Role)
-                .Where(u => managementRoles.Contains(u.Role.NameLT))
+                .Where(u => managementRoles.Contains(u.Role.NameLT) &&
+                            u.Role.NameLT.ToLower() != currentUserRole.ToLower())
                 .Select(u => new BasicUserDto
                 {
                     UserId = u.Id,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
-                    Email = u.Email
+                    Email = u.Email,
+                    RoleLT = u.Role.NameLT,
+                    RoleAR = u.Role.NameAR,
                 })
                 .ToListAsync();
         }

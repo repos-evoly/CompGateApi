@@ -1,6 +1,7 @@
 using BlockingApi.Core.Startup;
 using BlockingApi.Data.Seeding;
 using BlockingApi.Extensions;
+using BlockingApi.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,7 @@ builder.RegisterServices();
 builder.Logging.ClearProviders();
 builder.Host.ConfigureSerilog();
 builder.Services.AddHostedService<EscalationTimeoutService>();
+
 
 
 var app = builder.Build();
@@ -26,6 +28,9 @@ app.ConfigureStaticFiles();
 app.UseCors("AllowSpecificOrigins");
 app.UseAuthorization();
 app.UseAuthentication();
+
+app.MapHub<NotificationHub>("/notificationHub");
+
 
 app.RegisterEndpoints();
 

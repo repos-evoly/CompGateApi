@@ -1,14 +1,13 @@
-using BlockingApi.Core.Abstractions;
-using BlockingApi.Data.Models;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Authorization;
+using BlockingApi.Core.Dtos;
+using BlockingApi.Core.Abstractions;
+using BlockingApi.Data.Abstractions;
+using BlockingApi.Abstractions;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
-using BlockingApi.Core.Dtos;
-using BlockingApi.Abstractions;
-using System.Security.Claims;
 
 namespace BlockingApi.Endpoints
 {
@@ -26,147 +25,108 @@ namespace BlockingApi.Endpoints
                 .Produces<UserActivityDto>(200)
                 .Produces(404);
 
-
             activity.MapGet("/all", GetAllUserActivities)
                 .Produces<List<UserActivityDto>>(200);
         }
 
+        // POST: Update the user's activity status.
         public static async Task<IResult> UpdateUserActivity(
-    [FromBody] UserActivityDto activityDto,
-    [FromServices] IUserActivityRepository userActivityRepository,
-    ILogger<UserActivityEndpoints> logger)
+            [FromBody] UserActivityDto activityDto,
+            [FromServices] IUserActivityRepository userActivityRepository,
+            ILogger<UserActivityEndpoints> logger)
         {
             logger.LogInformation("Updating user activity: UserId {UserId} - Status {Status}", activityDto.UserId, activityDto.Status);
-
             bool updated = await userActivityRepository.UpdateUserStatus(activityDto.UserId, activityDto.Status);
             return updated ? Results.Ok("User activity updated.") : Results.BadRequest("Failed to update activity.");
         }
 
-
+        // GET: Return the current user's own activity enriched with auth details.
         public static async Task<IResult> GetUserActivities(
-       HttpContext context,
-       [FromServices] IUserRepository userRepository,
-       [FromServices] IUserActivityRepository userActivityRepository,
-       // Optional filters
-       [FromQuery] string? branchId,
-       [FromQuery] int? areaId,
-       ILogger<UserActivityEndpoints> logger)
+            HttpContext context,
+            [FromServices] IUserActivityRepository userActivityRepository,
+            [FromServices] IUserRepository userRepository)
         {
-            // Retrieve the current user from the token
+            int currentUserId = AuthUserId(context);
             var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
-            var currentUserAuthId = int.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-            var currentUser = await userRepository.GetUserByAuthId(currentUserAuthId, authToken);
-            if (currentUser == null)
+            var currentUserDetails = await userRepository.GetUserByAuthId(currentUserId, authToken);
+            if (currentUserDetails == null)
                 return Results.BadRequest("Invalid user.");
 
-            // Determine role (assuming Role.Name is available)
-            var roleName = currentUser.Role.ToLower();
+            var dto = await userActivityRepository.GetUserActivityWithAuthDetailsAsync(currentUserId, authToken);
+            if (dto == null)
+                return Results.NotFound("User activity not found.");
+            return Results.Ok(dto);
+        }
 
-            List<UserActivity> activities = new List<UserActivity>();
+        // GET: Return all user activities for the current user's branch.
+        // Makers see only activities in their area (forced area filter) and can optionally filter by branch.
+        // Managers, AssistantManagers, and DeputyManagers see all activities and can filter by branch or area.
+        public static async Task<IResult> GetAllUserActivities(
+    [FromQuery] string? branch,
+    [FromQuery] int? area,
+    HttpContext context,
+    [FromServices] IUserActivityRepository userActivityRepository,
+    [FromServices] IUserRepository userRepository)
+        {
+            if (!context.User.Identity?.IsAuthenticated ?? false)
+                return Results.Unauthorized();
 
-            if (roleName.Contains("manager") || roleName.Contains("deputymanager") || roleName.Contains("assistantmanager"))
+            var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int currentUserId))
+                return Results.Unauthorized();
+
+            var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            var currentUserDetails = await userRepository.GetUserByAuthId(currentUserId, authToken);
+            if (currentUserDetails == null)
+                return Results.BadRequest("Invalid user.");
+
+            // Convert role to lowercase for consistent comparison.
+            string role = currentUserDetails.Role?.ToLower() ?? "";
+
+            List<UserActivityDto> dtos = null;
+            if (role == "maker")
             {
-                // For Manager-like roles, retrieve all activities.
-                // (Assumes you have implemented GetAllActivities in your repository)
-                activities = await userActivityRepository.GetAllActivities();
-
-                // Apply branch or area filters if provided
-                if (branchId != null)
+                // For Maker, force area filter to his own area.
+                if (area.HasValue && area.Value != currentUserDetails.AreaId)
                 {
-                    activities = activities.Where(a => a.User.Branch.CABBN == branchId).ToList();
+                    return Results.BadRequest("As a Maker, you can only view your own area.");
                 }
-                else if (areaId.HasValue)
-                {
-                    activities = activities.Where(a => a.User.Branch.AreaId == areaId.Value).ToList();
-                }
+                dtos = await userActivityRepository.GetAllUserActivitiesWithAuthDetailsAsync(currentUserId, authToken, branch, currentUserDetails.AreaId);
             }
-            else if (roleName.Contains("maker"))
+            else if (role == "manager" || role == "assistantmanager" || role == "deputymanager" ||
+                     role == "admin" || role == "superadmin")
             {
-                // For Maker, only allow activities from his own area.
-                int makerAreaId = currentUser.Branch.AreaId;
-                // (Assumes you have implemented GetActivitiesByArea in your repository)
-                activities = await userActivityRepository.GetActivitiesByArea(makerAreaId);
-
-                // If a branch filter is provided, further filter the result.
-                if (branchId != null)
+                // For these roles, if no filter is provided, show all activities.
+                // Otherwise, use the provided branch and/or area filter.
+                if (string.IsNullOrEmpty(branch) && !area.HasValue)
                 {
-                    activities = activities.Where(a => a.User.Branch.CABBN == branchId).ToList();
+                    dtos = await userActivityRepository.GetAllUserActivitiesWithAuthDetailsAsync(currentUserId, authToken, null, null);
+                }
+                else
+                {
+                    dtos = await userActivityRepository.GetAllUserActivitiesWithAuthDetailsAsync(currentUserId, authToken, branch, area);
                 }
             }
             else
             {
-                // Fallback: only return the current user's activity.
-                var activity = await userActivityRepository.GetUserActivity(currentUser.UserId);
-                if (activity != null)
-                    activities.Add(activity);
+                // For all other roles, only return the current user's activity.
+                var single = await userActivityRepository.GetUserActivityWithAuthDetailsAsync(currentUserId, authToken);
+                if (single == null)
+                    return Results.NotFound("User activity not found.");
+                return Results.Ok(single);
             }
 
-            return Results.Ok(activities);
+            return Results.Ok(dtos);
         }
 
 
 
-        public static async Task<IResult> GetAllUserActivities(
-     [FromServices] IUserActivityRepository userActivityRepository,
-     HttpContext httpContext)
-        {
-            // 🔥 Check if the user is authenticated
-            if (!httpContext.User.Identity?.IsAuthenticated ?? false)
-            {
-                Console.WriteLine("❌ User is NOT authenticated!");
-                return Results.Unauthorized();
-            }
-            Console.WriteLine("✅ User IS authenticated!");
 
-            // 🔍 Log all claims to verify correct claim extraction
-            foreach (var claim in httpContext.User.Claims)
-            {
-                Console.WriteLine($"Claim Type: {claim.Type}, Value: {claim.Value}");
-            }
-
-            // ✅ Extract UserId from multiple possible claims
-            var userIdClaim = httpContext.User.Claims
-                .FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value // 🔥 Standard .NET claim type
-                ?? httpContext.User.Claims.FirstOrDefault(c => c.Type == "nameidentifier")?.Value // 🔥 Raw JWT claim
-                ?? httpContext.User.Claims.FirstOrDefault(c => c.Type == "sid")?.Value; // 🔥 Alternate claim
-
-            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
-            {
-                Console.WriteLine("❌ User ID is missing or invalid in token!");
-                return Results.Unauthorized();
-            }
-
-            Console.WriteLine($"✅ Extracted UserId: {userId}");
-
-            // ✅ Fetch user activities for this user’s branch
-            var activities = await userActivityRepository.GetAllUserActivitiesForUser(userId);
-
-            return Results.Ok(activities.Select(activity => new
-            {
-                UserId = activity.UserId,
-                Status = activity.Status,
-                LastActivityTime = activity.LastActivityTime,
-
-                User = new
-                {
-                    activity.User.FirstName,
-                    activity.User.LastName,
-                    activity.User.Email
-                },
-
-                Branch = new
-                {
-                    activity.User.Branch.Name
-                }
-            }));
-        }
-
+        // Helper: Extract the authenticated user's ID from claims.
         private static int AuthUserId(HttpContext context)
         {
-            // Assumes the ClaimTypes.NameIdentifier contains the user id.
             var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return int.TryParse(userIdClaim, out int userId) ? userId : 0;
         }
-
     }
 }

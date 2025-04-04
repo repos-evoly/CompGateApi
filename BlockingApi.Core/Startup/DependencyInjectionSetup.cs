@@ -21,6 +21,8 @@ using BlockingApi.Abstractions;
 using BlockingApi.Repositories;
 using BlockingApi.Data.Repositories;
 using BlockingApi.Data.Abstractions;
+using BlockingApi.Core.Services;
+
 
 namespace BlockingApi.Core.Startup
 {
@@ -62,6 +64,10 @@ namespace BlockingApi.Core.Startup
       });
 
       builder.Services.RegisterValidators();
+      builder.Services.AddSignalR();
+
+      // Optionally, add your NotificationService to DI:
+      builder.Services.AddScoped<NotificationService>();
       builder.Services.RegisterRepos();
       return builder;
     }

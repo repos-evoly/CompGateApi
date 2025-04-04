@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using BlockingApi.Data.Models;
 
 namespace BlockingApi.Core.Dtos
@@ -79,6 +80,9 @@ namespace BlockingApi.Core.Dtos
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+
+        public string RoleLT { get; set; } = string.Empty;
+        public string RoleAR { get; set; } = string.Empty;
     }
 
 
@@ -91,6 +95,12 @@ namespace BlockingApi.Core.Dtos
         public bool Active { get; set; }
         public bool IsTwoFactorEnabled { get; set; }
         public string? PasswordResetToken { get; set; }
+
+        [JsonPropertyName("lastLogin")]
+        public DateTimeOffset? LastLogin { get; set; }
+
+        [JsonPropertyName("lastLogout")]
+        public DateTimeOffset? LastLogout { get; set; }
     }
 
     public class AuthRegisterResponseDto

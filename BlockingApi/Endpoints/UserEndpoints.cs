@@ -201,14 +201,22 @@ namespace BlockingApi.Endpoints
         }
 
         public static async Task<IResult> GetManagementUsers(
-             [FromServices] IUserRepository userRepository,
-             ILogger<UserEndpoints> logger)
+            HttpContext context,
+            [FromServices] IUserRepository userRepository,
+            ILogger<UserEndpoints> logger)
         {
-            var managementUsers = await userRepository.GetManagementUsersAsync();
+            int currentUserId = AuthUserId(context);
+            var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            var currentUser = await userRepository.GetUserByAuthId(currentUserId, authToken);
+            if (currentUser == null)
+                return Results.BadRequest("Invalid user.");
+
+            // Use the role from the fetched user details.
+            string currentUserRole = currentUser.Role;
+            var managementUsers = await userRepository.GetManagementUsersAsync(currentUserRole);
             logger.LogInformation("Retrieved {Count} management users.", managementUsers.Count);
             return Results.Ok(managementUsers);
         }
-
 
         public static async Task<IResult> GetUserByAuthId(
           int authId,
@@ -286,6 +294,12 @@ namespace BlockingApi.Endpoints
             logger.LogInformation("Fetching all permissions");
             var permissions = await userRepository.GetPermissions();
             return Results.Ok(permissions);
+        }
+
+        private static int AuthUserId(HttpContext context)
+        {
+            var userIdClaim = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(userIdClaim, out int userId) ? userId : 0;
         }
 
     }
