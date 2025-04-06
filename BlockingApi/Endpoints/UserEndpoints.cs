@@ -212,7 +212,7 @@ namespace BlockingApi.Endpoints
                 return Results.BadRequest("Invalid user.");
 
             // Use the role from the fetched user details.
-            string currentUserRole = currentUser.Role;
+            string currentUserRole = currentUser.Role.NameLT;
             var managementUsers = await userRepository.GetManagementUsersAsync(currentUserRole);
             logger.LogInformation("Retrieved {Count} management users.", managementUsers.Count);
             return Results.Ok(managementUsers);

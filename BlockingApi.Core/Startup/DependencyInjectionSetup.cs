@@ -308,6 +308,38 @@ namespace BlockingApi.Core.Startup
            "Checker",
            "Viewer",
            "Auditor"));
+       a.AddPolicy("CanDashboard", b => b.RequireRole(
+          "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanTransactions", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanBlock", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanUnblock", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanUsers", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanDefinitions", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanArea", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanBranches", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanReasons", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanSources", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanRoles", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanPermissions", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanDocuments", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanBankDocuments", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanUserActivity", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
+       a.AddPolicy("CanSettings", b => b.RequireRole(
+           "SuperAdmin", "Admin", "Maker", "Manager", "AssistantManager", "DeputyManager", "Checker", "Viewer", "Auditor"));
      });
       return auth;
     }

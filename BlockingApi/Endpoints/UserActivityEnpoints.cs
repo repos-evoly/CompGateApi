@@ -81,7 +81,7 @@ namespace BlockingApi.Endpoints
                 return Results.BadRequest("Invalid user.");
 
             // Convert role to lowercase for consistent comparison.
-            string role = currentUserDetails.Role?.ToLower() ?? "";
+            string role = currentUserDetails.Role?.NameLT.ToLower() ?? "";
 
             List<UserActivityDto> dtos = null;
             if (role == "maker")

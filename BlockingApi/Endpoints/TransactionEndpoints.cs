@@ -114,7 +114,7 @@ public class TransactionEndpoints : IEndpoints
             else
             {
                 // If not escalated, determine role logic
-                var roleName = currentUser.Role?.ToLower() ?? string.Empty;
+                var roleName = currentUser.Role?.NameLT.ToLower() ?? string.Empty;
 
                 if (roleName.Contains("auditor") || roleName.Contains("checker"))
                 {
@@ -176,8 +176,8 @@ public class TransactionEndpoints : IEndpoints
                 {
                     FromUserId = initiatorId,
                     ToUserId = currentPartyId ?? throw new InvalidOperationException("currentPartyId cannot be null when escalation is true"), // Ensure currentPartyId is not null when escalation is true
-                    Subject = "Transaction Escalated",
-                    Message = $"Transaction {transaction.Id} has been escalated to you for further action.",
+                    Subject = "تم احالة المعاملة",
+                    Message = $"لقد تم إحالة المعاملة رقم {transaction.Id} إليك لاتخاذ الإجراءات الإضافية.",
                     Link = $"transactions/{transaction.Id}"
                 }
                 ;
@@ -204,7 +204,6 @@ public class TransactionEndpoints : IEndpoints
        [FromServices] ITransactionRepository transactionRepository,
        HttpContext context)
     {
-        // Extract the authenticated user's ID from the claims.
         int userId = AuthUserId(context);
 
         // Retrieve transactions relevant to the current user.
@@ -214,12 +213,47 @@ public class TransactionEndpoints : IEndpoints
         if (!string.IsNullOrEmpty(status))
         {
             transactions = transactions
-                .Where(t => t.Status.Equals(status, StringComparison.OrdinalIgnoreCase))
+                .Where(t => t.Status.Equals(status, System.StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
-        return Results.Ok(transactions);
+        // Project each transaction into TransactionDto with full names.
+        var result = transactions.Select(t => new TransactionDto
+        {
+            Id = t.Id,
+            BranchCode = t.BranchCode,
+            BranchName = t.BranchName,
+            Basic = t.Basic,
+            Suffix = t.Suffix,
+            InputBranch = t.InputBranch,
+            DC = t.DC,
+            Amount = t.Amount,
+            CCY = t.CCY,
+            InputBranchNo = t.InputBranchNo,
+            PostingDate = t.PostingDate,
+            Nr1 = t.Nr1,
+            Nr2 = t.Nr2,
+            Timestamp = t.Timestamp,
+            Status = t.Status,
+            InitiatorUserId = t.InitiatorUserId,
+            CurrentPartyUserId = t.CurrentPartyUserId,
+            EventKey = t.EventKey,
+            TrxTagCode = t.TrxTagCode,
+            TrxTag = t.TrxTag,
+            TrxSeq = t.TrxSeq,
+            ReconRef = t.ReconRef,
+
+            InitiatorName = t.InitiatorUser != null
+                              ? $"{t.InitiatorUser.FirstName} {t.InitiatorUser.LastName}"
+                              : string.Empty,
+            CurrentPartyName = t.CurrentPartyUser != null
+                              ? $"{t.CurrentPartyUser.FirstName} {t.CurrentPartyUser.LastName}"
+                              : string.Empty
+        }).ToList();
+
+        return Results.Ok(result);
     }
+
 
 
     // Escalate a transaction: from a user to a user.
@@ -248,9 +282,9 @@ public class TransactionEndpoints : IEndpoints
         {
             FromUserId = escalateDto.FromUserId,
             ToUserId = escalateDto.ToUserId,
-            Subject = "Escalated",
-            Message = $"Transaction {transaction.Id} has been escalated to you for further action.",
-            Link = $"transactions/{transaction.Id}",  // Link to transaction details in frontend
+            Subject = "تم احالة المعاملة",
+            Message = $"لقد تم إحالة المعاملة رقم {transaction.Id} إليك لاتخاذ الإجراءات الإضافية.",
+            Link = $"transactions/{transaction.Id}"
         };
 
         await notificationRepository.AddNotificationAsync(notification);

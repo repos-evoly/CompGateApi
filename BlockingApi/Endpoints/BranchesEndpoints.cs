@@ -54,7 +54,7 @@ namespace BlockingApi.Endpoints
             return branch != null ? TypedResults.Ok(mapper.Map<BranchDto>(branch)) : TypedResults.NotFound("Branch not found.");
         }
 
-        [Authorize(Roles = "Admin")]
+     
         public static async Task<IResult> Create([FromServices] BlockingApiDbContext context, [FromServices] IMapper mapper, [FromBody] EditBranchDto branchDto)
         {
             if (branchDto == null) return TypedResults.BadRequest("Invalid branch data.");
@@ -66,7 +66,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Created($"/api/branches/{branch.Id}", mapper.Map<BranchDto>(branch));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Update([FromServices] BlockingApiDbContext context, [FromServices] IMapper mapper, int id, [FromBody] EditBranchDto branchDto)
         {
             var branch = await context.Branches.FindAsync(id);
@@ -79,7 +79,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Ok(mapper.Map<BranchDto>(branch));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Delete([FromServices] BlockingApiDbContext context, int id)
         {
             var branch = await context.Branches.FindAsync(id);

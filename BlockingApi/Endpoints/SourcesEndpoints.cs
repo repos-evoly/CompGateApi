@@ -53,7 +53,7 @@ namespace BlockingApi.Endpoints
             return source != null ? TypedResults.Ok(mapper.Map<SourceDto>(source)) : TypedResults.NotFound("Source not found.");
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Create([FromServices] IUnitOfWork unitOfWork, [FromServices] IMapper mapper, [FromBody] EditSourceDto sourceDto)
         {
             if (sourceDto == null) return TypedResults.BadRequest("Invalid source data.");
@@ -65,7 +65,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Created($"/api/sources/{source.Id}", mapper.Map<SourceDto>(source));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Update([FromServices] IUnitOfWork unitOfWork, [FromServices] IMapper mapper, int id, [FromBody] EditSourceDto sourceDto)
         {
             var source = await unitOfWork.Sources.GetById(s => s.Id == id);
@@ -78,7 +78,6 @@ namespace BlockingApi.Endpoints
             return TypedResults.Ok(mapper.Map<SourceDto>(source));
         }
 
-        [Authorize(Roles = "Admin")]
         public static async Task<IResult> Delete([FromServices] IUnitOfWork unitOfWork, int id)
         {
             var source = await unitOfWork.Sources.GetById(s => s.Id == id);

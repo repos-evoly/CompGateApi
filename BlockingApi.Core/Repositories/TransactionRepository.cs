@@ -176,16 +176,19 @@ namespace BlockingApi.Data.Repositories
         public async Task<List<Transaction>> GetUserTransactionsAsync(int userId)
         {
             return await _context.Transactions
-                .Where(t =>
+                 .Include(t => t.InitiatorUser)
+                 .Include(t => t.CurrentPartyUser)
+                 .Where(t =>
                     t.InitiatorUserId == userId ||
                     t.CurrentPartyUserId == userId ||
                     _context.TransactionFlows.Any(tf =>
                         tf.TransactionId == t.Id &&
                         (tf.FromUserId == userId || (tf.ToUserId.HasValue && tf.ToUserId.Value == userId))
                     )
-                )
-                .ToListAsync();
+                 )
+                 .ToListAsync();
         }
+
 
         public async Task<HashSet<string>> GetExistingEventKeysAsync(List<string> eventKeys)
         {

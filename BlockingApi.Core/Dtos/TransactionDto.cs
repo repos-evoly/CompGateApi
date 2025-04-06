@@ -86,6 +86,13 @@ namespace BlockingApi.Core.Dtos
         public string? Status { get; set; }
         public int? InitiatorUserId { get; set; }
         public int? CurrentPartyUserId { get; set; }
+        public string? InitiatorName { get; set; }
+        public string? CurrentPartyName { get; set; }
+        public string? TrxTagCode { get; set; } = string.Empty;
+        public string? TrxTag { get; set; } = string.Empty;
+        public int? TrxSeq { get; set; }
+        public string? ReconRef { get; set; }
+        public string? EventKey { get; set; }
     }
 
     public class TransactionFlowDto

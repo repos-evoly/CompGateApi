@@ -54,7 +54,7 @@ namespace BlockingApi.Endpoints
             return area != null ? TypedResults.Ok(mapper.Map<AreaDto>(area)) : TypedResults.NotFound("Area not found.");
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Create([FromServices] BlockingApiDbContext context, [FromServices] IMapper mapper, [FromBody] EditAreaDto areaDto)
         {
             if (areaDto == null) return TypedResults.BadRequest("Invalid area data.");
@@ -66,7 +66,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Created($"/api/areas/{area.Id}", mapper.Map<AreaDto>(area));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Update([FromServices] BlockingApiDbContext context, [FromServices] IMapper mapper, int id, [FromBody] EditAreaDto areaDto)
         {
             var area = await context.Areas.FindAsync(id);
@@ -79,7 +79,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Ok(mapper.Map<AreaDto>(area));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Delete([FromServices] BlockingApiDbContext context, int id)
         {
             var area = await context.Areas.FindAsync(id);

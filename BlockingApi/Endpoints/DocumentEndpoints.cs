@@ -87,7 +87,7 @@ namespace BlockingApi.Endpoints
             return documents.Any() ? Results.Ok(documents) : Results.NotFound("No documents found for the given type.");
         }
 
-        
+
         public static async Task<IResult> GetDocumentById(
             [FromRoute] Guid id,
             [FromServices] IDocumentRepository documentRepository,
@@ -96,7 +96,7 @@ namespace BlockingApi.Endpoints
             var document = await documentRepository.GetDocumentById(id);
             return document != null ? Results.Ok(document) : Results.NotFound("Document not found.");
         }
-   
+
         public static async Task<IResult> DeleteDocument(
             [FromRoute] Guid id,
             [FromServices] IDocumentRepository documentRepository,

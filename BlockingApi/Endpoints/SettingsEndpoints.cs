@@ -35,7 +35,7 @@ namespace BlockingApi.Endpoints
         }
 
         // 🔹 PATCH settings (allow partial updates)
-        [Authorize(Roles = "Admin")]
+   
         public static async Task<IResult> Patch([FromServices] ISettingsRepository settingsRepository, [FromServices] IMapper mapper, [FromBody] SettingsPatchDto settingsDto)
         {
             var settings = await settingsRepository.GetFirstSettingsAsync(); // Fetch the first row

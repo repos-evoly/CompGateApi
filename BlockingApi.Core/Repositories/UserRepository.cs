@@ -129,12 +129,14 @@ namespace BlockingApi.Core.Repositories
 
                 var userDto = new UserDetailsDto
                 {
-                    AuthUserId = user.Id,
+                    UserId = user.Id,
+                    AuthUserId = authUser?.Id ?? 0,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     Email = user.Email,
                     Phone = user.Phone,
-                    Role = user.Role?.NameLT ?? "Unknown",
+                    Role = user.Role,
+                    RoleId = user.Role?.Id ?? 0,
                     Branch = user.Branch,
                     IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                     PasswordResetToken = authUser?.PasswordResetToken
@@ -177,10 +179,10 @@ namespace BlockingApi.Core.Repositories
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
-                Role = user.Role?.NameLT ?? "Unknown",
+                Role = user.Role,
+                RoleId = user.Role?.Id ?? 0,
                 Branch = user.Branch,
                 BranchId = user.Branch?.CABBN ?? string.Empty,
-                RoleId = user.Role?.Id ?? 0,
                 Area = user.Branch?.Area,
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                 PasswordResetToken = authUser?.PasswordResetToken,
@@ -223,7 +225,7 @@ namespace BlockingApi.Core.Repositories
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
-                Role = user.Role?.NameLT ?? "Unknown",
+                Role = user.Role,
                 RoleId = user.Role?.Id ?? 0,
                 Branch = user.Branch,
                 BranchId = user.Branch?.CABBN,

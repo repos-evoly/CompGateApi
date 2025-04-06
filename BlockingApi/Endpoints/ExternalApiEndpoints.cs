@@ -62,12 +62,16 @@ namespace BlockingApi.Endpoints
 
 
         public static async Task<IResult> GetCustomerInfo(
-    [FromBody] SearchRequestDto request,
-    [FromServices] IExternalApiRepository externalApiRepository,
-    [FromServices] BlockingApiDbContext context,
-    [FromServices] IKycApiRepository kycApiRepository, // New KYC API repository
-    ILogger<ExternalApiEndpoints> logger)
+        [FromBody] SearchRequestDto request,
+        [FromServices] IExternalApiRepository externalApiRepository,
+        [FromServices] BlockingApiDbContext context,
+        [FromServices] IKycApiRepository kycApiRepository, // New KYC API repository
+        [FromServices] IRoleRepository roleRepository,
+        ClaimsPrincipal user, // Injected ClaimsPrincipal
+        ILogger<ExternalApiEndpoints> logger)
         {
+            if (!await UserHasPermission(user, "ViewCustomers", roleRepository, logger))
+                return Results.Forbid();
             logger.LogInformation("Fetching customer info for {SearchBy}: {SearchTerm}", request.SearchBy, request.SearchTerm);
 
             // Define the string that indicates where the customer was found
@@ -260,11 +264,14 @@ namespace BlockingApi.Endpoints
 
         public static async Task<IResult> BlockCustomer(
     [FromBody] BlockCustomerDto blockDto,
+     ClaimsPrincipal user,
     [FromServices] BlockingApiDbContext context,
     [FromServices] IExternalApiRepository externalApiRepository,
     [FromServices] IRoleRepository roleRepository,
     ILogger<ExternalApiEndpoints> logger)
         {
+            if (!await UserHasPermission(user, "BlockPermission", roleRepository, logger))
+                return Results.Forbid();
             // Validate BlockedByUserId to ensure it exists in the database
             var blockedByUser = await context.Users.FirstOrDefaultAsync(u => u.Id == blockDto.BlockedByUserId);
             if (blockedByUser == null)

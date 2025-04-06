@@ -60,7 +60,7 @@ namespace BlockingApi.Core.Dtos
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         // Instead of a string, include the Role as an object or at least the needed role name:
-        public string Role { get; set; } = string.Empty;
+        public Role? Role { get; set; }
         public int RoleId { get; set; }
         // Return the full Branch object so that you can access AreaId:
         public Branch? Branch { get; set; }

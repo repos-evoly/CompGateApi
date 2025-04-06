@@ -67,8 +67,8 @@ public class EscalationTimeoutService : IHostedService, IDisposable
                     // Here, using BlockedByUserId for both FromUserId and ToUserId as an example.
                     FromUserId = block.BlockedByUserId,
                     ToUserId = block.BlockedByUserId,
-                    Subject = "Unblock Reminder",
-                    Message = $"The block on customer {block.CustomerId} was scheduled to be lifted on {block.ScheduledUnblockDate:yyyy-MM-dd HH:mm} UTC. Please review and unblock if appropriate.",
+                    Subject = "تذكير إلغاء الحظر",
+                    Message = $"كان من المقرر رفع الحظر عن العميل {block.CustomerId} في {block.ScheduledUnblockDate:yyyy-MM-dd HH:mm} بالتوقيت العالمي المنسق. يُرجى مراجعة هذا الرابط وإلغاء الحظر إن أمكن.",
                     Link = $"unblock/{block.Customer.CID}",
                 };
 

@@ -53,7 +53,7 @@ namespace BlockingApi.Endpoints
             return reason != null ? TypedResults.Ok(mapper.Map<ReasonDto>(reason)) : TypedResults.NotFound("Reason not found.");
         }
 
-        [Authorize(Roles = "Admin")]
+     
         public static async Task<IResult> Create([FromServices] IUnitOfWork unitOfWork, [FromServices] IMapper mapper, [FromBody] EditReasonDto reasonDto)
         {
             if (reasonDto == null) return TypedResults.BadRequest("Invalid reason data.");
@@ -65,7 +65,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Created($"/api/reasons/{reason.Id}", mapper.Map<ReasonDto>(reason));
         }
 
-        [Authorize(Roles = "Admin")]
+
         public static async Task<IResult> Update([FromServices] IUnitOfWork unitOfWork, [FromServices] IMapper mapper, int id, [FromBody] EditReasonDto reasonDto)
         {
             var reason = await unitOfWork.Reasons.GetById(r => r.Id == id);
@@ -78,7 +78,7 @@ namespace BlockingApi.Endpoints
             return TypedResults.Ok(mapper.Map<ReasonDto>(reason));
         }
 
-        [Authorize(Roles = "Admin")]
+     
         public static async Task<IResult> Delete([FromServices] IUnitOfWork unitOfWork, int id)
         {
             var reason = await unitOfWork.Reasons.GetById(r => r.Id == id);
