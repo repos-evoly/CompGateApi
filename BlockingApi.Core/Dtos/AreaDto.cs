@@ -7,7 +7,9 @@ namespace BlockingApi.Core.Dtos
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
 
-        public UserDto? HeadOfSection { get; set; }
+        public int? HeadOfSectionId { get; set; }
+
+        public string? HeadOfSectionName { get; set; }
 
         public List<BranchDto> Branches { get; set; } = new();
     }

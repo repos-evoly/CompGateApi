@@ -2,9 +2,10 @@ using BlockingApi.Data.Context;
 using BlockingApi.Data.Models;
 using BlockingApi.Core.Abstractions;
 using Microsoft.EntityFrameworkCore;
-using System.Threading.Tasks;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace BlockingApi.Core.Repositories
 {
@@ -59,31 +60,13 @@ namespace BlockingApi.Core.Repositories
         {
             return await _context.Customers
                 .Include(c => c.Branch)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.BlockedBy)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.Reason)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.Source)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.BlockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Reason)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Source)
                 .Where(c => c.BlockRecords.Any(b => b.ActualUnblockDate == null))
                 .ToListAsync();
         }
 
-        public async Task<List<Customer>> GetUnblockedCustomers()
-        {
-            return await _context.Customers
-                .Include(c => c.Branch)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.BlockedBy)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.UnblockedBy)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.Reason)
-                .Include(c => c.BlockRecords)
-                    .ThenInclude(b => b.Source)
-                .Where(c => c.BlockRecords.Any(b => b.ActualUnblockDate != null))
-                .ToListAsync();
-        }
 
         public async Task<List<Customer>> SearchCustomers(string searchTerm)
         {
@@ -104,6 +87,99 @@ namespace BlockingApi.Core.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Customer>> GetUnblockedCustomers()
+        {
+            return await _context.Customers
+                .Include(c => c.Branch)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.BlockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.UnblockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Reason)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Source)
+                .Where(c => c.BlockRecords.Any(b => b.ActualUnblockDate != null))
+                .ToListAsync();
+        }
+
+        // New: Get blocked customers with optional search and pagination.
+        public async Task<List<Customer>> GetBlockedCustomers(string? search, string? searchBy, int page, int limit)
+        {
+            var query = _context.Customers
+                .Include(c => c.Branch)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.BlockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Reason)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Source)
+                .Where(c => c.BlockRecords.Any(b => b.ActualUnblockDate == null))
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search) && !string.IsNullOrWhiteSpace(searchBy))
+            {
+                search = search.Trim();
+                switch (searchBy.ToLower())
+                {
+                    case "firstname":
+                        query = query.Where(c => c.FirstName.Contains(search));
+                        break;
+                    case "lastname":
+                        query = query.Where(c => c.LastName.Contains(search));
+                        break;
+                    case "email":
+                        query = query.Where(c => c.Email.Contains(search));
+                        break;
+                    case "cid":
+                        query = query.Where(c => c.CID.Contains(search));
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            query = query.OrderBy(c => c.Id)
+                         .Skip((page - 1) * limit)
+                         .Take(limit);
+
+            return await query.ToListAsync();
+        }
+
+        // New: Get unblocked customers with optional search and pagination.
+        public async Task<List<Customer>> GetUnblockedCustomers(string? search, string? searchBy, int page, int limit)
+        {
+            var query = _context.Customers
+                .Include(c => c.Branch)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.BlockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.UnblockedBy)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Reason)
+                .Include(c => c.BlockRecords).ThenInclude(b => b.Source)
+                .Where(c => c.BlockRecords.Any(b => b.ActualUnblockDate != null))
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search) && !string.IsNullOrWhiteSpace(searchBy))
+            {
+                search = search.Trim();
+                switch (searchBy.ToLower())
+                {
+                    case "firstname":
+                        query = query.Where(c => c.FirstName.Contains(search));
+                        break;
+                    case "lastname":
+                        query = query.Where(c => c.LastName.Contains(search));
+                        break;
+                    case "email":
+                        query = query.Where(c => c.Email.Contains(search));
+                        break;
+                    case "cid":
+                        query = query.Where(c => c.CID.Contains(search));
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            query = query.OrderBy(c => c.Id)
+                         .Skip((page - 1) * limit)
+                         .Take(limit);
+
+            return await query.ToListAsync();
+        }
+
         public async Task<int> GetBlockedAccountsCountAsync()
         {
             return await _context.Customers
@@ -121,3 +197,4 @@ namespace BlockingApi.Core.Repositories
         }
     }
 }
+

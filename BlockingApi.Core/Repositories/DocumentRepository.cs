@@ -107,5 +107,44 @@ namespace BlockingApi.Core.Repositories
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<IEnumerable<DocumentResponseDto>> SearchDocuments(string searchBy, string query)
+        {
+            // Start with the documents set including the UploadedBy navigation property.
+            var docs = _context.Documents.Include(d => d.UploadedBy).AsQueryable();
+
+            switch (searchBy.ToLower())
+            {
+                case "title":
+                    docs = docs.Where(d => d.Title.Contains(query));
+                    break;
+                case "description":
+                    docs = docs.Where(d => d.Description != null && d.Description.Contains(query));
+                    break;
+                case "filename":
+                    docs = docs.Where(d => d.FileName.Contains(query));
+                    break;
+                default:
+                    // If searchBy is not recognized, return an empty list.
+                    return new List<DocumentResponseDto>();
+            }
+
+            return await docs.Select(d => new DocumentResponseDto
+            {
+                Id = d.Id,
+                Title = d.Title,
+                Description = d.Description,
+                DocumentType = d.DocumentType,
+                FileName = d.FileName,
+                OriginalFileName = d.OriginalFileName,
+                FileMimeType = d.FileMimeType,
+                FileSize = d.FileSize,
+                FilePath = d.FilePath,
+                UploadedAt = d.UploadedAt,
+                UploadedByUserId = d.UploadedByUserId,
+                UploadedBy = d.UploadedBy.FirstName + " " + d.UploadedBy.LastName
+            }).ToListAsync();
+        }
+
     }
 }

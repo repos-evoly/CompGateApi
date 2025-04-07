@@ -79,12 +79,53 @@ namespace BlockingApi.Endpoints
         }
 
         public static async Task<IResult> GetDocuments(
-            [FromRoute] string documentType,
+            [FromQuery] string? documentType,
+            [FromQuery] string? searchBy,
+            [FromQuery] string? query,
             [FromServices] IDocumentRepository documentRepository,
-            ILogger<DocumentEndpoints> logger)
+            [FromServices] ILogger<DocumentEndpoints> logger,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 10000)
         {
-            var documents = await documentRepository.GetDocuments(documentType);
-            return documents.Any() ? Results.Ok(documents) : Results.NotFound("No documents found for the given type.");
+            IEnumerable<DocumentResponseDto> documents;
+
+            // If both searchBy and query are provided, use the search method.
+            if (!string.IsNullOrWhiteSpace(searchBy) && !string.IsNullOrWhiteSpace(query))
+            {
+                documents = await documentRepository.SearchDocuments(searchBy, query);
+
+                // If a documentType filter is also provided, apply it.
+                if (!string.IsNullOrWhiteSpace(documentType))
+                {
+                    documents = documents.Where(d => d.DocumentType.Equals(documentType, System.StringComparison.OrdinalIgnoreCase));
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(documentType))
+            {
+                // No search query provided; filter by documentType.
+                documents = await documentRepository.GetDocuments(documentType);
+            }
+            else
+            {
+                // If no filters are provided, call search with an empty query.
+                documents = await documentRepository.SearchDocuments("title", "");
+            }
+
+            // Apply pagination.
+            var pagedDocuments = documents
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .ToList();
+
+            if (pagedDocuments.Any())
+            {
+                logger.LogInformation("Returning {Count} documents for page {Page} with limit {Limit}.", pagedDocuments.Count, page, limit);
+                return Results.Ok(pagedDocuments);
+            }
+            else
+            {
+                return Results.NotFound("No documents found matching the criteria.");
+            }
         }
 
 

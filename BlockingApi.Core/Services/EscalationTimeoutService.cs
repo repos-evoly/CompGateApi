@@ -10,6 +10,7 @@ using BlockingApi.Data.Models;
 using BlockingApi.Data.Context;
 using Microsoft.AspNetCore.SignalR;
 using BlockingApi.Hubs;
+using Microsoft.EntityFrameworkCore;
 
 public class EscalationTimeoutService : IHostedService, IDisposable
 {
@@ -30,7 +31,7 @@ public class EscalationTimeoutService : IHostedService, IDisposable
         _logger.LogInformation("EscalationTimeoutService is starting...");
 
         // Existing timers
-        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(100));
+        _timerAudit = new Timer(PerformAuditLog, null, TimeSpan.Zero, TimeSpan.FromMinutes(240));
         _timerEscalation = new Timer(PerformEscalationCheck, null, TimeSpan.Zero, TimeSpan.FromMinutes(30));
 
         // New timer for scheduled unblock notifications (e.g., every 240 minutes)
@@ -49,8 +50,9 @@ public class EscalationTimeoutService : IHostedService, IDisposable
             var notificationRepo = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
             var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
 
-            // Find block records with a scheduled unblock date that has passed and not yet unblocked.
+            // Include the Customer entity when fetching block records.
             var blocksToNotify = context.BlockRecords
+                .Include(b => b.Customer)
                 .Where(b => b.ScheduledUnblockDate != null &&
                             b.ScheduledUnblockDate <= DateTimeOffset.Now &&
                             b.ActualUnblockDate == null)
@@ -64,12 +66,12 @@ public class EscalationTimeoutService : IHostedService, IDisposable
                 // Construct the notification message.
                 var notification = new Notification
                 {
-                    // Here, using BlockedByUserId for both FromUserId and ToUserId as an example.
+                    // Using BlockedByUserId for both FromUserId and ToUserId as an example.
                     FromUserId = block.BlockedByUserId,
                     ToUserId = block.BlockedByUserId,
                     Subject = "تذكير إلغاء الحظر",
                     Message = $"كان من المقرر رفع الحظر عن العميل {block.CustomerId} في {block.ScheduledUnblockDate:yyyy-MM-dd HH:mm} بالتوقيت العالمي المنسق. يُرجى مراجعة هذا الرابط وإلغاء الحظر إن أمكن.",
-                    Link = $"unblock/{block.Customer.CID}",
+                    Link = block.Customer != null ? $"unblock/{block.Customer.CID}" : "unblock/unknown"
                 };
 
                 // Save the notification in the database.
@@ -77,7 +79,6 @@ public class EscalationTimeoutService : IHostedService, IDisposable
                 _logger.LogInformation("Sent unblock reminder notification for block record {BlockId}", block.Id);
 
                 // Broadcast the notification to all connected clients via SignalR.
-                // Since we're in a synchronous callback, use .GetAwaiter().GetResult()
                 hubContext.Clients.All.SendAsync("ReceiveNotification", new
                 {
                     notification.Id,

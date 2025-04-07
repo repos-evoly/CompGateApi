@@ -40,13 +40,13 @@ namespace BlockingApi.Data.Seeding
         {
             new() { NameLT = "SuperAdmin",  NameAR = "SuperAdminAR",Description = "Full control over the system" },
             new() { NameLT = "Admin",NameAR = "AdminAR", Description = "Manages users, roles, and transactions" },
-            new() { NameLT = "Manager",NameAR = "ManagerAR", Description = "Manages a specific area or department" },
-            new() { NameLT = "AssistantManager",NameAR = "AssistantManagerAR", Description = "Assists the Manager in overseeing operations" },
-            new() { NameLT = "DeputyManager", NameAR = "DeputyManagerAR", Description = "Assists with managerial tasks and decision-making" },
-            new() { NameLT = "Maker",NameAR = "MakerAR", Description = "Handles transaction creation and data entry" },
-            new() { NameLT = "Checker", NameAR = "CheckerAR", Description = "Reviews and approves transactions" },
-            new() { NameLT = "Viewer",NameAR = "ViewerAR", Description = "Can only view information, no modification rights" },
-            new() { NameLT = "Auditor",NameAR = "AuditorAR", Description = "Can only view audit logs and system changes" }
+            new() { NameLT = "Manager",NameAR = "المدير", Description = "Manages a specific area or department" },
+            new() { NameLT = "AssistantManager",NameAR = "مساعد المدير", Description = "Assists the Manager in overseeing operations" },
+            new() { NameLT = "DeputyManager", NameAR = "نائب المدير", Description = "Assists with managerial tasks and decision-making" },
+            new() { NameLT = "Maker",NameAR = "رئيس قسم", Description = "Handles transaction creation and data entry" },
+            new() { NameLT = "Checker", NameAR = "مراقب 1", Description = "Reviews and approves transactions" },
+            new() { NameLT = "Viewer",NameAR = "مراقب 2", Description = "Can only view information, no modification rights" },
+            new() { NameLT = "Auditor",NameAR = "مراقب 3", Description = "Can only view audit logs and system changes" }
         };
 
                 _context.Roles.AddRange(roles);
@@ -200,10 +200,10 @@ namespace BlockingApi.Data.Seeding
             {
                 var areas = new List<Area>
                 {
-                    new() { Name = "North Region" },
-                    new() { Name = "South Region" },
-                    new() { Name = "East Region" },
-                    new() { Name = "West Region" }
+                    new() { Name = "المنطقة الغربية" },
+                    new() { Name = "المنطقة الشرقية" },
+                    new() { Name = "فروع بنغازي" },
+                    new() { Name = "فروع المنطقة الوسطى والجنوبية" }
                 };
 
                 _context.Areas.AddRange(areas);

@@ -27,22 +27,26 @@ namespace BlockingApi.Endpoints
                 .Produces(200);
         }
 
-        private static async Task<bool> UserHasPermission(ClaimsPrincipal user, string permission, IRoleRepository roleRepository)
+        public static async Task<IResult> GetBlockedCustomers(
+             [FromServices] ICustomerRepository customerRepository,
+             [FromQuery] string? search,
+             [FromQuery] string? searchBy,
+             [FromQuery] int page = 1,
+             [FromQuery] int limit = 100)
         {
-            var userId = int.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-            var userPermissions = await roleRepository.GetUserPermissions(userId);
-            return userPermissions.Contains(permission);
-        }
-
-        public static async Task<IResult> GetBlockedCustomers([FromServices] ICustomerRepository customerRepository)
-        {
-            var blockedCustomers = await customerRepository.GetBlockedCustomers();
+            var blockedCustomers = await customerRepository.GetBlockedCustomers(search, searchBy, page, limit);
             return Results.Ok(blockedCustomers);
         }
 
-        public static async Task<IResult> GetUnblockedCustomers([FromServices] ICustomerRepository customerRepository)
+        // GET: Unblocked customers
+        public static async Task<IResult> GetUnblockedCustomers(
+            [FromServices] ICustomerRepository customerRepository,
+            [FromQuery] string? search,
+            [FromQuery] string? searchBy,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 100000)
         {
-            var unblockedCustomers = await customerRepository.GetUnblockedCustomers();
+            var unblockedCustomers = await customerRepository.GetUnblockedCustomers(search, searchBy, page, limit);
             return Results.Ok(unblockedCustomers);
         }
 

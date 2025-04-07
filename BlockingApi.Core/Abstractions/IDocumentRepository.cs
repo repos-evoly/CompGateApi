@@ -12,5 +12,7 @@ namespace BlockingApi.Core.Abstractions
         Task<DocumentResponseDto?> GetDocumentById(Guid id);
         Task<bool> UploadDocument(IFormFile file, DocumentDto documentDto);
         Task<bool> DeleteDocument(Guid id);
+        Task<IEnumerable<DocumentResponseDto>> SearchDocuments(string searchBy, string query);
+
     }
 }

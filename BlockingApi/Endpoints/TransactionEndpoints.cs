@@ -116,11 +116,29 @@ public class TransactionEndpoints : IEndpoints
                 // If not escalated, determine role logic
                 var roleName = currentUser.Role?.NameLT.ToLower() ?? string.Empty;
 
-                if (roleName.Contains("auditor") || roleName.Contains("checker"))
+                if (roleName.Contains("auditor") || roleName.Contains("checker") || roleName.Contains("viewer"))
                 {
-                    // Auditor/checker can only mark as pending (no escalation)
                     initiatorId = currentUser.UserId;
+                    // Retrieve branch details for logging.
                     var branch = await branchRepository.GetBranchById(currentUser.BranchId.ToString());
+                    if (branch == null)
+                    {
+                        logger.LogWarning("Branch not found for BranchId: {BranchId}", currentUser.BranchId);
+                    }
+                    else
+                    {
+                        logger.LogInformation("Retrieved branch details: {@Branch}", branch);
+                        if (branch.Area != null)
+                        {
+                            logger.LogInformation("Branch Area: {@Area}", branch.Area);
+                            logger.LogInformation("Area HeadOfSectionId: {HeadOfSectionId}", branch.Area.HeadOfSectionId);
+                        }
+                        else
+                        {
+                            logger.LogWarning("No Area found for branch {BranchId}", branch.CABBN);
+                        }
+                    }
+                    // Assign currentPartyId from branch's Area.HeadOfSectionId (could be null).
                     currentPartyId = branch?.Area?.HeadOfSectionId;
                 }
                 else if (roleName.Contains("maker") || roleName.Contains("manager") || roleName.Contains("admin") || roleName.Contains("assistantmanager") || roleName.Contains("deputymanager"))
