@@ -10,9 +10,9 @@
       "request": "launch",
       "preLaunchTask": "build",
       // If you have changed target frameworks, make sure to update the program path.
-      "program": "${workspaceFolder}/BlockingApi/bin/Debug/net7.0/BlockingApi.dll",
+      "program": "${workspaceFolder}/CardOpsApi/bin/Debug/net7.0/CardOpsApi.dll",
       "args": [],
-      "cwd": "${workspaceFolder}/BlockingApi",
+      "cwd": "${workspaceFolder}/CardOpsApi",
       "stopAtEntry": false,
       // Enable launching a web browser when ASP.NET Core starts. For more information: https://aka.ms/VSCode-CS-LaunchJson-WebBrowser
       "serverReadyAction": {

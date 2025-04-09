@@ -7,7 +7,7 @@
       "type": "process",
       "args": [
         "build",
-        "${workspaceFolder}/BlockingApi/BlockingApi.csproj",
+        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
@@ -19,7 +19,7 @@
       "type": "process",
       "args": [
         "publish",
-        "${workspaceFolder}/BlockingApi/BlockingApi.csproj",
+        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
@@ -33,7 +33,7 @@
         "watch",
         "run",
         "--project",
-        "${workspaceFolder}/BlockingApi/BlockingApi.csproj"
+        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj"
       ],
       "problemMatcher": "$msCompile"
     }
