@@ -7,7 +7,7 @@
       "type": "process",
       "args": [
         "build",
-        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj",
+        "${workspaceFolder}/CompGateApi/CompGateApi.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
@@ -19,7 +19,7 @@
       "type": "process",
       "args": [
         "publish",
-        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj",
+        "${workspaceFolder}/CompGateApi/CompGateApi.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary"
       ],
@@ -33,7 +33,7 @@
         "watch",
         "run",
         "--project",
-        "${workspaceFolder}/CardOpsApi/CardOpsApi.csproj"
+        "${workspaceFolder}/CompGateApi/CompGateApi.csproj"
       ],
       "problemMatcher": "$msCompile"
     }

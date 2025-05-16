@@ -1,26 +1,26 @@
 Migrations:
 
-1. go to CardOpsApi project directory
+1. go to CompGateApi project directory
    Execute: ./migrate.sh
 
    OR
 
-2. dotnet ef --project ../CardOpsApi.Data/CardOpsApi.Data.csproj database drop
-3. dotnet ef --project ../CardOpsApi.Data/CardOpsApi.Data.csproj migrations remove
-4. dotnet ef --project ../CardOpsApi.Data/CardOpsApi.Data.csproj migrations add InitialCreate
-5. dotnet ef --project ../CardOpsApi.Data/CardOpsApi.Data.csproj database update
-6. From CardOpsApi root project run "dotnet run seeddata"
+2. dotnet ef --project ../CompGateApi.Data/CompGateApi.Data.csproj database drop
+3. dotnet ef --project ../CompGateApi.Data/CompGateApi.Data.csproj migrations remove
+4. dotnet ef --project ../CompGateApi.Data/CompGateApi.Data.csproj migrations add InitialCreate
+5. dotnet ef --project ../CompGateApi.Data/CompGateApi.Data.csproj database update
+6. From CompGateApi root project run "dotnet run seeddata"
 
 Common Errors
 The Body inferred error: means some services are not registered in the dependency injection class under Startup folder
-project CardOpsApi.Core specifically either in RegisterServices or in RegisterValidators
+project CompGateApi.Core specifically either in RegisterServices or in RegisterValidators
 Sometimes the fronend stop working and data stop being returned by the server. Check The Token validity. Logout and then login to solve the problem. Do not tear your hair
 
 Publish to IIS
 dotnet publish --configuration Release
-Then copy the content under the below publish folder to IIS CardOpsApi folder
-CardOpsApi -> /Users/ismatayash/Projects/ContactCenter/CardOpsApiProjects/CardOpsApi/bin/Release/net7.0/publish/
-The folder Attachments must exist on the CardOpsApi folder on IIS and Modify permission should be given to it for the IISUSERS user
+Then copy the content under the below publish folder to IIS CompGateApi folder
+CompGateApi -> /Users/ismatayash/Projects/ContactCenter/CompGateApiProjects/CompGateApi/bin/Release/net7.0/publish/
+The folder Attachments must exist on the CompGateApi folder on IIS and Modify permission should be given to it for the IISUSERS user
 
 Logs
 Log file logged daily and saved on the server under C:/Blocking/logs delete from time to time

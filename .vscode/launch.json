@@ -10,9 +10,9 @@
       "request": "launch",
       "preLaunchTask": "build",
       // If you have changed target frameworks, make sure to update the program path.
-      "program": "${workspaceFolder}/CardOpsApi/bin/Debug/net7.0/CardOpsApi.dll",
+      "program": "${workspaceFolder}/CompGateApi/bin/Debug/net7.0/CompGateApi.dll",
       "args": [],
-      "cwd": "${workspaceFolder}/CardOpsApi",
+      "cwd": "${workspaceFolder}/CompGateApi",
       "stopAtEntry": false,
       // Enable launching a web browser when ASP.NET Core starts. For more information: https://aka.ms/VSCode-CS-LaunchJson-WebBrowser
       "serverReadyAction": {
