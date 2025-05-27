@@ -53,6 +53,7 @@ namespace CompGateApi.Data.Migrations
                     NameAR = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     NameLT = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsGlobal = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -138,33 +139,31 @@ namespace CompGateApi.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Users",
+                name: "Companies",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    AuthUserId = table.Column<int>(type: "int", nullable: false),
-                    CompanyId = table.Column<string>(type: "nvarchar(6)", maxLength: 6, nullable: true),
-                    FirstName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
-                    Phone = table.Column<string>(type: "nvarchar(15)", maxLength: 15, nullable: false),
-                    RoleId = table.Column<int>(type: "int", nullable: false),
-                    ServicePackageId = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                    Code = table.Column<string>(type: "nvarchar(6)", maxLength: 6, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    KycStatus = table.Column<int>(type: "int", nullable: false),
+                    KycStatusMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    KycRequestedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    KycReviewedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    KycBranchId = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
+                    KycLegalCompanyName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    KycLegalCompanyNameLt = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    KycMobile = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    KycNationality = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    KycCity = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    ServicePackageId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.PrimaryKey("PK_Companies", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Users_Roles_RoleId",
-                        column: x => x.RoleId,
-                        principalTable: "Roles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Users_ServicePackages_ServicePackageId",
+                        name: "FK_Companies_ServicePackages_ServicePackageId",
                         column: x => x.ServicePackageId,
                         principalTable: "ServicePackages",
                         principalColumn: "Id",
@@ -240,6 +239,47 @@ namespace CompGateApi.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Users",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    AuthUserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: true),
+                    FirstName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Phone = table.Column<string>(type: "nvarchar(15)", maxLength: 15, nullable: false),
+                    RoleId = table.Column<int>(type: "int", nullable: false),
+                    IsCompanyAdmin = table.Column<bool>(type: "bit", nullable: false),
+                    ServicePackageId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Users_Roles_RoleId",
+                        column: x => x.RoleId,
+                        principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Users_ServicePackages_ServicePackageId",
+                        column: x => x.ServicePackageId,
+                        principalTable: "ServicePackages",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "BankAccounts",
                 columns: table => new
                 {
@@ -276,8 +316,9 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
                     PartyName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    Capital = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    Capital = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: true),
                     FoundingDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     LegalForm = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     BranchOrAgency = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
@@ -311,7 +352,61 @@ namespace CompGateApi.Data.Migrations
                 {
                     table.PrimaryKey("PK_CblRequests", x => x.Id);
                     table.ForeignKey(
+                        name: "FK_CblRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
                         name: "FK_CblRequests_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CertifiedBankStatementRequests",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
+                    AccountHolderName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    AuthorizedOnTheAccountName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    AccountNumber = table.Column<long>(type: "bigint", nullable: false),
+                    OldAccountNumber = table.Column<long>(type: "bigint", nullable: true),
+                    NewAccountNumber = table.Column<long>(type: "bigint", nullable: true),
+                    ServiceRequests_ReactivateIdfaali = table.Column<bool>(type: "bit", nullable: false),
+                    ServiceRequests_DeactivateIdfaali = table.Column<bool>(type: "bit", nullable: false),
+                    ServiceRequests_ResetDigitalBankPassword = table.Column<bool>(type: "bit", nullable: false),
+                    ServiceRequests_ResendMobileBankingPin = table.Column<bool>(type: "bit", nullable: false),
+                    ServiceRequests_ChangePhoneNumber = table.Column<bool>(type: "bit", nullable: false),
+                    StatementRequest_CurrentAccountStatementArabic = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_CurrentAccountStatementEnglish = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_VisaAccountStatement = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_AccountStatement = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_JournalMovement = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_NonFinancialCommitment = table.Column<bool>(type: "bit", nullable: true),
+                    StatementRequest_FromDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    StatementRequest_ToDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CertifiedBankStatementRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CertifiedBankStatementRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_CertifiedBankStatementRequests_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
                         principalColumn: "Id",
@@ -325,6 +420,7 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
                     FullName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
                     Address = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
                     AccountNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
@@ -340,6 +436,12 @@ namespace CompGateApi.Data.Migrations
                 {
                     table.PrimaryKey("PK_CheckBookRequests", x => x.Id);
                     table.ForeignKey(
+                        name: "FK_CheckBookRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
                         name: "FK_CheckBookRequests_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
@@ -354,6 +456,7 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
                     Branch = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
                     BranchNum = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     Date = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -371,6 +474,12 @@ namespace CompGateApi.Data.Migrations
                 {
                     table.PrimaryKey("PK_CheckRequests", x => x.Id);
                     table.ForeignKey(
+                        name: "FK_CheckRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
                         name: "FK_CheckRequests_Users_ApprovedByUserId",
                         column: x => x.ApprovedByUserId,
                         principalTable: "Users",
@@ -384,12 +493,100 @@ namespace CompGateApi.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "CreditFacilities",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    Purpose = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    AdditionalInfo = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Curr = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ReferenceNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Type = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CreditFacilities", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CreditFacilities_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_CreditFacilities_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ForeignTransfers",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
+                    ToBank = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    Branch = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    ResidentSupplierName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    ResidentSupplierNationality = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    NonResidentPassportNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    PlaceOfIssue = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    DateOfIssue = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    NonResidentNationality = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    NonResidentAddress = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    TransferAmount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: true),
+                    ToCountry = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    BeneficiaryName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    BeneficiaryAddress = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    ExternalBankName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    ExternalBankAddress = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    TransferToAccountNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    TransferToAddress = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    AccountHolderName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    PermanentAddress = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    PurposeOfTransfer = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ForeignTransfers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ForeignTransfers_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_ForeignTransfers_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "RtgsRequests",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
                     RefNum = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Date = table.Column<DateTime>(type: "datetime2", nullable: true),
                     PaymentType = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
@@ -414,6 +611,12 @@ namespace CompGateApi.Data.Migrations
                 {
                     table.PrimaryKey("PK_RtgsRequests", x => x.Id);
                     table.ForeignKey(
+                        name: "FK_RtgsRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
                         name: "FK_RtgsRequests_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
@@ -428,6 +631,7 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
                     TransactionCategoryId = table.Column<int>(type: "int", nullable: false),
                     FromAccount = table.Column<string>(type: "nvarchar(34)", maxLength: 34, nullable: false),
                     ToAccount = table.Column<string>(type: "nvarchar(34)", maxLength: 34, nullable: false),
@@ -435,6 +639,7 @@ namespace CompGateApi.Data.Migrations
                     CurrencyId = table.Column<int>(type: "int", nullable: false),
                     ServicePackageId = table.Column<int>(type: "int", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
@@ -442,6 +647,12 @@ namespace CompGateApi.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_TransferRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TransferRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_TransferRequests_Currencies_CurrencyId",
                         column: x => x.CurrencyId,
@@ -497,6 +708,47 @@ namespace CompGateApi.Data.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_UserRolePermissions_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "VisaRequests",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    CompanyId = table.Column<int>(type: "int", nullable: false),
+                    Branch = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    AccountHolderName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    AccountNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    NationalId = table.Column<long>(type: "bigint", nullable: true),
+                    PhoneNumberLinkedToNationalId = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    Cbl = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    CardMovementApproval = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    CardUsingAcknowledgment = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    ForeignAmount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: true),
+                    LocalAmount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: true),
+                    Pldedge = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VisaRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_VisaRequests_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_VisaRequests_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
                         principalColumn: "Id",
@@ -628,6 +880,11 @@ namespace CompGateApi.Data.Migrations
                 column: "CblRequestId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_CblRequests_CompanyId",
+                table: "CblRequests",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_CblRequests_UserId",
                 table: "CblRequests",
                 column: "UserId");
@@ -636,6 +893,21 @@ namespace CompGateApi.Data.Migrations
                 name: "IX_CblRequestSignatures_CblRequestId",
                 table: "CblRequestSignatures",
                 column: "CblRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CertifiedBankStatementRequests_CompanyId",
+                table: "CertifiedBankStatementRequests",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CertifiedBankStatementRequests_UserId",
+                table: "CertifiedBankStatementRequests",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CheckBookRequests_CompanyId",
+                table: "CheckBookRequests",
+                column: "CompanyId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CheckBookRequests_UserId",
@@ -653,8 +925,38 @@ namespace CompGateApi.Data.Migrations
                 column: "ApprovedByUserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_CheckRequests_CompanyId",
+                table: "CheckRequests",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_CheckRequests_UserId",
                 table: "CheckRequests",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Companies_ServicePackageId",
+                table: "Companies",
+                column: "ServicePackageId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CreditFacilities_CompanyId",
+                table: "CreditFacilities",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CreditFacilities_UserId",
+                table: "CreditFacilities",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ForeignTransfers_CompanyId",
+                table: "ForeignTransfers",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ForeignTransfers_UserId",
+                table: "ForeignTransfers",
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
@@ -666,6 +968,11 @@ namespace CompGateApi.Data.Migrations
                 name: "IX_RolePermissions_RoleId",
                 table: "RolePermissions",
                 column: "RoleId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RtgsRequests_CompanyId",
+                table: "RtgsRequests",
+                column: "CompanyId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RtgsRequests_UserId",
@@ -696,6 +1003,11 @@ namespace CompGateApi.Data.Migrations
                 name: "IX_TransferLimits_TransactionCategoryId",
                 table: "TransferLimits",
                 column: "TransactionCategoryId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TransferRequests_CompanyId",
+                table: "TransferRequests",
+                column: "CompanyId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TransferRequests_CurrencyId",
@@ -752,6 +1064,16 @@ namespace CompGateApi.Data.Migrations
                 table: "Users",
                 column: "Email",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VisaRequests_CompanyId",
+                table: "VisaRequests",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VisaRequests_UserId",
+                table: "VisaRequests",
+                column: "UserId");
         }
 
         /// <inheritdoc />
@@ -770,10 +1092,19 @@ namespace CompGateApi.Data.Migrations
                 name: "CblRequestSignatures");
 
             migrationBuilder.DropTable(
+                name: "CertifiedBankStatementRequests");
+
+            migrationBuilder.DropTable(
                 name: "CheckBookRequests");
 
             migrationBuilder.DropTable(
                 name: "CheckRequestLineItems");
+
+            migrationBuilder.DropTable(
+                name: "CreditFacilities");
+
+            migrationBuilder.DropTable(
+                name: "ForeignTransfers");
 
             migrationBuilder.DropTable(
                 name: "RolePermissions");
@@ -797,6 +1128,9 @@ namespace CompGateApi.Data.Migrations
                 name: "UserRolePermissions");
 
             migrationBuilder.DropTable(
+                name: "VisaRequests");
+
+            migrationBuilder.DropTable(
                 name: "CblRequests");
 
             migrationBuilder.DropTable(
@@ -813,6 +1147,9 @@ namespace CompGateApi.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "Users");
+
+            migrationBuilder.DropTable(
+                name: "Companies");
 
             migrationBuilder.DropTable(
                 name: "Roles");

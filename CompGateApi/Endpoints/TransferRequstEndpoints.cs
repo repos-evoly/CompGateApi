@@ -76,18 +76,24 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> GetMyTransfers(
-            HttpContext ctx,
-            ITransferRequestRepository repo,
-            IMapper mapper,
-            [FromQuery] int page = 1,
-            [FromQuery] int limit = 50,
-            [FromQuery] string? searchTerm = null)
+     HttpContext ctx,
+     ITransferRequestRepository repo,
+     IMapper mapper,
+     IUserRepository userRepo,
+     [FromQuery] int page = 1,
+     [FromQuery] int limit = 50,
+     [FromQuery] string? searchTerm = null)
         {
             if (!TryGetAuthUserId(ctx, out var auth))
                 return Results.Unauthorized();
 
-            var total = await repo.GetCountByUserAsync(auth, searchTerm);
-            var list = await repo.GetAllByUserAsync(auth, searchTerm, page, limit);
+            // load local user
+            var me = await userRepo.GetUserByAuthId(auth, ctx.Request.Headers["Authorization"]);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm);
+            var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, page, limit);
             var dtos = list.Select(r => mapper.Map<TransferRequestDto>(r)).ToList();
 
             return Results.Ok(new PagedResult<TransferRequestDto>
@@ -100,33 +106,44 @@ namespace CompGateApi.Endpoints
             });
         }
 
+
         public static async Task<IResult> GetMyTransferById(
-            int id,
-            HttpContext ctx,
-            ITransferRequestRepository repo,
-            IMapper mapper)
+    int id,
+    HttpContext ctx,
+    ITransferRequestRepository repo,
+    IUserRepository userRepo,
+    IMapper mapper)
         {
-            if (!TryGetAuthUserId(ctx, out var auth))
+            // 1) Auth
+            if (!TryGetAuthUserId(ctx, out var authUserId))
                 return Results.Unauthorized();
 
+            // 2) Load our local user & ensure they belong to a company
+            var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authUserId, token);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            // 3) Fetch the transfer and lock to their company
             var ent = await repo.GetByIdAsync(id);
-            if (ent == null || ent.UserId != auth)
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
 
+            // 4) Map & return
             return Results.Ok(mapper.Map<TransferRequestDto>(ent));
         }
 
 
         public static async Task<IResult> CreateTransfer(
-            [FromBody] TransferRequestCreateDto dto,
-            HttpContext ctx,
-            ITransferRequestRepository repo,
-            IUserRepository userRepo,
-            IValidator<TransferRequestCreateDto> validator,
-            IMapper mapper,
-            ILogger<TransferRequestEndpoints> log,
-            IHttpClientFactory httpFactory,
-            CompGateApiDbContext db)               // <-- inject your DbContext
+       [FromBody] TransferRequestCreateDto dto,
+       HttpContext ctx,
+       ITransferRequestRepository repo,
+       IUserRepository userRepo,
+       IValidator<TransferRequestCreateDto> validator,
+       IMapper mapper,
+       ILogger<TransferRequestEndpoints> log,
+       IHttpClientFactory httpFactory,
+       CompGateApiDbContext db)
         {
             // 1) Validate DTO
             var validation = await validator.ValidateAsync(dto);
@@ -139,27 +156,48 @@ namespace CompGateApi.Endpoints
 
             var me = await userRepo.GetUserByAuthId(
                 authUserId, ctx.Request.Headers["Authorization"]);
-            if (me == null)
+            if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
-            // 3) Enforce transfer limits for each period
-            var limits = await db.TransferLimits
+            // 3) Fetch limits for both packages
+            var userPkgId = me.ServicePackageId;
+            var companyPkgId = me.CompanyServicePackageId; // however you expose it on UserDetailsDto
+
+            // get all user‐level limits
+            var userLimits = await db.TransferLimits
                 .Where(l =>
-                    l.ServicePackageId == me.ServicePackageId &&
+                    l.ServicePackageId == userPkgId &&
                     l.TransactionCategoryId == dto.TransactionCategoryId &&
                     l.CurrencyId == dto.CurrencyId)
                 .ToListAsync();
 
-            if (!limits.Any())
-                return Results.BadRequest("No transfer limits configured for your package.");
+            // get all company‐level limits
+            var companyLimits = await db.TransferLimits
+                .Where(l =>
+                    l.ServicePackageId == companyPkgId &&
+                    l.TransactionCategoryId == dto.TransactionCategoryId &&
+                    l.CurrencyId == dto.CurrencyId)
+                .ToListAsync();
+
+            if (!companyLimits.Any())
+                return Results.BadRequest("No transfer limits configured for your company’s package.");
+
+            // if the user has limits defined, use those; otherwise use the company limits
+            var useUserLimits = userLimits.Any();
+            var limitsToCheck = useUserLimits ? userLimits : companyLimits;
 
             var now = DateTime.UtcNow;
-            foreach (var limit in limits)
+            foreach (var limit in limitsToCheck)
             {
-                // minimum per‐transaction
-                if (dto.Amount < limit.MinAmount)
+                // clamp min/max to the intersection of user & company
+                var compMatch = companyLimits.Single(l => l.Period == limit.Period);
+                decimal effectiveMin = Math.Max(limit.MinAmount, compMatch.MinAmount);
+                decimal effectiveMax = Math.Min(limit.MaxAmount, compMatch.MaxAmount);
+
+                // 3a) minimum per‐transaction
+                if (dto.Amount < effectiveMin)
                     return Results.BadRequest(
-                        $"Minimum amount per {limit.Period} is {limit.MinAmount}.");
+                        $"Minimum amount per {limit.Period} is {effectiveMin}.");
 
                 // calculate start of the period
                 DateTime periodStart = limit.Period switch
@@ -170,18 +208,34 @@ namespace CompGateApi.Endpoints
                     _ => DateTime.MinValue
                 };
 
-                // sum all prior transfers in that period
-                var sum = await db.TransferRequests
-                    .Where(tr =>
-                        tr.UserId == me.UserId &&
-                        tr.TransactionCategoryId == dto.TransactionCategoryId &&
-                        tr.CurrencyId == dto.CurrencyId &&
-                        tr.RequestedAt >= periodStart)
-                    .SumAsync(tr => (decimal?)tr.Amount) ?? 0m;
+                // 3b) rolling sum
+                decimal sumInPeriod;
+                if (useUserLimits)
+                {
+                    // sum *just this user’s* transfers
+                    sumInPeriod = await db.TransferRequests
+                        .Where(tr =>
+                            tr.UserId == me.UserId &&
+                            tr.TransactionCategoryId == dto.TransactionCategoryId &&
+                            tr.CurrencyId == dto.CurrencyId &&
+                            tr.RequestedAt >= periodStart)
+                        .SumAsync(tr => (decimal?)tr.Amount) ?? 0m;
+                }
+                else
+                {
+                    // sum *all users in the company* (so if company total is exhausted nobody can send more)
+                    sumInPeriod = await db.TransferRequests
+                        .Where(tr =>
+                            tr.CompanyId == me.CompanyId.Value &&
+                            tr.TransactionCategoryId == dto.TransactionCategoryId &&
+                            tr.CurrencyId == dto.CurrencyId &&
+                            tr.RequestedAt >= periodStart)
+                        .SumAsync(tr => (decimal?)tr.Amount) ?? 0m;
+                }
 
-                if (sum + dto.Amount > limit.MaxAmount)
+                if (sumInPeriod + dto.Amount > effectiveMax)
                     return Results.BadRequest(
-                        $"Your total for this {limit.Period} would exceed the maximum of {limit.MaxAmount}.");
+                        $"Your total for this {limit.Period} would exceed the maximum of {effectiveMax}.");
             }
 
             // 4) External API call
@@ -203,13 +257,12 @@ namespace CompGateApi.Endpoints
             { "@SRCACC", dto.FromAccount },
             { "@DSTACC", dto.ToAccount },
             { "@APLYTRN2","N" },
-            { "@TRFAMT", ((long)(dto.Amount * 10)).ToString("D15") },
+            { "@TRFAMT", ((long)(dto.Amount * 1000)).ToString("D15") },
             { "@NR2",     "" }
         }
             };
 
-            var extResp = await bankClient.PostAsJsonAsync(
-                "/api/mobile/postTransfer", extPayload);
+            var extResp = await bankClient.PostAsJsonAsync("/api/mobile/postTransfer", extPayload);
             if (!extResp.IsSuccessStatusCode)
             {
                 log.LogError("Bank transfer failed: {Status}", extResp.StatusCode);
@@ -220,6 +273,7 @@ namespace CompGateApi.Endpoints
             var tr = new TransferRequest
             {
                 UserId = me.UserId,
+                CompanyId = me.CompanyId.Value,
                 TransactionCategoryId = dto.TransactionCategoryId,
                 FromAccount = dto.FromAccount,
                 ToAccount = dto.ToAccount,
@@ -227,7 +281,8 @@ namespace CompGateApi.Endpoints
                 CurrencyId = dto.CurrencyId,
                 ServicePackageId = me.ServicePackageId,
                 Status = "Completed",
-                RequestedAt = now
+                RequestedAt = now,
+                Description = dto.Description
             };
             await repo.CreateAsync(tr);
 
@@ -235,6 +290,7 @@ namespace CompGateApi.Endpoints
             var outDto = mapper.Map<TransferRequestDto>(tr);
             return Results.Created($"/api/transfers/{tr.Id}", outDto);
         }
+
 
         public static async Task<IResult> LookupAccounts(
     [FromQuery] string account,

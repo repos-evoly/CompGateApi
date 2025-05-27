@@ -46,13 +46,18 @@ namespace CompGateApi.Endpoints
                  .Accepts<VisaRequestStatusUpdateDto>("application/json")
                  .Produces<VisaRequestDto>(200)
                  .Produces(404);
+
+            admin.MapGet("/{id:int}", GetByIdAdmin)
+                .Produces<VisaRequestDto>(200)
+                .Produces(404);
         }
 
         private static int GetAuthUserId(HttpContext ctx)
         {
-            var raw = ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // token uses "nameid" claim
+            var raw = ctx.User.FindFirst("nameid")?.Value;
             if (int.TryParse(raw, out var id)) return id;
-            throw new UnauthorizedAccessException("Missing nameid claim.");
+            throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
         }
 
         public static async Task<IResult> GetMyRequests(
@@ -62,7 +67,8 @@ namespace CompGateApi.Endpoints
             [FromServices] ILogger<VisaRequestEndpoints> log,
             [FromQuery] int page = 1,
             [FromQuery] int limit = 50,
-            [FromQuery] string? searchTerm = null)
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? searchBy = null)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -70,8 +76,12 @@ namespace CompGateApi.Endpoints
             if (me == null)
                 return Results.Unauthorized();
 
-            var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, page, limit);
-            var total = await repo.GetCountByUserAsync(me.UserId, searchTerm);
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
+            var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
+
 
             var dtos = list.Select(v => new VisaRequestDto
             {
@@ -117,7 +127,7 @@ namespace CompGateApi.Endpoints
                 return Results.Unauthorized();
 
             var v = await repo.GetByIdAsync(id);
-            if (v == null || v.UserId != me.UserId)
+            if (v == null || !me.CompanyId.HasValue || v.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
 
             var dto = new VisaRequestDto
@@ -161,9 +171,13 @@ namespace CompGateApi.Endpoints
             if (me == null)
                 return Results.Unauthorized();
 
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
             var ent = new VisaRequest
             {
                 UserId = me.UserId,
+                CompanyId = me.CompanyId.Value,
                 Branch = dto.Branch,
                 Date = dto.Date,
                 AccountHolderName = dto.AccountHolderName,
@@ -287,5 +301,42 @@ namespace CompGateApi.Endpoints
             };
             return Results.Ok(outDto);
         }
+        public static async Task<IResult> GetByIdAdmin(
+    int id,
+    [FromServices] IVisaRequestRepository repo,
+    [FromServices] ILogger<VisaRequestEndpoints> log)
+        {
+            log.LogInformation("Admin: GetByIdAdmin({Id})", id);
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound($"VisaRequest {id} not found.");
+
+            var dto = new VisaRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                Branch = ent.Branch,
+                Date = ent.Date,
+                AccountHolderName = ent.AccountHolderName,
+                AccountNumber = ent.AccountNumber,
+                NationalId = ent.NationalId,
+                PhoneNumberLinkedToNationalId = ent.PhoneNumberLinkedToNationalId,
+                Cbl = ent.Cbl,
+                CardMovementApproval = ent.CardMovementApproval,
+                CardUsingAcknowledgment = ent.CardUsingAcknowledgment,
+                ForeignAmount = ent.ForeignAmount,
+                LocalAmount = ent.LocalAmount,
+                Pldedge = ent.Pldedge,
+                Status = ent.Status,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(dto);
+        }
+
     }
+
+
 }

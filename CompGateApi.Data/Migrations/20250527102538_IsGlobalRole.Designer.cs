@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    [Migration("20250508132830_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20250527102538_IsGlobalRole")]
+    partial class IsGlobalRole
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -123,7 +123,8 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("nvarchar(150)");
 
                     b.Property<decimal?>("Capital")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<string>("ChamberNumber")
                         .HasMaxLength(150)
@@ -136,6 +137,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("CommercialRegistration")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -220,9 +224,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("CblRequests");
+                    b.ToTable("CblRequests", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequestOfficial", b =>
@@ -254,7 +260,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("CblRequestId");
 
-                    b.ToTable("CblRequestOfficials");
+                    b.ToTable("CblRequestOfficials", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequestSignature", b =>
@@ -291,7 +297,63 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("CblRequestId");
 
-                    b.ToTable("CblRequestSignatures");
+                    b.ToTable("CblRequestSignatures", (string)null);
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.CertifiedBankStatementRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountHolderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<long>("AccountNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AuthorizedOnTheAccountName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long?>("NewAccountNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("OldAccountNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CertifiedBankStatementRequests", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CheckBookRequest", b =>
@@ -317,6 +379,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("Branch")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -345,9 +410,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("CheckBookRequests");
+                    b.ToTable("CheckBookRequests", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CheckRequest", b =>
@@ -384,6 +451,9 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -409,9 +479,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("ApprovedByUserId");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("CheckRequests");
+                    b.ToTable("CheckRequests", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CheckRequestLineItem", b =>
@@ -443,7 +515,142 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("CheckRequestId");
 
-                    b.ToTable("CheckRequestLineItems");
+                    b.ToTable("CheckRequestLineItems", (string)null);
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.Company", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KycBranchId")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("KycCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("KycLegalCompanyName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("KycLegalCompanyNameLt")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("KycMobile")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("KycNationality")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("KycRequestedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("KycReviewedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("KycStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("KycStatusMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ServicePackageId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServicePackageId");
+
+                    b.ToTable("Companies", (string)null);
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.CreditFacilitiesOrLetterOfGuaranteeRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AdditionalInfo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Curr")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReferenceNumber")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CreditFacilities", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.Currency", b =>
@@ -478,6 +685,119 @@ namespace CompGateApi.Data.Migrations
                     b.ToTable("Currencies");
                 });
 
+            modelBuilder.Entity("CompGateApi.Data.Models.ForeignTransfer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountHolderName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("BeneficiaryAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("BeneficiaryName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Branch")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTime?>("DateOfIssue")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalBankAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("ExternalBankName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NonResidentAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("NonResidentNationality")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("NonResidentPassportNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PermanentAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("PlaceOfIssue")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PurposeOfTransfer")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ResidentSupplierName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ResidentSupplierNationality")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ToBank")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ToCountry")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("TransferAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("TransferToAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TransferToAddress")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ForeignTransfers", (string)null);
+                });
+
             modelBuilder.Entity("CompGateApi.Data.Models.Permission", b =>
                 {
                     b.Property<int>("Id")
@@ -492,6 +812,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsGlobal")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -520,6 +843,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsGlobal")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NameAR")
                         .IsRequired()
@@ -610,6 +936,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<bool>("Claim")
                         .HasColumnType("bit");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("Contract")
                         .HasColumnType("bit");
 
@@ -649,9 +978,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("RtgsRequests");
+                    b.ToTable("RtgsRequests", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.ServicePackage", b =>
@@ -829,11 +1160,18 @@ namespace CompGateApi.Data.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<int>("CurrencyId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("FromAccount")
                         .IsRequired()
@@ -867,6 +1205,8 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("CurrencyId");
 
                     b.HasIndex("ServicePackageId");
@@ -889,9 +1229,8 @@ namespace CompGateApi.Data.Migrations
                     b.Property<int>("AuthUserId")
                         .HasColumnType("int");
 
-                    b.Property<string>("CompanyId")
-                        .HasMaxLength(6)
-                        .HasColumnType("nvarchar(6)");
+                    b.Property<int?>("CompanyId")
+                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
@@ -906,6 +1245,9 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<bool>("IsCompanyAdmin")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -919,7 +1261,7 @@ namespace CompGateApi.Data.Migrations
                     b.Property<int>("RoleId")
                         .HasColumnType("int");
 
-                    b.Property<int>("ServicePackageId")
+                    b.Property<int?>("ServicePackageId")
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -978,6 +1320,86 @@ namespace CompGateApi.Data.Migrations
                     b.ToTable("UserRolePermissions");
                 });
 
+            modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountHolderName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Branch")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CardMovementApproval")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CardUsingAcknowledgment")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Cbl")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTime?>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("ForeignAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("LocalAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long?>("NationalId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PhoneNumberLinkedToNationalId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Pldedge")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("VisaRequests", (string)null);
+                });
+
             modelBuilder.Entity("CompGateApi.Data.Models.AuditLog", b =>
                 {
                     b.HasOne("CompGateApi.Data.Models.CheckRequest", null)
@@ -1014,11 +1436,19 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("CblRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("CompGateApi.Data.Models.User", "User")
-                        .WithMany()
+                        .WithMany("CblRequests")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("User");
                 });
@@ -1045,13 +1475,111 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("CblRequest");
                 });
 
-            modelBuilder.Entity("CompGateApi.Data.Models.CheckBookRequest", b =>
+            modelBuilder.Entity("CompGateApi.Data.Models.CertifiedBankStatementRequest", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("CertifiedBankStatementRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("CompGateApi.Data.Models.User", "User")
-                        .WithMany()
+                        .WithMany("CertifiedBankStatementRequests")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsOne("CompGateApi.Data.Models.ServicesRequest", "ServiceRequests", b1 =>
+                        {
+                            b1.Property<int>("CertifiedBankStatementRequestId")
+                                .HasColumnType("int");
+
+                            b1.Property<bool>("ChangePhoneNumber")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("DeactivateIdfaali")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("ReactivateIdfaali")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("ResendMobileBankingPin")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool>("ResetDigitalBankPassword")
+                                .HasColumnType("bit");
+
+                            b1.HasKey("CertifiedBankStatementRequestId");
+
+                            b1.ToTable("CertifiedBankStatementRequests");
+
+                            b1.WithOwner()
+                                .HasForeignKey("CertifiedBankStatementRequestId");
+                        });
+
+                    b.OwnsOne("CompGateApi.Data.Models.StatementRequest", "StatementRequest", b1 =>
+                        {
+                            b1.Property<int>("CertifiedBankStatementRequestId")
+                                .HasColumnType("int");
+
+                            b1.Property<bool?>("AccountStatement")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool?>("CurrentAccountStatementArabic")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool?>("CurrentAccountStatementEnglish")
+                                .HasColumnType("bit");
+
+                            b1.Property<DateTime?>("FromDate")
+                                .HasColumnType("datetime2");
+
+                            b1.Property<bool?>("JournalMovement")
+                                .HasColumnType("bit");
+
+                            b1.Property<bool?>("NonFinancialCommitment")
+                                .HasColumnType("bit");
+
+                            b1.Property<DateTime?>("ToDate")
+                                .HasColumnType("datetime2");
+
+                            b1.Property<bool?>("VisaAccountStatement")
+                                .HasColumnType("bit");
+
+                            b1.HasKey("CertifiedBankStatementRequestId");
+
+                            b1.ToTable("CertifiedBankStatementRequests");
+
+                            b1.WithOwner()
+                                .HasForeignKey("CertifiedBankStatementRequestId");
+                        });
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ServiceRequests")
+                        .IsRequired();
+
+                    b.Navigation("StatementRequest")
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.CheckBookRequest", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("CheckBookRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CompGateApi.Data.Models.User", "User")
+                        .WithMany("CheckBookRequests")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("User");
                 });
@@ -1062,13 +1590,21 @@ namespace CompGateApi.Data.Migrations
                         .WithMany()
                         .HasForeignKey("ApprovedByUserId");
 
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("CheckRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("CompGateApi.Data.Models.User", "User")
-                        .WithMany()
+                        .WithMany("CheckRequests")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("ApprovedByUser");
+
+                    b.Navigation("Company");
 
                     b.Navigation("User");
                 });
@@ -1082,6 +1618,55 @@ namespace CompGateApi.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CheckRequest");
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.Company", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.ServicePackage", "ServicePackage")
+                        .WithMany("Companies")
+                        .HasForeignKey("ServicePackageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ServicePackage");
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.CreditFacilitiesOrLetterOfGuaranteeRequest", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("CreditFacilitiesRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CompGateApi.Data.Models.User", "User")
+                        .WithMany("CreditFacilitiesRequests")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.ForeignTransfer", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("ForeignTransfers")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CompGateApi.Data.Models.User", "User")
+                        .WithMany("ForeignTransferRequests")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.RolePermission", b =>
@@ -1105,11 +1690,19 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.RtgsRequest", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("RtgsRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("CompGateApi.Data.Models.User", "User")
-                        .WithMany()
+                        .WithMany("RtgsRequests")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("User");
                 });
@@ -1162,6 +1755,12 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.TransferRequest", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("TransferRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("CompGateApi.Data.Models.Currency", "Currency")
                         .WithMany()
                         .HasForeignKey("CurrencyId")
@@ -1186,6 +1785,8 @@ namespace CompGateApi.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Company");
+
                     b.Navigation("Currency");
 
                     b.Navigation("ServicePackage");
@@ -1197,6 +1798,11 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.User", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("Users")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("CompGateApi.Data.Models.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
@@ -1206,8 +1812,9 @@ namespace CompGateApi.Data.Migrations
                     b.HasOne("CompGateApi.Data.Models.ServicePackage", "ServicePackage")
                         .WithMany("Users")
                         .HasForeignKey("ServicePackageId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Company");
 
                     b.Navigation("Role");
 
@@ -1241,6 +1848,25 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("VisaRequests")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CompGateApi.Data.Models.User", "User")
+                        .WithMany("VisaRequests")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
                     b.Navigation("Officials");
@@ -1253,6 +1879,29 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("AuditLogs");
 
                     b.Navigation("LineItems");
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.Company", b =>
+                {
+                    b.Navigation("CblRequests");
+
+                    b.Navigation("CertifiedBankStatementRequests");
+
+                    b.Navigation("CheckBookRequests");
+
+                    b.Navigation("CheckRequests");
+
+                    b.Navigation("CreditFacilitiesRequests");
+
+                    b.Navigation("ForeignTransfers");
+
+                    b.Navigation("RtgsRequests");
+
+                    b.Navigation("TransferRequests");
+
+                    b.Navigation("Users");
+
+                    b.Navigation("VisaRequests");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.Permission", b =>
@@ -1273,6 +1922,8 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.ServicePackage", b =>
                 {
+                    b.Navigation("Companies");
+
                     b.Navigation("ServicePackageDetails");
 
                     b.Navigation("TransferLimits");
@@ -1293,9 +1944,25 @@ namespace CompGateApi.Data.Migrations
 
                     b.Navigation("BankAccounts");
 
+                    b.Navigation("CblRequests");
+
+                    b.Navigation("CertifiedBankStatementRequests");
+
+                    b.Navigation("CheckBookRequests");
+
+                    b.Navigation("CheckRequests");
+
+                    b.Navigation("CreditFacilitiesRequests");
+
+                    b.Navigation("ForeignTransferRequests");
+
+                    b.Navigation("RtgsRequests");
+
                     b.Navigation("TransferRequests");
 
                     b.Navigation("UserRolePermissions");
+
+                    b.Navigation("VisaRequests");
                 });
 #pragma warning restore 612, 618
         }

@@ -3,6 +3,9 @@ public class ExternalAccountDto
     public string? YBCD01AB { get; set; }
     public string? YBCD01AN { get; set; }
     public string? YBCD01AS { get; set; }
+
+    public decimal YBCD01CABL { get; set; }
+    public decimal YBCD01LDBL { get; set; }
 }
 
 public class ExternalAccountsResponseDetailsDto

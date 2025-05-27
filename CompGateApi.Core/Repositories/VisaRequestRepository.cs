@@ -102,5 +102,77 @@ namespace CompGateApi.Data.Repositories
             _context.VisaRequests.Update(entity);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<IList<VisaRequest>> GetAllByCompanyAsync(
+           int userId,
+           string? searchTerm,
+           string? searchBy,
+           int page,
+           int limit)
+        {
+            var q = _context.VisaRequests.Where(v => v.UserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "accountholder":
+                        q = q.Where(v => v.AccountHolderName!.Contains(searchTerm));
+                        break;
+                    case "accountnumber":
+                        q = q.Where(v => v.AccountNumber!.Contains(searchTerm));
+                        break;
+                    case "cbl":
+                        q = q.Where(v => v.Cbl!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(v =>
+                            v.AccountHolderName!.Contains(searchTerm) ||
+                            v.AccountNumber!.Contains(searchTerm) ||
+                            v.Cbl!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q
+                .OrderByDescending(v => v.CreatedAt)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int userId,
+            string? searchTerm,
+            string? searchBy)
+        {
+            var q = _context.VisaRequests.Where(v => v.UserId == userId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "accountholder":
+                        q = q.Where(v => v.AccountHolderName!.Contains(searchTerm));
+                        break;
+                    case "accountnumber":
+                        q = q.Where(v => v.AccountNumber!.Contains(searchTerm));
+                        break;
+                    case "cbl":
+                        q = q.Where(v => v.Cbl!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(v =>
+                            v.AccountHolderName!.Contains(searchTerm) ||
+                            v.AccountNumber!.Contains(searchTerm) ||
+                            v.Cbl!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q.CountAsync();
+        }
+
     }
 }

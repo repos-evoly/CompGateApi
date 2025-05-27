@@ -20,6 +20,10 @@ namespace CompGateApi.Data.Models
         public User User { get; set; } = null!;
 
         [Required]
+        public int CompanyId { get; set; }
+        public Company Company { get; set; } = null!;
+
+        [Required]
         public int TransactionCategoryId { get; set; }
         public TransactionCategory TransactionCategory { get; set; } = null!;
 
@@ -43,6 +47,9 @@ namespace CompGateApi.Data.Models
 
         [MaxLength(20)]
         public string Status { get; set; } = "Pending";
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
 
         public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
     }

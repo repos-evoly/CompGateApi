@@ -53,9 +53,10 @@ namespace CompGateApi.Endpoints
                  .Produces<CblRequestDto>(200)
                  .Produces(404);
 
-             admin.MapGet("admin/{id:int}", GetMyRequestById)
-                   .Produces<CblRequestDto>(200)
-                   .Produces(404);
+            admin.MapGet("/{id:int}", AdminGetById)
+                .WithName("AdminGetCblRequestById")
+                .Produces<CblRequestDto>(200)
+                .Produces(404);
         }
 
         private static int GetAuthUserId(HttpContext ctx)
@@ -93,8 +94,11 @@ namespace CompGateApi.Endpoints
                     return Results.Unauthorized();
                 }
 
-                var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, searchBy, page, limit);
-                var total = await repo.GetCountByUserAsync(me.UserId, searchTerm, searchBy);
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+                var cid = me.CompanyId.Value;
+                var list = await repo.GetAllByCompanyAsync(cid, searchTerm, searchBy, page, limit);
+                var total = await repo.GetCountByCompanyAsync(cid, searchTerm, searchBy);
 
                 var dtos = list.Select(r => new CblRequestDto
                 {
@@ -168,7 +172,9 @@ namespace CompGateApi.Endpoints
                 if (me == null) return Results.Unauthorized();
 
                 var ent = await repo.GetByIdAsync(id);
-                if (ent == null || ent.UserId != me.UserId)
+                if (ent == null
+                    || !me.CompanyId.HasValue
+                    || ent.CompanyId != me.CompanyId.Value)
                     return Results.NotFound("Not found");
 
                 var dto = new CblRequestDto
@@ -242,9 +248,13 @@ namespace CompGateApi.Endpoints
                 var me = await userRepo.GetUserByAuthId(authId, token);
                 if (me == null) return Results.Unauthorized();
 
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
                 var ent = new CblRequest
                 {
                     UserId = me.UserId,
+                    CompanyId = me.CompanyId.Value,
                     PartyName = dto.PartyName,
                     Capital = dto.Capital,
                     FoundingDate = dto.FoundingDate,
@@ -422,6 +432,61 @@ namespace CompGateApi.Endpoints
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             });
+        }
+
+        public static async Task<IResult> AdminGetById(
+    int id,
+    [FromServices] ICblRequestRepository repo,
+    [FromServices] ILogger<CblRequestEndpoints> log)
+        {
+            log.LogInformation("Admin:GetById CblRequest {Id}", id);
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound("CBL request not found.");
+
+            var dto = new CblRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                PartyName = ent.PartyName,
+                Capital = ent.Capital,
+                FoundingDate = ent.FoundingDate,
+                LegalForm = ent.LegalForm,
+                BranchOrAgency = ent.BranchOrAgency,
+                CurrentAccount = ent.CurrentAccount,
+                AccountOpening = ent.AccountOpening,
+                CommercialLicense = ent.CommercialLicense,
+                ValidatyLicense = ent.ValidatyLicense,
+                CommercialRegistration = ent.CommercialRegistration,
+                ValidatyRegister = ent.ValidatyRegister,
+                StatisticalCode = ent.StatisticalCode,
+                ValidatyCode = ent.ValidatyCode,
+                ChamberNumber = ent.ChamberNumber,
+                ValidatyChamber = ent.ValidatyChamber,
+                TaxNumber = ent.TaxNumber,
+                Office = ent.Office,
+                LegalRepresentative = ent.LegalRepresentative,
+                RepresentativeNumber = ent.RepresentativeNumber,
+                BirthDate = ent.BirthDate,
+                PassportNumber = ent.PassportNumber,
+                PassportIssuance = ent.PassportIssuance,
+                PassportExpiry = ent.PassportExpiry,
+                Mobile = ent.Mobile,
+                Address = ent.Address,
+                PackingDate = ent.PackingDate,
+                SpecialistName = ent.SpecialistName,
+                Status = ent.Status,
+                Officials = ent.Officials
+                              .Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position })
+                              .ToList(),
+                Signatures = ent.Signatures
+                               .Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status })
+                               .ToList(),
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+            return Results.Ok(dto);
         }
     }
 }

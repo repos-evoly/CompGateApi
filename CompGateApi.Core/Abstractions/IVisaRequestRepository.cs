@@ -19,5 +19,19 @@ namespace CompGateApi.Core.Abstractions
         Task CreateAsync(VisaRequest entity);
         Task UpdateAsync(VisaRequest entity);
         Task DeleteAsync(int id);
+
+        // ── COMPANY only ────────────────────────────────────────────────
+        Task<IList<VisaRequest>> GetAllByCompanyAsync(
+             int userId,
+             string? searchTerm,
+             string? searchBy,
+             int page,
+             int limit);
+
+        Task<int> GetCountByCompanyAsync(
+            int userId,
+            string? searchTerm,
+            string? searchBy);
+
     }
 }

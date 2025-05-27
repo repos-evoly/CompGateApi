@@ -18,5 +18,19 @@ namespace CompGateApi.Core.Abstractions
         Task CreateAsync(ForeignTransfer req);
         Task UpdateAsync(ForeignTransfer req);
         Task DeleteAsync(int id);
+
+        // ── COMPANY ROUTES ───────────────────────────────────────────
+        Task<IList<ForeignTransfer>> GetAllByCompanyAsync(
+            int companyId,
+            string? searchTerm,
+            string? searchBy,
+            int page,
+            int limit);
+
+        Task<int> GetCountByCompanyAsync(
+            int companyId,
+            string? searchTerm,
+            string? searchBy);
+
     }
 }

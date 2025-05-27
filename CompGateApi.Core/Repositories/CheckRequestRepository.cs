@@ -157,5 +157,30 @@ namespace CompGateApi.Data.Repositories
             _context.CheckRequests.Update(req);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<IList<CheckRequest>> GetAllByCompanyAsync(
+    int companyId, string? searchTerm, string? searchBy, int page, int limit)
+        {
+            var q = _context.CheckRequests
+                            .Include(r => r.LineItems)
+                            .Where(r => r.CompanyId == companyId);
+            // … copy your searchTerm/searchBy switch here …
+            return await q
+              .OrderByDescending(r => r.CreatedAt)
+              .Skip((page - 1) * limit)
+              .Take(limit)
+              .AsNoTracking()
+              .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int companyId, string? searchTerm, string? searchBy)
+        {
+            var q = _context.CheckRequests
+                            .Where(r => r.CompanyId == companyId);
+            // … same searchTerm/searchBy filtering …
+            return await q.CountAsync();
+        }
+
     }
 }

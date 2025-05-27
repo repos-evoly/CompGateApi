@@ -16,6 +16,11 @@ namespace CompGateApi.Data.Models
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
+        [Required]
+        public int CompanyId { get; set; }
+        public Company Company { get; set; } = null!;
+
+
         [MaxLength(100)]
         public string? Branch { get; set; }
 

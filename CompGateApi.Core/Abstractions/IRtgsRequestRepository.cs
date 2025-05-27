@@ -19,5 +19,17 @@ namespace CompGateApi.Core.Abstractions
         Task CreateAsync(RtgsRequest entity);
         Task UpdateAsync(RtgsRequest entity);
         Task DeleteAsync(int id);
+
+        Task<IList<RtgsRequest>> GetAllByCompanyAsync(
+     int companyId,
+     string? searchTerm,
+     string? searchBy,
+     int page,
+     int limit);
+
+        Task<int> GetCountByCompanyAsync(
+            int companyId,
+            string? searchTerm,
+            string? searchBy);
     }
 }

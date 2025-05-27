@@ -22,5 +22,17 @@ namespace CompGateApi.Core.Abstractions
         Task CreateAsync(CheckBookRequest entity);
         Task UpdateAsync(CheckBookRequest entity);
         Task DeleteAsync(int id);
+
+        Task<IList<CheckBookRequest>> GetAllByCompanyAsync(
+        int companyId,
+        string? searchTerm,
+        string? searchBy,
+        int page,
+        int limit);
+
+        Task<int> GetCountByCompanyAsync(
+            int companyId,
+            string? searchTerm,
+            string? searchBy);
     }
 }

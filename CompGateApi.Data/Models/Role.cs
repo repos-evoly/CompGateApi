@@ -14,6 +14,7 @@ namespace CompGateApi.Data.Models
         public string NameAR { get; set; } = string.Empty;
         public string NameLT { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public bool IsGlobal { get; set; } = false;
 
         public ICollection<User> Users { get; set; } = new List<User>();
 

@@ -18,6 +18,7 @@ namespace CompGateApi.Core.Dtos
         public string Status { get; set; } = string.Empty;
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
+        public int? CompanyId { get; set; }
     }
 
     // Company calls this to create a new request; UserId is inferred from token.
@@ -39,5 +40,5 @@ namespace CompGateApi.Core.Dtos
     }
 
     // Standard paged‐result wrapper
-   
+
 }

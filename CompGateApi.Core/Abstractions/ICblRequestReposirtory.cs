@@ -18,5 +18,10 @@ namespace CompGateApi.Core.Abstractions
         Task CreateAsync(CblRequest entity);
         Task UpdateAsync(CblRequest entity);
         Task DeleteAsync(int id);
+
+        Task<IList<CblRequest>> GetAllByCompanyAsync(
+    int companyId, string? searchTerm, string? searchBy, int page, int limit);
+        Task<int> GetCountByCompanyAsync(
+            int companyId, string? searchTerm, string? searchBy);
     }
 }

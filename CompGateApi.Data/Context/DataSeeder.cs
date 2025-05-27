@@ -21,26 +21,45 @@ namespace CompGateApi.Data.Seeding
             SeedRolePermissions();       // map perms → roles
             SeedSettings();
             SeedCurrencies();
+
             SeedTransactionCategories();
             SeedServicePackages();
             SeedServicePackageDetails();
             SeedTransferLimits();
+            SeedCompanies();
+            SeedCompanyAdmins();
             SeedAdminUser();             // after roles & perms
             SeedUserRolePermissions();   // map perms → admin
             SeedSampleTransferRequests();
-            SeedSampleRequests();        // CBL, CheckBook, Check, RTGS
+            // SeedSampleRequests();        // CBL, CheckBook, Check, RTGS
+            // the Taha/Nader/user@example.com pieces
         }
 
         private void SeedRoles()
         {
-            if (_context.Roles.Any()) return;
-            var roleNames = new[]
+            var desired = new[]
             {
                 "SuperAdmin", "Admin", "Support", "Auditor",
-                "CompanyManager", "Accountant", "Maker", "Checker", "Viewer"
+                "CompanyManager", "Accountant", "Maker", "Checker", "Viewer",
+                "CompanyUser"
             };
-            _context.Roles.AddRange(roleNames.Select(n => new Role { NameLT = n }));
-            _context.SaveChanges();
+
+            // look up existing names
+            var existing = _context.Roles
+                                   .Select(r => r.NameLT)
+                                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // only add the ones that aren't there yet
+            var toAdd = desired
+                .Where(name => !existing.Contains(name))
+                .Select(name => new Role { NameLT = name })
+                .ToList();
+
+            if (toAdd.Any())
+            {
+                _context.Roles.AddRange(toAdd);
+                _context.SaveChanges();
+            }
         }
 
         private void SeedPermissions()
@@ -246,15 +265,102 @@ namespace CompGateApi.Data.Seeding
             var admin = new User
             {
                 AuthUserId = 1,
-                CompanyId = "000001",
                 FirstName = "System",
                 LastName = "Administrator",
                 Email = "admin@example.com",
                 Phone = "999999999",
                 RoleId = adminRole.Id,
-                ServicePackageId = stdPackage.Id
+                // ServicePackageId = stdPackage.Id
             };
             _context.Users.Add(admin);
+            _context.SaveChanges();
+        }
+
+        private void SeedCompanies()
+        {
+            if (_context.Companies.Any()) return;
+
+            // pick a default service package (must already have been seeded)
+            var defaultPkg = _context.ServicePackages
+                                     .Single(p => p.Name == "Standard");
+
+            _context.Companies.AddRange(
+                new Company
+                {
+                    Code = "549117",
+                    Name = "Company 549117",
+                    IsActive = true,
+                    ServicePackageId = defaultPkg.Id
+                },
+                new Company
+                {
+                    Code = "725010",
+                    Name = "Company 725010",
+                    IsActive = true,
+                    ServicePackageId = defaultPkg.Id
+                }
+            );
+            _context.SaveChanges();
+        }
+
+
+        private void SeedCompanyAdmins()
+        {
+            var pkg = _context.ServicePackages.Single(p => p.Name == "Standard");
+            var role = _context.Roles.Single(r => r.NameLT == "CompanyManager");  // role Id = 5
+            var usrRole = _context.Roles.Single(r => r.NameLT == "CompanyUser");  // for normal employees
+
+            var co1 = _context.Companies.Single(c => c.Code == "549117");
+            if (!_context.Users.Any(u => u.Email == "taha@gmail.com"))
+            {
+                _context.Users.Add(new User
+                {
+                    AuthUserId = 7,
+                    CompanyId = co1.Id,
+                    FirstName = "Taha",
+                    LastName = "Owner",
+                    Email = "taha@gmail.com",
+                    Phone = "7777777777",
+                    RoleId = role.Id,
+                    // ServicePackageId = pkg.Id,
+                    IsCompanyAdmin = true
+                });
+            }
+
+            var co2 = _context.Companies.Single(c => c.Code == "725010");
+            if (!_context.Users.Any(u => u.Email == "nader@gmail.com"))
+            {
+                _context.Users.Add(new User
+                {
+                    AuthUserId = 8,
+                    CompanyId = co2.Id,
+                    FirstName = "Nader",
+                    LastName = "Owner",
+                    Email = "nader@gmail.com",
+                    Phone = "8888888888",
+                    RoleId = role.Id,
+                    // ServicePackageId = pkg.Id,
+                    IsCompanyAdmin = true
+                });
+            }
+
+            // a normal employee in co2
+            if (!_context.Users.Any(u => u.Email == "user@example.com"))
+            {
+                _context.Users.Add(new User
+                {
+                    AuthUserId = 9,
+                    CompanyId = co2.Id,
+                    FirstName = "Normal",
+                    LastName = "User",
+                    Email = "user@example.com",
+                    Phone = "9999999999",
+                    RoleId = usrRole.Id,
+                    // ServicePackageId = pkg.Id,
+                    IsCompanyAdmin = false
+                });
+            }
+
             _context.SaveChanges();
         }
 
@@ -286,7 +392,7 @@ namespace CompGateApi.Data.Seeding
         private void SeedSampleTransferRequests()
         {
             if (_context.TransferRequests.Any()) return;
-            var user = _context.Users.First();
+            var user = _context.Users.First(u => u.CompanyId > 0);
             var cats = _context.TransactionCategories.ToList();
             var cur = _context.Currencies.First();
             var pkg = _context.ServicePackages.First(p => p.Name == "Standard");
@@ -296,6 +402,7 @@ namespace CompGateApi.Data.Seeding
                 _context.TransferRequests.Add(new TransferRequest
                 {
                     UserId = user.Id,
+                    CompanyId = user.CompanyId ?? 0,    // ← add this line, default to 0 if null
                     TransactionCategoryId = cat.Id,
                     FromAccount = "ACCT-0001",
                     ToAccount = "ACCT-1001",
@@ -309,107 +416,107 @@ namespace CompGateApi.Data.Seeding
             _context.SaveChanges();
         }
 
-        private void SeedSampleRequests()
-        {
-            // reuse admin user
-            var admin = _context.Users.Single(u => u.Email == "admin@example.com");
+        // private void SeedSampleRequests()
+        // {
+        //     // reuse admin user
+        //     var admin = _context.Users.Single(u => u.Email == "admin@example.com");
 
-            if (!_context.CblRequests.Any())
-            {
-                _context.CblRequests.Add(new CblRequest
-                {
-                    UserId = admin.Id,
-                    PartyName = "Example Co. LLC",
-                    Capital = 250000m,
-                    FoundingDate = DateTime.Today.AddYears(-4),
-                    LegalForm = "LLC",
-                    BranchOrAgency = "Main Branch",
-                    CurrentAccount = "AC-100200",
-                    AccountOpening = DateTime.Today.AddYears(-3),
-                    CommercialLicense = "LIC-2025-001",
-                    ValidatyLicense = DateTime.Today.AddYears(1),
-                    CommercialRegistration = "REG-12345",
-                    ValidatyRegister = DateTime.Today.AddMonths(6),
-                    StatisticalCode = "ST-98765",
-                    ValidatyCode = DateTime.Today.AddYears(2),
-                    ChamberNumber = "CH-54321",
-                    ValidatyChamber = DateTime.Today.AddYears(3),
-                    TaxNumber = "TAX-112233",
-                    Office = "HQ",
-                    LegalRepresentative = "Alice Manager",
-                    RepresentativeNumber = "REP-2025",
-                    BirthDate = new DateTime(1980, 1, 1),
-                    PassportNumber = "P-567890",
-                    PassportIssuance = new DateTime(2015, 5, 1),
-                    PassportExpiry = new DateTime(2025, 5, 1),
-                    Mobile = "+218912345678",
-                    Address = "123 Corporate Ave",
-                    PackingDate = DateTime.Today,
-                    SpecialistName = "Bob Specialist"
-                });
-                _context.SaveChanges();
-            }
+        //     if (!_context.CblRequests.Any())
+        //     {
+        //         _context.CblRequests.Add(new CblRequest
+        //         {
+        //             UserId = admin.Id,
+        //             PartyName = "Example Co. LLC",
+        //             Capital = 250000m,
+        //             FoundingDate = DateTime.Today.AddYears(-4),
+        //             LegalForm = "LLC",
+        //             BranchOrAgency = "Main Branch",
+        //             CurrentAccount = "AC-100200",
+        //             AccountOpening = DateTime.Today.AddYears(-3),
+        //             CommercialLicense = "LIC-2025-001",
+        //             ValidatyLicense = DateTime.Today.AddYears(1),
+        //             CommercialRegistration = "REG-12345",
+        //             ValidatyRegister = DateTime.Today.AddMonths(6),
+        //             StatisticalCode = "ST-98765",
+        //             ValidatyCode = DateTime.Today.AddYears(2),
+        //             ChamberNumber = "CH-54321",
+        //             ValidatyChamber = DateTime.Today.AddYears(3),
+        //             TaxNumber = "TAX-112233",
+        //             Office = "HQ",
+        //             LegalRepresentative = "Alice Manager",
+        //             RepresentativeNumber = "REP-2025",
+        //             BirthDate = new DateTime(1980, 1, 1),
+        //             PassportNumber = "P-567890",
+        //             PassportIssuance = new DateTime(2015, 5, 1),
+        //             PassportExpiry = new DateTime(2025, 5, 1),
+        //             Mobile = "+218912345678",
+        //             Address = "123 Corporate Ave",
+        //             PackingDate = DateTime.Today,
+        //             SpecialistName = "Bob Specialist"
+        //         });
+        //         _context.SaveChanges();
+        //     }
 
-            if (!_context.CheckBookRequests.Any())
-            {
-                _context.CheckBookRequests.Add(new CheckBookRequest
-                {
-                    UserId = admin.Id,
-                    FullName = "John Doe",
-                    Address = "456 Finance St",
-                    AccountNumber = "AC-334455",
-                    PleaseSend = "Mail to HQ",
-                    Branch = "Downtown",
-                    Date = DateTime.Today,
-                    BookContaining = "50 leaves"
-                });
-                _context.SaveChanges();
-            }
+        //     if (!_context.CheckBookRequests.Any())
+        //     {
+        //         _context.CheckBookRequests.Add(new CheckBookRequest
+        //         {
+        //             UserId = admin.Id,
+        //             FullName = "John Doe",
+        //             Address = "456 Finance St",
+        //             AccountNumber = "AC-334455",
+        //             PleaseSend = "Mail to HQ",
+        //             Branch = "Downtown",
+        //             Date = DateTime.Today,
+        //             BookContaining = "50 leaves"
+        //         });
+        //         _context.SaveChanges();
+        //     }
 
-            if (!_context.CheckRequests.Any())
-            {
-                var chk = new CheckRequest
-                {
-                    UserId = admin.Id,
-                    Branch = "Central",
-                    BranchNum = "C-100",
-                    Date = DateTime.Today,
-                    CustomerName = "Mary Customer",
-                    CardNum = "CARD-998877",
-                    AccountNum = "AC-112233",
-                    Beneficiary = "Vendor Ltd."
-                };
-                chk.LineItems.Add(new CheckRequestLineItem { Dirham = "100", Lyd = "450" });
-                chk.LineItems.Add(new CheckRequestLineItem { Dirham = "250", Lyd = "1125" });
-                _context.CheckRequests.Add(chk);
-                _context.SaveChanges();
-            }
+        //     if (!_context.CheckRequests.Any())
+        //     {
+        //         var chk = new CheckRequest
+        //         {
+        //             UserId = admin.Id,
+        //             Branch = "Central",
+        //             BranchNum = "C-100",
+        //             Date = DateTime.Today,
+        //             CustomerName = "Mary Customer",
+        //             CardNum = "CARD-998877",
+        //             AccountNum = "AC-112233",
+        //             Beneficiary = "Vendor Ltd."
+        //         };
+        //         chk.LineItems.Add(new CheckRequestLineItem { Dirham = "100", Lyd = "450" });
+        //         chk.LineItems.Add(new CheckRequestLineItem { Dirham = "250", Lyd = "1125" });
+        //         _context.CheckRequests.Add(chk);
+        //         _context.SaveChanges();
+        //     }
 
-            if (!_context.RtgsRequests.Any())
-            {
-                _context.RtgsRequests.Add(new RtgsRequest
-                {
-                    UserId = admin.Id,
-                    RefNum = DateTime.Now,
-                    Date = DateTime.Now,
-                    PaymentType = "Domestic",
-                    AccountNo = "RTGS-556677",
-                    ApplicantName = "Sam Sender",
-                    Address = "789 Payments Blvd",
-                    BeneficiaryName = "Receiver Co.",
-                    BeneficiaryAccountNo = "BEN-445566",
-                    BeneficiaryBank = "OtherBank",
-                    BranchName = "North Branch",
-                    Amount = "2000",
-                    RemittanceInfo = "Invoice #2025",
-                    Invoice = true,
-                    Contract = true,
-                    Claim = false,
-                    OtherDoc = false
-                });
-                _context.SaveChanges();
-            }
-        }
+        //     if (!_context.RtgsRequests.Any())
+        //     {
+        //         _context.RtgsRequests.Add(new RtgsRequest
+        //         {
+        //             UserId = admin.Id,
+        //             RefNum = DateTime.Now,
+        //             Date = DateTime.Now,
+        //             PaymentType = "Domestic",
+        //             AccountNo = "RTGS-556677",
+        //             ApplicantName = "Sam Sender",
+        //             Address = "789 Payments Blvd",
+        //             BeneficiaryName = "Receiver Co.",
+        //             BeneficiaryAccountNo = "BEN-445566",
+        //             BeneficiaryBank = "OtherBank",
+        //             BranchName = "North Branch",
+        //             Amount = "2000",
+        //             RemittanceInfo = "Invoice #2025",
+        //             Invoice = true,
+        //             Contract = true,
+        //             Claim = false,
+        //             OtherDoc = false
+        //         });
+        //         _context.SaveChanges();
+        //     }
+        // }
 
         public static void Initialize(IServiceProvider services)
         {

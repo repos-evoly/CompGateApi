@@ -27,7 +27,7 @@ namespace CompGateApi.Core.Dtos
     public class CompanyRegistrationDto
     {
         [Required, StringLength(6, MinimumLength = 6)]
-        public string CompanyId { get; set; } = string.Empty;
+        public string CompanyCode { get; set; } = string.Empty;
 
         [Required, MaxLength(150)]
         public string Username { get; set; } = string.Empty;
@@ -108,7 +108,7 @@ namespace CompGateApi.Core.Dtos
         public int AuthUserId { get; set; }
 
         /// <summary>The 6-digit CompanyId from the route</summary>
-        public string CompanyId { get; set; } = string.Empty;
+        public string CompanyCode { get; set; }
 
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
@@ -127,13 +127,32 @@ namespace CompGateApi.Core.Dtos
 {
     public class CompanyListDto
     {
-        public string CompanyId { get; set; } = string.Empty;
-        public string? BranchId { get; set; }
-        public string? LegalNameEn { get; set; }
-        public string? LegalNameLt { get; set; }
-        public KycStatus Status { get; set; }
-        public string? StatusMessage { get; set; }
-        public DateTime? RequestedAt { get; set; }
-        public DateTime? ReviewedAt { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public KycStatus KycStatus { get; set; }
+        public string? KycStatusMessage { get; set; }
+        public DateTimeOffset KycRequestedAt { get; set; }
+        public DateTimeOffset? KycReviewedAt { get; set; }
+        public string? KycBranchId { get; set; }
+        public string? KycLegalCompanyName { get; set; }
+        public string? KycLegalCompanyNameLt { get; set; }
+        public string? KycMobile { get; set; }
+        public string? KycNationality { get; set; }
+        public string? KycCity { get; set; }
+    }
+
+}
+
+namespace CompGateApi.Core.Dtos
+{
+    public class CompanyRegistrationResult
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        /// <summary>
+        /// Optional: the URI of the newly created company resource
+        /// </summary>
+        public string? Location { get; set; }
     }
 }

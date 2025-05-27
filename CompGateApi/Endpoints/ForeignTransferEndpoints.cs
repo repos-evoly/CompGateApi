@@ -50,13 +50,19 @@ namespace CompGateApi.Endpoints
                  .Produces<ForeignTransferDto>(200)
                  .Produces(400)
                  .Produces(404);
+
+            admin.MapGet("/{id:int}", GetByIdAdmin)
+                    .WithName("AdminGetForeignTransferById")
+                    .Produces<ForeignTransferDto>(200)
+                    .Produces(404);
         }
 
         private static int GetAuthUserId(HttpContext ctx)
         {
-            var raw = ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // token uses "nameid" claim
+            var raw = ctx.User.FindFirst("nameid")?.Value;
             if (int.TryParse(raw, out var id)) return id;
-            throw new UnauthorizedAccessException("Missing nameid claim.");
+            throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
         }
 
         public static async Task<IResult> GetMyRequests(
@@ -74,8 +80,11 @@ namespace CompGateApi.Endpoints
             var me = await userRepo.GetUserByAuthId(authId, bearer);
             if (me == null) return Results.Unauthorized();
 
-            var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, searchBy, page, limit);
-            var total = await repo.GetCountByUserAsync(me.UserId, searchTerm, searchBy);
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+            var cid = me.CompanyId.Value;
+            var list = await repo.GetAllByCompanyAsync(cid, searchTerm, searchBy, page, limit);
+            var total = await repo.GetCountByCompanyAsync(cid, searchTerm, searchBy);
 
             var dtos = list.Select(r => new ForeignTransferDto
             {
@@ -128,7 +137,9 @@ namespace CompGateApi.Endpoints
             if (me == null) return Results.Unauthorized();
 
             var ent = await repo.GetByIdAsync(id);
-            if (ent == null || ent.UserId != me.UserId)
+            if (ent == null
+                || !me.CompanyId.HasValue
+                || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
 
             return Results.Ok(new ForeignTransferDto
@@ -178,9 +189,14 @@ namespace CompGateApi.Endpoints
             var me = await userRepo.GetUserByAuthId(authId, bearer);
             if (me == null) return Results.Unauthorized();
 
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+
             var ent = new ForeignTransfer
             {
                 UserId = me.UserId,
+                CompanyId = me.CompanyId.Value,
                 ToBank = dto.ToBank,
                 Branch = dto.Branch,
                 ResidentSupplierName = dto.ResidentSupplierName,
@@ -334,6 +350,48 @@ namespace CompGateApi.Endpoints
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             });
+        }
+
+        public static async Task<IResult> GetByIdAdmin(
+    int id,
+    [FromServices] IForeignTransferRepository repo,
+    [FromServices] ILogger<ForeignTransferEndpoints> log)
+        {
+            log.LogInformation("Admin:GetByIdAdmin({Id})", id);
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound("Foreign transfer not found.");
+
+            var dto = new ForeignTransferDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                ToBank = ent.ToBank,
+                Branch = ent.Branch,
+                ResidentSupplierName = ent.ResidentSupplierName,
+                ResidentSupplierNationality = ent.ResidentSupplierNationality,
+                NonResidentPassportNumber = ent.NonResidentPassportNumber,
+                PlaceOfIssue = ent.PlaceOfIssue,
+                DateOfIssue = ent.DateOfIssue,
+                NonResidentNationality = ent.NonResidentNationality,
+                NonResidentAddress = ent.NonResidentAddress,
+                TransferAmount = ent.TransferAmount,
+                ToCountry = ent.ToCountry,
+                BeneficiaryName = ent.BeneficiaryName,
+                BeneficiaryAddress = ent.BeneficiaryAddress,
+                ExternalBankName = ent.ExternalBankName,
+                ExternalBankAddress = ent.ExternalBankAddress,
+                TransferToAccountNumber = ent.TransferToAccountNumber,
+                TransferToAddress = ent.TransferToAddress,
+                AccountHolderName = ent.AccountHolderName,
+                PermanentAddress = ent.PermanentAddress,
+                PurposeOfTransfer = ent.PurposeOfTransfer,
+                Status = ent.Status,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+            return Results.Ok(dto);
         }
     }
 }

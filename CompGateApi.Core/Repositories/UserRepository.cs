@@ -114,10 +114,22 @@ namespace CompGateApi.Core.Repositories
             return true;
         }
 
-        public async Task<List<UserDetailsDto>> GetUsersAsync(string? searchTerm, string? searchBy, int page, int limit, string authToken)
+        public async Task<List<UserDetailsDto>> GetUsersAsync(
+     string? searchTerm,
+     string? searchBy,
+     bool? hasCompany,
+     int? roleId,
+     int page,
+     int limit,
+     string authToken
+ )
         {
-            IQueryable<User> query = _context.Users.Include(u => u.Role);
+            // start with base query
+            IQueryable<User> query = _context.Users
+                                             .Include(u => u.Role)
+                                             .Include(u => u.Company);
 
+            // 1) text search
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 switch (searchBy?.ToLower())
@@ -132,16 +144,38 @@ namespace CompGateApi.Core.Repositories
                         query = query.Where(u => u.Email.Contains(searchTerm));
                         break;
                     default:
-                        query = query.Where(u => u.FirstName.Contains(searchTerm) || u.LastName.Contains(searchTerm) || u.Email.Contains(searchTerm));
+                        query = query.Where(u =>
+                            u.FirstName.Contains(searchTerm) ||
+                            u.LastName.Contains(searchTerm) ||
+                            u.Email.Contains(searchTerm)
+                        );
                         break;
                 }
             }
 
-            var users = await query.OrderBy(u => u.Id)
-                                   .Skip((page - 1) * limit)
-                                   .Take(limit)
-                                   .AsNoTracking()
-                                   .ToListAsync();
+            // 2) filter by company presence/absence
+            if (hasCompany == true)
+            {
+                query = query.Where(u => u.CompanyId != null);
+            }
+            else if (hasCompany == false)
+            {
+                query = query.Where(u => u.CompanyId == null);
+            }
+
+            // 3) filter by role if provided
+            if (roleId.HasValue)
+            {
+                query = query.Where(u => u.RoleId == roleId.Value);
+            }
+
+            // 4) pagination
+            var users = await query
+                .OrderBy(u => u.Id)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
 
             var userDetailsList = new List<UserDetailsDto>();
             foreach (var user in users)
@@ -156,10 +190,21 @@ namespace CompGateApi.Core.Repositories
                     LastName = user.LastName,
                     Email = user.Email,
                     Phone = user.Phone,
-                    Role = user.Role,
+                    Role = new RoleDto
+                    {
+                        Id = user.Role.Id,
+                        NameLT = user.Role.NameLT,
+                        NameAR = user.Role.NameAR,
+                        Description = user.Role.Description,
+                        IsGlobal = user.Role.IsGlobal
+                    },
                     RoleId = user.Role?.Id ?? 0,
                     IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
-                    PasswordResetToken = authUser?.PasswordResetToken
+                    PasswordResetToken = authUser?.PasswordResetToken,
+                    Permissions = (await GetUserPermissions(user.Id))
+                                    .Where(p => p.HasPermission == 1)
+                                    .Select(p => p.PermissionName)
+                                    .ToList(),
                 });
             }
             return userDetailsList;
@@ -186,6 +231,58 @@ namespace CompGateApi.Core.Repositories
                         break;
                 }
             }
+            return await query.AsNoTracking().CountAsync();
+        }
+
+        public async Task<int> GetUsersCountAsync(
+  string? searchTerm,
+  string? searchBy,
+  bool? hasCompany,
+  int? roleId
+)
+        {
+            // Start from Users (no need to Include navigation here since we're only counting)
+            IQueryable<User> query = _context.Users;
+
+            // 1) text search on name/email
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch (searchBy?.ToLower())
+                {
+                    case "firstname":
+                        query = query.Where(u => u.FirstName.Contains(searchTerm));
+                        break;
+                    case "lastname":
+                        query = query.Where(u => u.LastName.Contains(searchTerm));
+                        break;
+                    case "email":
+                        query = query.Where(u => u.Email.Contains(searchTerm));
+                        break;
+                    default:
+                        query = query.Where(u =>
+                            u.FirstName.Contains(searchTerm) ||
+                            u.LastName.Contains(searchTerm) ||
+                            u.Email.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            // 2) hasCompany filter
+            if (hasCompany.HasValue)
+            {
+                if (hasCompany.Value)
+                    query = query.Where(u => u.CompanyId != null);
+                else
+                    query = query.Where(u => u.CompanyId == null);
+            }
+
+            // 3) roleId filter
+            if (roleId.HasValue)
+            {
+                query = query.Where(u => u.RoleId == roleId.Value);
+            }
+
+            // 4) final count
             return await query.AsNoTracking().CountAsync();
         }
 
@@ -220,7 +317,14 @@ namespace CompGateApi.Core.Repositories
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
-                Role = user.Role,
+                Role = new RoleDto
+                {
+                    Id = user.Role.Id,
+                    NameLT = user.Role.NameLT,
+                    NameAR = user.Role.NameAR,
+                    Description = user.Role.Description,
+                    IsGlobal = user.Role.IsGlobal
+                },
                 RoleId = user.Role?.Id ?? 0,
 
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
@@ -233,8 +337,9 @@ namespace CompGateApi.Core.Repositories
         {
             // a) local lookup
             var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.AuthUserId == authId);
+            .Include(u => u.Role)
+            .Include(u => u.Company)      // ← pull in the Company entity
+            .FirstOrDefaultAsync(u => u.AuthUserId == authId);
             if (user == null) return null;
 
             // b) auth details
@@ -252,8 +357,9 @@ namespace CompGateApi.Core.Repositories
 
             // d) bank accounts — only if CompanyId is set
             var accounts = new List<string>();
-            if (!string.IsNullOrEmpty(user.CompanyId))
+            if (user.CompanyId != null)
             {
+                var companyCode = user.Company!.Code;   // ← the 6-digit code
                 var bankClient = _httpFactory.CreateClient("BankApi");
                 // optional: bankClient.DefaultRequestHeaders.Authorization = …
                 var payload = new
@@ -263,12 +369,12 @@ namespace CompGateApi.Core.Repositories
                         system = "MOBILE",
                         referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
                         userName = "TEDMOB",
-                        customerNumber = user.CompanyId,
+                        customerNumber = companyCode,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
                     },
                     Details = new Dictionary<string, string> {
-                    { "@CID",   user.CompanyId },
+                    { "@CID", companyCode },
                     { "@GETAVB","Y" }
                 }
                 };
@@ -288,17 +394,30 @@ namespace CompGateApi.Core.Repositories
             {
                 UserId = user.Id,
                 AuthUserId = user.AuthUserId,
+                Username = authUser?.Username,
+                CompanyId = user.CompanyId,
+                CompanyCode = user.Company?.Code,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
-                Role = user.Role,
+                Role = new RoleDto
+                {
+                    Id = user.Role.Id,
+                    NameLT = user.Role.NameLT,
+                    NameAR = user.Role.NameAR,
+                    Description = user.Role.Description,
+                    IsGlobal = user.Role.IsGlobal
+                },
                 RoleId = user.Role.Id,
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                 PasswordResetToken = authUser?.PasswordResetToken,
                 Permissions = userPermissionNames,
-                ServicePackageId = user.ServicePackageId,   // ← add this
-                Accounts = accounts
+                Accounts = accounts,
+                // ServicePackageId = user.ServicePackageId,
+                IsCompanyAdmin = user.IsCompanyAdmin,
+                CompanyStatus = user.Company?.KycStatus ?? KycStatus.Missing,
+                CompanyStatusMessage = user.Company?.KycStatusMessage,
             };
         }
         private async Task<AuthUserDto?> FetchAuthUserDetails(int authUserId, string authToken)
@@ -356,9 +475,23 @@ namespace CompGateApi.Core.Repositories
             return true;
         }
 
-        public async Task<List<Role>> GetRoles()
+        public async Task<List<RoleDto>> GetRolesAsync(bool? isGlobal = null)
         {
-            return await _context.Roles.ToListAsync();
+            var q = _context.Roles.AsQueryable();
+
+            if (isGlobal.HasValue)
+                q = q.Where(r => r.IsGlobal == isGlobal.Value);
+
+            return await q
+                .Select(r => new RoleDto
+                {
+                    Id = r.Id,
+                    NameLT = r.NameLT,
+                    NameAR = r.NameAR,
+                    Description = r.Description,
+                    IsGlobal = r.IsGlobal
+                })
+                .ToListAsync();
         }
 
         public async Task<List<Permission>> GetPermissions()
@@ -366,6 +499,31 @@ namespace CompGateApi.Core.Repositories
             return await _context.Permissions.ToListAsync();
         }
 
+        public async Task<List<Permission>> GetPermissionsByRoleAsync(int roleId)
+        {
+            return await _context.RolePermissions
+                .Where(rp => rp.RoleId == roleId)
+                .Include(rp => rp.Permission)
+                .Select(rp => rp.Permission)
+                .Distinct()
+                .ToListAsync();
+        }
+
+        public async Task<List<Permission>> GetPermissionsByGlobalAsync(bool isGlobal)
+        {
+            // find all roles with that flag, then all their permissions:
+            var roleIds = await _context.Roles
+                .Where(r => r.IsGlobal == isGlobal)
+                .Select(r => r.Id)
+                .ToListAsync();
+
+            return await _context.RolePermissions
+                .Where(rp => roleIds.Contains(rp.RoleId))
+                .Include(rp => rp.Permission)
+                .Select(rp => rp.Permission)
+                .Distinct()
+                .ToListAsync();
+        }
         public async Task<List<BasicUserDto>> GetManagementUsersAsync(string currentUserRole)
         {
             // Define the management role names (all management-related roles).

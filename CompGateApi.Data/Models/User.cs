@@ -1,4 +1,3 @@
-// CompGateApi.Data.Models/User.cs
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -27,48 +26,11 @@ namespace CompGateApi.Data.Models
         public int AuthUserId { get; set; }      // from Auth service
 
         /// <summary>
-        /// Six-digit company code (nullable for pure bank employees)
+        /// Foreign key to Company
         /// </summary>
-        [MaxLength(6)]
-        public string? CompanyId { get; set; }
 
-        // ── KYC fields ────────────────────────────────────────────────
-
-        /// <summary>Status of the KYC/registration workflow</summary>
-        [Required]
-        public KycStatus KycStatus { get; set; } = KycStatus.Missing;
-
-        /// <summary>Branch ID returned by KYC lookup</summary>
-        [MaxLength(10)]
-        public string? KycBranchId { get; set; }
-
-        [MaxLength(150)]
-        public string? KycLegalCompanyName { get; set; }
-
-        [MaxLength(150)]
-        public string? KycLegalCompanyNameLt { get; set; }
-
-        [MaxLength(50)]
-        public string? KycMobile { get; set; }
-
-        [MaxLength(100)]
-        public string? KycNationality { get; set; }
-
-        [MaxLength(100)]
-        public string? KycCity { get; set; }
-
-        /// <summary>An optional message (e.g. rejection reason)</summary>
-        [MaxLength(500)]
-        public string? KycStatusMessage { get; set; }
-
-        /// <summary>When the KYC lookup was requested</summary>
-        public DateTime? KycRequestedAt { get; set; }
-
-        /// <summary>When an admin approved/rejected</summary>
-        public DateTime? KycReviewedAt { get; set; }
-
-
-        // ── Identity fields ────────────────────────────────────────────
+        public int? CompanyId { get; set; }
+        public Company? Company { get; set; }
 
         [MaxLength(150)]
         public string FirstName { get; set; } = string.Empty;
@@ -91,33 +53,36 @@ namespace CompGateApi.Data.Models
         public Role Role { get; set; } = null!;
 
         /// <summary>
-        /// If true, this user is the “admin” of the CompanyId (can add others, manage approvals, etc.)
+        /// If true, this user is the “admin” of the Company
         /// </summary>
         public bool IsCompanyAdmin { get; set; } = false;
 
 
         // ── Service package & limits ─────────────────────────────────
 
-        [Required]
-        public int ServicePackageId { get; set; } = 1;
-        public ServicePackage ServicePackage { get; set; } = null!;
-
+        public int? ServicePackageId { get; set; }
+        public ServicePackage? ServicePackage { get; set; }
 
         // ── Navigation collections ──────────────────────────────────
 
-        public ICollection<AuditLog> AuditLogs { get; set; }
-            = new List<AuditLog>();
+        public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+        public ICollection<BankAccount> BankAccounts { get; set; } = new List<BankAccount>();
+        public ICollection<UserRolePermission> UserRolePermissions { get; set; } = new List<UserRolePermission>();
 
-        public ICollection<BankAccount> BankAccounts { get; set; }
-            = new List<BankAccount>();
+        // Requests submitted by this user
+        public ICollection<TransferRequest> TransferRequests { get; set; } = new List<TransferRequest>();
+        public ICollection<VisaRequest> VisaRequests { get; set; } = new List<VisaRequest>();
+        public ICollection<ForeignTransfer> ForeignTransferRequests { get; set; } = new List<ForeignTransfer>();
+        public ICollection<CheckRequest> CheckRequests { get; set; } = new List<CheckRequest>();
+        public ICollection<CheckBookRequest> CheckBookRequests { get; set; } = new List<CheckBookRequest>();
+        public ICollection<CblRequest> CblRequests { get; set; } = new List<CblRequest>();
+        public ICollection<RtgsRequest> RtgsRequests { get; set; } = new List<RtgsRequest>();
 
-        public ICollection<UserRolePermission> UserRolePermissions { get; set; }
-            = new List<UserRolePermission>();
+        public ICollection<CreditFacilitiesOrLetterOfGuaranteeRequest> CreditFacilitiesRequests
+            = new List<CreditFacilitiesOrLetterOfGuaranteeRequest>();
 
-        public ICollection<TransferRequest> TransferRequests { get; set; }
-            = new List<TransferRequest>();
+        public ICollection<CertifiedBankStatementRequest> CertifiedBankStatementRequests
+            = new List<CertifiedBankStatementRequest>();
 
-         public ICollection<VisaRequest> VisaRequests { get; set; } = new List<VisaRequest>();
-         public ICollection<ForeignTransfer> ForeignTransferRequests { get; set; } = new List<ForeignTransfer>();
     }
 }

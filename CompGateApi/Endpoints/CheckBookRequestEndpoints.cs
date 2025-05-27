@@ -60,6 +60,11 @@ namespace CompGateApi.Endpoints
                  .Accepts<CheckBookRequestStatusUpdateDto>("application/json")
                  .Produces<CheckBookRequestDto>(200)
                  .Produces(404);
+            admin.MapGet("/{id:int}", AdminGetById)
+                .WithName("AdminGetCheckBookRequestById")
+                .Produces<CheckBookRequestDto>(200)
+                .Produces(404);
+
         }
 
         /// <summary>
@@ -107,8 +112,11 @@ namespace CompGateApi.Endpoints
                     return Results.Unauthorized();
                 }
 
-                var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, searchBy, page, limit);
-                var total = await repo.GetCountByUserAsync(me.UserId, searchTerm, searchBy);
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
+                var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
 
                 var dtos = list.Select(r => new CheckBookRequestDto
                 {
@@ -166,11 +174,11 @@ namespace CompGateApi.Endpoints
                 }
 
                 var ent = await repo.GetByIdAsync(id);
-                if (ent == null || ent.UserId != me.UserId)
-                {
-                    log.LogWarning("Request {Id} not found or not owned by UserId={UserId}", id, me.UserId);
+                if (ent == null
+                    || !me.CompanyId.HasValue
+                    || ent.CompanyId != me.CompanyId.Value)
                     return Results.NotFound("Not found");
-                }
+
 
                 return Results.Ok(new CheckBookRequestDto
                 {
@@ -228,8 +236,10 @@ namespace CompGateApi.Endpoints
                     log.LogWarning("No local user mapping for AuthId={AuthId}", authId);
                     return Results.Unauthorized();
                 }
-                log.LogInformation("Mapped AuthUserId {AuthId} → UserId {UserId} / RoleId {RoleId}",
-                    authId, me.UserId, me.RoleId);
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+
 
                 // Build & save entity
                 var ent = new CheckBookRequest
@@ -252,6 +262,7 @@ namespace CompGateApi.Endpoints
                 {
                     Id = ent.Id,
                     UserId = ent.UserId,
+                    CompanyId = me.CompanyId.Value,
                     FullName = ent.FullName,
                     Address = ent.Address,
                     AccountNumber = ent.AccountNumber,
@@ -360,5 +371,37 @@ namespace CompGateApi.Endpoints
                 UpdatedAt = ent.UpdatedAt
             });
         }
+        public static async Task<IResult> AdminGetById(
+    int id,
+    [FromServices] ICheckBookRequestRepository repo,
+    [FromServices] ILogger<CheckBookRequestEndpoints> log)
+        {
+            log.LogInformation("AdminGetById({Id})", id);
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+            {
+                log.LogWarning("CheckBookRequest {Id} not found", id);
+                return Results.NotFound("Check‐book request not found.");
+            }
+
+            var dto = new CheckBookRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                FullName = ent.FullName,
+                Address = ent.Address,
+                AccountNumber = ent.AccountNumber,
+                PleaseSend = ent.PleaseSend,
+                Branch = ent.Branch,
+                Date = ent.Date,
+                BookContaining = ent.BookContaining,
+                Status = ent.Status,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(dto);
+        }
+
     }
 }

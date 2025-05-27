@@ -12,9 +12,9 @@ using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CompGateApi.Endpoints
 {
@@ -22,64 +22,81 @@ namespace CompGateApi.Endpoints
     {
         public void RegisterEndpoints(WebApplication app)
         {
-            var companies = app.MapGroup("/api/companies")
-                               .WithTags("Companies");
+            var companies = app
+                .MapGroup("/api/companies")
+                .WithTags("Companies");
 
-            // 1️⃣ Public KYC lookup
+            // 1️⃣ Public KYC lookup (no auth)
             companies.MapGet("/kyc/{code}", LookupKyc)
                      .WithName("LookupKyc")
                      .Produces(200)
                      .Produces(400);
 
-            // 2️⃣ Register under-review admin
+            // 2️⃣ Registration of company‐admin user (no auth)
             companies.MapPost("/register", RegisterCompany)
                      .WithName("RegisterCompany")
                      .Accepts<CompanyRegistrationDto>("application/json")
                      .Produces(201)
                      .Produces(400);
 
-            // ── Admin portal ────────────────────────────────────────────────────
-            var admin = companies.MapGroup("/admin")
-                                 .WithTags("Companies")
-                                 .RequireAuthorization("RequireAdminUser");
+            // ── ADMIN portal ───────────────────────────────────────────────
+            var admin = companies
+                .MapGroup("/admin")
+                .RequireAuthorization("RequireAdminUser")
+                .RequireAuthorization("AdminAccess");
 
-            // 3a) List / filter companies
+            // 3a) List & filter companies
             admin.MapGet("/", GetAllCompanies)
                  .WithName("GetAllCompanies")
                  .Produces<PagedResult<CompanyListDto>>(200);
 
-            // 3b) Approve/reject company KYC
+            // 3b) Approve/Reject KYC
             admin.MapPut("/{code}/status", UpdateCompanyStatus)
                  .WithName("UpdateCompanyStatus")
                  .Accepts<CompanyStatusUpdateDto>("application/json")
                  .Produces(200)
                  .Produces(404);
+            admin.MapGet("/{code}", GetCompanyByCode)
+            .WithName("GetCompanyByCode")
+            .Produces<CompanyListDto>(200)
+            .Produces(404);
 
-            // ── Company-admin: manage employees ────────────────────────────────
-            var employees = companies
+            // ── COMPANY-ADMIN portal ────────────────────────────────────
+            var companyAdmin = companies
                 .MapGroup("/{code}/users")
-                .WithTags("CompanyUsers")
-                .RequireAuthorization("RequireCompanyUser");
+                .RequireAuthorization("RequireCompanyUser")
+                .RequireAuthorization("RequireCompanyAdmin")
+                .WithTags("CompanyUsers");
 
-            employees.MapPost("/", AddCompanyUser)
-                     .WithName("AddCompanyUser")
-                     .Accepts<CompanyEmployeeRegistrationDto>("application/json")
-                     .Produces<CompanyEmployeeDetailsDto>(201)
-                     .Produces(400)
-                     .Produces(401);
+            // 4a) Add employee
+            companyAdmin.MapPost("/", AddCompanyUser)
+                        .WithName("AddCompanyUser")
+                        .Accepts<CompanyEmployeeRegistrationDto>("application/json")
+                        .Produces<CompanyEmployeeDetailsDto>(201)
+                        .Produces(400)
+                        .Produces(401);
 
-            employees.MapGet("/", GetCompanyUsers)
-                     .WithName("GetCompanyUsers")
-                     .Produces<List<CompanyEmployeeDetailsDto>>(200);
+            // 4b) List employees
+            companyAdmin.MapGet("/", GetCompanyUsers)
+                        .WithName("GetCompanyUsers")
+                        .Produces<List<CompanyEmployeeDetailsDto>>(200);
         }
 
-        // ────────────────────────────────────────────────────────────────────────
+        static int ResolveAuthUserId(HttpContext ctx)
+        {
+            var raw = ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                   ?? ctx.User.FindFirst("nameid")?.Value;
+            if (!int.TryParse(raw, out var id))
+                throw new UnauthorizedAccessException("Missing or invalid 'nameid' claim.");
+            return id;
+        }
+
         public static async Task<IResult> LookupKyc(
             string code,
             [FromServices] ICompanyRepository repo)
         {
             if (code.Length != 6)
-                return Results.BadRequest("Must be exactly 6 digits.");
+                return Results.BadRequest("Company code must be exactly 6 characters.");
 
             var kyc = await repo.LookupKycAsync(code);
             if (kyc == null || string.IsNullOrWhiteSpace(kyc.companyId))
@@ -90,17 +107,31 @@ namespace CompGateApi.Endpoints
 
         public static async Task<IResult> RegisterCompany(
             [FromBody] CompanyRegistrationDto dto,
-            [FromServices] ICompanyRepository repo)
+            [FromServices] ICompanyRepository repo,
+            [FromServices] ILogger<CompanyEndpoints> log)
         {
-            if (!await repo.CanRegisterCompanyAsync(dto.CompanyId))
-                return Results.BadRequest("Please complete KYC lookup first.");
+            // Make sure KYC was done first
+            if (!await repo.CanRegisterCompanyAsync(dto.CompanyCode))
+                return Results.BadRequest(new { error = "You must perform a successful KYC lookup before registering." });
 
-            var ok = await repo.RegisterCompanyAdminAsync(dto);
-            return ok
-                ? Results.Created($"/api/companies/{dto.CompanyId}", null)
-                : Results.BadRequest("Registration failed.");
+            // Attempt registration
+            var result = await repo.RegisterCompanyAdminAsync(dto);
+
+            if (!result.Success)
+            {
+                log.LogWarning("Company registration failed: {Error}", result.Error);
+                return Results.BadRequest(new { error = result.Error });
+            }
+
+            // Success → 201 + Location header
+            return Results.Ok(new
+            {
+                success = true,
+                companyCode = dto.CompanyCode,
+                location = result.Location,
+                message = "Registration successful, pending admin approval."
+            });
         }
-
         public static async Task<IResult> GetAllCompanies(
             [FromServices] ICompanyRepository repo,
             [FromServices] ILogger<CompanyEndpoints> log,
@@ -113,12 +144,12 @@ namespace CompGateApi.Endpoints
                 "Admin:GetAllCompanies(search={Search},status={Status},page={Page},limit={Limit})",
                 searchTerm, status, page, limit);
 
-            var list = await repo.GetAllCompaniesAsync(searchTerm, status, page, limit);
+            var items = await repo.GetAllCompaniesAsync(searchTerm, status, page, limit);
             var total = await repo.GetCompaniesCountAsync(searchTerm, status);
 
             return Results.Ok(new PagedResult<CompanyListDto>
             {
-                Data = list,
+                Data = items,
                 Page = page,
                 Limit = limit,
                 TotalRecords = total,
@@ -135,35 +166,34 @@ namespace CompGateApi.Endpoints
             return ok ? Results.Ok() : Results.NotFound();
         }
 
-        // ────────────────────────────────────────────────────────────────────────
-        static int ResolveAuthUserId(HttpContext ctx) =>
-            int.TryParse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
-              ? id
-              : throw new UnauthorizedAccessException();
-
         public static async Task<IResult> AddCompanyUser(
             string code,
             [FromBody] CompanyEmployeeRegistrationDto dto,
             HttpContext ctx,
             [FromServices] IUserRepository userRepo,
+            [FromServices] ICompanyRepository companyRepo,
             [FromServices] IValidator<CompanyEmployeeRegistrationDto> validator,
             [FromServices] IHttpClientFactory httpFactory,
             [FromServices] ILogger<CompanyEndpoints> log)
         {
-            // 1️⃣ Validate input
             var vr = await validator.ValidateAsync(dto);
             if (!vr.IsValid)
                 return Results.BadRequest(vr.Errors.Select(e => e.ErrorMessage));
 
-            // 2️⃣ Caller must be the company-admin
-            var callerAuth = ResolveAuthUserId(ctx);
+            int callerAuth;
+            try { callerAuth = ResolveAuthUserId(ctx); }
+            catch { return Results.Unauthorized(); }
+
             var bearer = ctx.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
             var me = await userRepo.GetUserByAuthId(callerAuth, bearer);
-            if (me == null || me.CompanyId != code)
+            if (me == null) return Results.Unauthorized();
+
+            var company = await companyRepo.GetByCodeAsync(code);
+            if (company == null) return Results.NotFound($"Company '{code}' not found.");
+            if (!me.IsCompanyAdmin || !string.Equals(me.CompanyCode, company.Code, StringComparison.OrdinalIgnoreCase))
                 return Results.Unauthorized();
 
-            // 3️⃣ Register in Auth service
-            var client = httpFactory.CreateClient();
+            var client = httpFactory.CreateClient("AuthApi");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
             var authPayload = new
             {
@@ -174,45 +204,39 @@ namespace CompGateApi.Endpoints
                 password = dto.Password,
                 roleId = dto.RoleId
             };
-            var resp = await client.PostAsJsonAsync(
-                "http://10.3.3.11/compauthapi/api/auth/register", authPayload);
+            var resp = await client.PostAsJsonAsync("api/auth/register", authPayload);
             if (!resp.IsSuccessStatusCode)
-            {
-                log.LogError("Auth register failed: {Status}", resp.StatusCode);
                 return Results.BadRequest("External auth registration failed.");
-            }
-            var body = await resp.Content.ReadAsStringAsync();
-            var reg = JsonSerializer.Deserialize<AuthRegisterResponseDto>(body,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-            if (reg.userId == 0)
-                return Results.BadRequest("Auth returned invalid userId.");
 
-            // 4️⃣ Persist locally
+            var regText = await resp.Content.ReadAsStringAsync();
+            var reg = JsonSerializer.Deserialize<AuthRegisterResponseDto>(regText,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            if (reg.userId <= 0) return Results.BadRequest("Auth returned invalid userId.");
+
             var user = new User
             {
                 AuthUserId = reg.userId,
-                CompanyId = code,
+                CompanyId = company.Id,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = dto.Email,
                 Phone = dto.Phone,
                 RoleId = dto.RoleId,
                 IsCompanyAdmin = false,
-                ServicePackageId = me.ServicePackageId
+                // ServicePackageId = me.ServicePackageId
             };
             await userRepo.AddUser(user);
 
-            // 5️⃣ Build return DTO
             var perms = (await userRepo.GetUserPermissions(user.Id))
-                            .Where(p => p.HasPermission == 1)
-                            .Select(p => p.PermissionName)
-                            .ToList();
+                         .Where(p => p.HasPermission == 1)
+                         .Select(p => p.PermissionName)
+                         .ToList();
 
             var outDto = new CompanyEmployeeDetailsDto
             {
                 Id = user.Id,
                 AuthUserId = user.AuthUserId,
-                CompanyId = user.CompanyId!,
+                CompanyCode = company.Code,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
@@ -220,28 +244,42 @@ namespace CompGateApi.Endpoints
                 RoleId = user.RoleId,
                 Permissions = perms
             };
+
             return Results.Created($"/api/companies/{code}/users/{user.Id}", outDto);
         }
 
         public static async Task<IResult> GetCompanyUsers(
             string code,
             HttpContext ctx,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] ICompanyRepository companyRepo)
         {
-            var callerAuth = ResolveAuthUserId(ctx);
-            var bearer = ctx.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
-            var me = await userRepo.GetUserByAuthId(callerAuth, bearer);
-            if (me == null || me.CompanyId != code)
+            int authId = ResolveAuthUserId(ctx);
+            var token = ctx.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            var me = await userRepo.GetUserByAuthId(authId, token);
+            if (me == null) return Results.Unauthorized();
+
+            var company = await companyRepo.GetByCodeAsync(code);
+            if (company == null) return Results.NotFound($"Company '{code}' not found.");
+            if (me == null || !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase) || !me.IsCompanyAdmin)
                 return Results.Unauthorized();
 
-            var all = await userRepo.GetUsersAsync(null, null, 1, int.MaxValue, bearer);
+            var all = await userRepo.GetUsersAsync(
+                searchTerm: null,
+                searchBy: null,
+                hasCompany: true,
+                roleId: null,
+                page: 1,
+                limit: int.MaxValue,
+                authToken: token
+            );
             var ours = all
-                .Where(u => u.CompanyId == code && u.AuthUserId != me.AuthUserId)
+               .Where(u => u.CompanyId == company.Id && u.AuthUserId != me.AuthUserId)
                 .Select(u => new CompanyEmployeeDetailsDto
                 {
                     Id = u.UserId,
                     AuthUserId = u.AuthUserId,
-                    CompanyId = u.CompanyId!,
+                    CompanyCode = company.Code,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
                     Email = u.Email,
@@ -253,5 +291,34 @@ namespace CompGateApi.Endpoints
 
             return Results.Ok(ours);
         }
+
+        public static async Task<IResult> GetCompanyByCode(
+    string code,
+    [FromServices] ICompanyRepository repo)
+        {
+            var c = await repo.GetByCodeAsync(code);
+            if (c == null)
+                return Results.NotFound($"Company '{code}' not found.");
+
+            var dto = new CompanyListDto
+            {
+                Code = c.Code,
+                Name = c.Name,
+                IsActive = c.IsActive,
+                KycStatus = c.KycStatus,
+                KycStatusMessage = c.KycStatusMessage,
+                KycRequestedAt = c.KycRequestedAt,
+                KycReviewedAt = c.KycReviewedAt,
+                KycBranchId = c.KycBranchId,
+                KycLegalCompanyName = c.KycLegalCompanyName,
+                KycLegalCompanyNameLt = c.KycLegalCompanyNameLt,
+                KycMobile = c.KycMobile,
+                KycNationality = c.KycNationality,
+                KycCity = c.KycCity
+            };
+
+            return Results.Ok(dto);
+        }
+
     }
 }

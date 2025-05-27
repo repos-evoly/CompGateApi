@@ -52,6 +52,12 @@ namespace CompGateApi.Endpoints
                  .Accepts<RtgsRequestStatusUpdateDto>("application/json")
                  .Produces<RtgsRequestDto>(200)
                  .Produces(404);
+
+            admin.MapGet("/{id:int}", GetByIdAdmin)
+                .WithName("AdminGetRtgsRequestById")
+                .Produces<RtgsRequestDto>(200)
+                .Produces(404);
+
         }
 
         private static int GetAuthUserId(HttpContext ctx)
@@ -82,9 +88,12 @@ namespace CompGateApi.Endpoints
             var me = await userRepo.GetUserByAuthId(authId, bearer);
             if (me == null) return Results.Unauthorized();
 
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
             // fetch filtered & paged data
-            var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, searchBy, page, limit);
-            var total = await repo.GetCountByUserAsync(me.UserId, searchTerm, searchBy);
+            var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
+            var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
 
             var dtos = list.Select(r => new RtgsRequestDto
             {
@@ -134,7 +143,7 @@ namespace CompGateApi.Endpoints
             if (me == null) return Results.Unauthorized();
 
             var ent = await repo.GetByIdAsync(id);
-            if (ent == null || ent.UserId != me.UserId)
+            if (ent == null || !me.CompanyId.HasValue || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
 
             var dto = new RtgsRequestDto
@@ -183,10 +192,14 @@ namespace CompGateApi.Endpoints
             var me = await userRepo.GetUserByAuthId(authId, bearer);
             if (me == null) return Results.Unauthorized();
 
+            if (!me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
             var ent = new RtgsRequest
             {
                 UserId = me.UserId,
                 RefNum = dto.RefNum,
+                CompanyId = me.CompanyId.Value,
                 Date = dto.Date,
                 PaymentType = dto.PaymentType,
                 AccountNo = dto.AccountNo,
@@ -329,6 +342,44 @@ namespace CompGateApi.Endpoints
                 UpdatedAt = ent.UpdatedAt
             };
             return Results.Ok(outDto);
+        }
+
+        public static async Task<IResult> GetByIdAdmin(
+    int id,
+    [FromServices] IRtgsRequestRepository repo,
+    [FromServices] ILogger<RtgsRequestEndpoints> log)
+        {
+            log.LogInformation("Admin:GetByIdAdmin({Id})", id);
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound("RTGS request not found.");
+
+            var dto = new RtgsRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                RefNum = ent.RefNum,
+                Date = ent.Date,
+                PaymentType = ent.PaymentType,
+                AccountNo = ent.AccountNo,
+                ApplicantName = ent.ApplicantName,
+                Address = ent.Address,
+                BeneficiaryName = ent.BeneficiaryName,
+                BeneficiaryAccountNo = ent.BeneficiaryAccountNo,
+                BeneficiaryBank = ent.BeneficiaryBank,
+                BranchName = ent.BranchName,
+                Amount = ent.Amount,
+                RemittanceInfo = ent.RemittanceInfo,
+                Invoice = ent.Invoice,
+                Contract = ent.Contract,
+                Claim = ent.Claim,
+                OtherDoc = ent.OtherDoc,
+                Status = ent.Status,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+            return Results.Ok(dto);
         }
     }
 }

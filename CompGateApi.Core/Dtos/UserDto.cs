@@ -55,14 +55,16 @@ namespace CompGateApi.Core.Dtos
         public int UserId { get; set; }  // local PK
         public int AuthUserId { get; set; }
         public string? Username { get; set; }  // from Auth
-        public string? CompanyId { get; set; }  // six‐digit, optional
+        public int? CompanyId { get; set; }  // six‐digit, optional
+        public string? CompanyCode { get; set; }// the 6-digit code
+
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
 
         // instead of role object, you already return Role & RoleId:
-        public Role? Role { get; set; }
+        public RoleDto Role { get; set; }
         public int RoleId { get; set; }
 
         public int AreaId { get; set; }  // keep if used
@@ -71,6 +73,10 @@ namespace CompGateApi.Core.Dtos
         public List<string> Permissions { get; set; } = new();  // existing
         public List<string> Accounts { get; set; } = new();  // new
         public int ServicePackageId { get; set; }
+        public bool IsCompanyAdmin { get; set; }
+        public KycStatus CompanyStatus { get; set; }
+        public string? CompanyStatusMessage { get; set; }
+        public int CompanyServicePackageId { get; set; }
     }
 
     public class BasicUserDto
@@ -125,13 +131,12 @@ namespace CompGateApi.Core.Dtos
         public string Password { get; set; } = string.Empty;
 
         [StringLength(6, MinimumLength = 6)]
-        public string? CompanyId { get; set; }                     // added
-
+        public string? CompanyCode { get; set; }
         public string Phone { get; set; } = string.Empty;
 
         [Required]
         public int RoleId { get; set; }
     }
 
-   
+
 }

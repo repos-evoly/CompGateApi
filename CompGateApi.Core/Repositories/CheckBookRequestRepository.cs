@@ -165,5 +165,66 @@ namespace CompGateApi.Data.Repositories
                 await _context.SaveChangesAsync();
             }
         }
+
+        public async Task<IList<CheckBookRequest>> GetAllByCompanyAsync(
+    int companyId, string? searchTerm, string? searchBy, int page, int limit)
+        {
+            var q = _context.CheckBookRequests
+                            .Where(r => r.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "status":
+                        q = q.Where(r => r.Status!.Contains(searchTerm));
+                        break;
+                    case "branch":
+                        q = q.Where(r => r.Branch!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(r =>
+                            r.FullName!.Contains(searchTerm) ||
+                            r.AccountNumber!.Contains(searchTerm) ||
+                            r.Branch!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int companyId, string? searchTerm, string? searchBy)
+        {
+            var q = _context.CheckBookRequests
+                            .Where(r => r.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "status":
+                        q = q.Where(r => r.Status!.Contains(searchTerm));
+                        break;
+                    case "branch":
+                        q = q.Where(r => r.Branch!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(r =>
+                            r.FullName!.Contains(searchTerm) ||
+                            r.AccountNumber!.Contains(searchTerm) ||
+                            r.Branch!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q.CountAsync();
+        }
     }
 }

@@ -33,7 +33,10 @@ namespace CompGateApi.Data.Models
         public ICollection<TransferLimit> TransferLimits { get; set; }
             = new List<TransferLimit>();
 
+        public ICollection<Company> Companies { get; set; }
+            = new List<Company>();
+
         public ICollection<User> Users { get; set; }
-            = new List<User>();
+             = new List<User>();
     }
 }

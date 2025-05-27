@@ -165,6 +165,12 @@ namespace CompGateApi.Core.Startup
                   p.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                    .RequireAuthenticatedUser());
 
+        // Only COMPANY-ADMIN (CompanyManager) may manage employees
+        opts.AddPolicy("RequireCompanyAdmin", p =>
+        p.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                        .RequireAuthenticatedUser()
+                        .RequireRole("CompanyManager"));
+
         opts.AddPolicy("CanRequestCheckBook", p =>
                   p.RequireRole("CompanyManager", "Accountant", "Maker"));
 
@@ -213,7 +219,13 @@ namespace CompGateApi.Core.Startup
                            TransferRequestStatusUpdateDtoValidator>();
       validators.AddScoped<IValidator<ServicePackageCreateDto>, ServicePackageCreateDtoValidator>();
       validators.AddScoped<IValidator<ServicePackageUpdateDto>, ServicePackageUpdateDtoValidator>();
-
+      validators.AddScoped<IValidator<ForeignTransferCreateDto>, ForeignTransferCreateDtoValidator>();
+      validators.AddScoped<IValidator<VisaRequestCreateDto>, VisaRequestCreateDtoValidator>();
+      validators.AddScoped<IValidator<CompanyEmployeeRegistrationDto>, CompanyEmployeeRegistrationDtoValidator>();
+      validators.AddScoped<IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto>, CreditFacilitiesOrLetterOfGuaranteeRequestCreateDtoValidator>();
+      validators.AddScoped<IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto>, CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDtoValidator>();
+      validators.AddScoped<IValidator<CertifiedBankStatementRequestCreateDto>, CertifiedBankStatementRequestCreateDtoValidator>();
+      validators.AddScoped<IValidator<CertifiedBankStatementRequestStatusUpdateDto>, CertifiedBankStatementRequestStatusUpdateDtoValidator>();
 
 
       return validators;
@@ -237,7 +249,7 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.3.3.11:7070");
+        client.BaseAddress = new Uri("http://10.1.1.205:7070");
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
@@ -295,6 +307,13 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<ICompanyRepository, CompanyRepository>();
 
       services.AddScoped<IVisaRequestRepository, VisaRequestRepository>();
+
+      services.AddScoped<IForeignTransferRepository, ForeignTransferRepository>();
+
+      services.AddScoped<ICreditFacilitiesOrLetterOfGuaranteeRequestRepository, CreditFacilitiesOrLetterOfGuaranteeRequestRepository>();
+
+      services.AddScoped<ICertifiedBankStatementRequestRepository, CertifiedBankStatementRequestRepository>();
+
 
       return services;
     }

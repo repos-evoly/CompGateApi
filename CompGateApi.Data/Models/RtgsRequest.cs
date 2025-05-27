@@ -15,6 +15,10 @@ namespace CompGateApi.Data.Models
         public int UserId { get; set; }
         public User User { get; set; } = null!;
 
+        [Required]
+        public int CompanyId { get; set; }
+        public Company Company { get; set; } = null!;
+
         public DateTime? RefNum { get; set; }  // Could also be a string
         public DateTime? Date { get; set; }
 

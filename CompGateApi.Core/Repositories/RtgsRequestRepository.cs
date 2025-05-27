@@ -160,5 +160,73 @@ namespace CompGateApi.Data.Repositories
                 await _context.SaveChangesAsync();
             }
         }
+
+        public async Task<IList<RtgsRequest>> GetAllByCompanyAsync(
+    int companyId,
+    string? searchTerm,
+    string? searchBy,
+    int page,
+    int limit)
+        {
+            var q = _context.RtgsRequests
+                            .Where(r => r.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "paymenttype":
+                        q = q.Where(r => r.PaymentType!.Contains(searchTerm));
+                        break;
+                    case "beneficiarybank":
+                        q = q.Where(r => r.BeneficiaryBank!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(r =>
+                            r.ApplicantName!.Contains(searchTerm) ||
+                            r.BeneficiaryName!.Contains(searchTerm) ||
+                            r.BranchName!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int companyId,
+            string? searchTerm,
+            string? searchBy)
+        {
+            var q = _context.RtgsRequests
+                            .Where(r => r.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "paymenttype":
+                        q = q.Where(r => r.PaymentType!.Contains(searchTerm));
+                        break;
+                    case "beneficiarybank":
+                        q = q.Where(r => r.BeneficiaryBank!.Contains(searchTerm));
+                        break;
+                    default:
+                        q = q.Where(r =>
+                            r.ApplicantName!.Contains(searchTerm) ||
+                            r.BeneficiaryName!.Contains(searchTerm) ||
+                            r.BranchName!.Contains(searchTerm));
+                        break;
+                }
+            }
+
+            return await q.CountAsync();
+        }
+
     }
 }

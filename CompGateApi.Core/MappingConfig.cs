@@ -29,7 +29,8 @@ namespace CompGateApi
                            opt => opt.MapFrom(src => src.Amount))
                 .ForMember(dest => dest.CurrencyId,
                            opt => opt.MapFrom(src => src.CurrencyId))
-                // these four you’ll set in code, not via mapping:
+                .ForMember(dest => dest.Description,
+                           opt => opt.MapFrom(src => src.Description))
                 .ForAllMembers(opt => opt.Ignore());
             CreateMap<Currency, CurrencyDto>();
             CreateMap<CurrencyCreateDto, Currency>();

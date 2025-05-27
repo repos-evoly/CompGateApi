@@ -96,7 +96,9 @@ namespace CompGateApi.Core.Dtos
     public class CblRequestStatusUpdateDto
     {
         public string Status { get; set; } = string.Empty;
+
+        
     }
 
-    
+
 }

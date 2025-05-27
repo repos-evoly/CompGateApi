@@ -1,0 +1,306 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// CompGateApi.Endpoints/CertifiedBankStatementRequestEndpoints.cs
+// ─────────────────────────────────────────────────────────────────────────────
+using System;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using CompGateApi.Abstractions;
+using CompGateApi.Core.Abstractions;
+using CompGateApi.Core.Dtos;
+using CompGateApi.Data.Models;
+using FluentValidation;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
+namespace CompGateApi.Endpoints
+{
+    public class CertifiedBankStatementRequestEndpoints : IEndpoints
+    {
+        public void RegisterEndpoints(WebApplication app)
+        {
+            // ── COMPANY ROUTES ────────────────────────────────────────────────
+            var company = app
+                .MapGroup("/api/certifiedbankstatementrequests")
+                .WithTags("CertifiedBankStatements")
+                .RequireAuthorization("RequireCompanyUser");
+            // .RequireAuthorization("CanRequestBankStatement");
+
+            company.MapGet("/", GetCompanyRequests)
+                   .Produces<PagedResult<CertifiedBankStatementRequestDto>>(200);
+
+            company.MapGet("/{id:int}", GetCompanyRequestById)
+                   .Produces<CertifiedBankStatementRequestDto>(200)
+                   .Produces(404);
+
+            company.MapPost("/", CreateCompanyRequest)
+                   .Accepts<CertifiedBankStatementRequestCreateDto>("application/json")
+                   .Produces<CertifiedBankStatementRequestDto>(201)
+                   .Produces(400);
+
+            // ── ADMIN ROUTES ──────────────────────────────────────────────────
+            var admin = app
+                .MapGroup("/api/admin/certifiedbankstatementrequests")
+                .WithTags("CertifiedBankStatements")
+                .RequireAuthorization("RequireAdminUser");
+            // .RequireAuthorization("AdminAccess");
+
+            admin.MapGet("/", AdminGetAll)
+                 .Produces<PagedResult<CertifiedBankStatementRequestDto>>(200);
+
+            admin.MapPut("/{id:int}/status", AdminUpdateStatus)
+                 .Accepts<CertifiedBankStatementRequestStatusUpdateDto>("application/json")
+                 .Produces<CertifiedBankStatementRequestDto>(200)
+                 .Produces(400)
+                 .Produces(404);
+
+            admin.MapGet("/{id:int}", AdminGetById)
+                 .Produces<CertifiedBankStatementRequestDto>(200)
+                 .Produces(404);
+        }
+
+        static int GetAuthUserId(HttpContext ctx)
+        {
+            var raw = ctx.User.FindFirst("nameid")?.Value
+                   ?? ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(raw, out var id)) return id;
+            throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
+        }
+
+        // ── COMPANY: list by company ─────────────────────────────────────
+        public static async Task<IResult> GetCompanyRequests(
+            HttpContext ctx,
+            ICertifiedBankStatementRequestRepository repo,
+            IUserRepository userRepo,
+            ILogger<CertifiedBankStatementRequestEndpoints> log,
+            [FromQuery] string? searchTerm,
+            [FromQuery] string? searchBy,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 50)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
+            var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
+
+            var dtos = list.Select(r => new CertifiedBankStatementRequestDto
+            {
+                Id = r.Id,
+                CompanyId = r.CompanyId,
+                AccountHolderName = r.AccountHolderName,
+                AuthorizedOnTheAccountName = r.AuthorizedOnTheAccountName,
+                AccountNumber = r.AccountNumber,
+                // flatten serviceRequests/statementRequest into your DTO as needed…
+                Status = r.Status,
+                Reason = r.Reason,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt
+            }).ToList();
+
+            return Results.Ok(new PagedResult<CertifiedBankStatementRequestDto>
+            {
+                Data = dtos,
+                Page = page,
+                Limit = limit,
+                TotalRecords = total,
+                TotalPages = (int)Math.Ceiling(total / (double)limit)
+            });
+        }
+
+        // ── COMPANY: get single ─────────────────────────────────────────
+        public static async Task<IResult> GetCompanyRequestById(
+            int id,
+            HttpContext ctx,
+            ICertifiedBankStatementRequestRepository repo,
+            IUserRepository userRepo)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            return Results.Ok(new CertifiedBankStatementRequestDto
+            {
+                Id = ent.Id,
+                CompanyId = ent.CompanyId,
+                AccountHolderName = ent.AccountHolderName,
+                AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
+                AccountNumber = ent.AccountNumber,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            });
+        }
+
+        // ── COMPANY: create ─────────────────────────────────────────────
+        public static async Task<IResult> CreateCompanyRequest(
+            [FromBody] CertifiedBankStatementRequestCreateDto dto,
+            HttpContext ctx,
+            ICertifiedBankStatementRequestRepository repo,
+            IUserRepository userRepo,
+            IValidator<CertifiedBankStatementRequestCreateDto> validator,
+            ILogger<CertifiedBankStatementRequestEndpoints> log)
+        {
+            var v = await validator.ValidateAsync(dto);
+            if (!v.IsValid)
+                return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
+
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var ent = new CertifiedBankStatementRequest
+            {
+                CompanyId = me.CompanyId.Value,
+                UserId = me.UserId,
+                AccountHolderName = dto.AccountHolderName,
+                AuthorizedOnTheAccountName = dto.AuthorizedOnTheAccountName,
+                AccountNumber = dto.AccountNumber,
+                ServiceRequests = dto.ServiceRequests == null ? null : new ServicesRequest
+                {
+                    // Map each property from dto.ServiceRequests to ServicesRequest here
+                    // Example:
+                    // Property1 = dto.ServiceRequests.Property1,
+                    // Property2 = dto.ServiceRequests.Property2,
+                    // Add all necessary property mappings
+                },
+                StatementRequest = dto.StatementRequest == null ? null : new StatementRequest
+                {
+                    // Map each property from dto.StatementRequest to StatementRequest here
+                    // Example:
+                    // Property1 = dto.StatementRequest.Property1,
+                    // Property2 = dto.StatementRequest.Property2,
+                    // Add all necessary property mappings
+                },
+                OldAccountNumber = dto.OldAccountNumber,
+                NewAccountNumber = dto.NewAccountNumber,
+                Status = "Pending",
+                Reason = string.Empty
+            };
+
+            await repo.CreateAsync(ent);
+            log.LogInformation("Created CertifiedBankStatementRequest Id={Id}", ent.Id);
+
+            var outDto = new CertifiedBankStatementRequestDto
+            {
+                Id = ent.Id,
+                CompanyId = ent.CompanyId,
+                AccountHolderName = ent.AccountHolderName,
+                AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
+                AccountNumber = ent.AccountNumber,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+            return Results.Created($"/api/certifiedbankstatementrequests/{ent.Id}", outDto);
+        }
+
+        // ── ADMIN: list all ─────────────────────────────────────────────
+        public static async Task<IResult> AdminGetAll(
+            ICertifiedBankStatementRequestRepository repo,
+            ILogger<CertifiedBankStatementRequestEndpoints> log,
+            [FromQuery] string? searchTerm,
+            [FromQuery] string? searchBy,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 50)
+        {
+            var total = await repo.GetCountAsync(searchTerm, searchBy);
+            var list = await repo.GetAllAsync(searchTerm, searchBy, page, limit);
+
+            var dtos = list.Select(r => new CertifiedBankStatementRequestDto
+            {
+                Id = r.Id,
+                CompanyId = r.CompanyId,
+                AccountHolderName = r.AccountHolderName,
+                AuthorizedOnTheAccountName = r.AuthorizedOnTheAccountName,
+                AccountNumber = r.AccountNumber,
+                Status = r.Status,
+                Reason = r.Reason,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt
+            }).ToList();
+
+            return Results.Ok(new PagedResult<CertifiedBankStatementRequestDto>
+            {
+                Data = dtos,
+                Page = page,
+                Limit = limit,
+                TotalRecords = total,
+                TotalPages = (int)Math.Ceiling(total / (double)limit)
+            });
+        }
+
+        // ── ADMIN: update status & reason ─────────────────────────────
+        public static async Task<IResult> AdminUpdateStatus(
+            int id,
+            [FromBody] CertifiedBankStatementRequestStatusUpdateDto dto,
+            ICertifiedBankStatementRequestRepository repo,
+            IValidator<CertifiedBankStatementRequestStatusUpdateDto> validator,
+            ILogger<CertifiedBankStatementRequestEndpoints> log)
+        {
+            var v = await validator.ValidateAsync(dto);
+            if (!v.IsValid)
+                return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound();
+
+            ent.Status = dto.Status;
+            ent.Reason = dto.Reason;
+            await repo.UpdateAsync(ent);
+
+            return Results.Ok(new CertifiedBankStatementRequestDto
+            {
+                Id = ent.Id,
+                CompanyId = ent.CompanyId,
+                AccountHolderName = ent.AccountHolderName,
+                AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
+                AccountNumber = ent.AccountNumber,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            });
+        }
+
+        // ── ADMIN: get by id ────────────────────────────────────────────
+        public static async Task<IResult> AdminGetById(
+            int id,
+            [FromServices] ICertifiedBankStatementRequestRepository repo,
+            [FromServices] ILogger<CertifiedBankStatementRequestEndpoints> log)
+        {
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound();
+
+            return Results.Ok(new CertifiedBankStatementRequestDto
+            {
+                Id = ent.Id,
+                CompanyId = ent.CompanyId,
+                AccountHolderName = ent.AccountHolderName,
+                AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
+                AccountNumber = ent.AccountNumber,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            });
+        }
+    }
+}

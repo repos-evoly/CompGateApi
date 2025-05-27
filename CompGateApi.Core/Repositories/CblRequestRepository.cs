@@ -136,5 +136,54 @@ namespace CompGateApi.Data.Repositories
                 await _ctx.SaveChangesAsync();
             }
         }
+
+        public async Task<IList<CblRequest>> GetAllByCompanyAsync(
+    int companyId, string? searchTerm, string? searchBy, int page, int limit)
+        {
+            var q = _ctx.CblRequests.Where(r => r.CompanyId == companyId);
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "status":
+                        q = q.Where(r => r.Status!.Contains(searchTerm)); break;
+                    case "party":
+                        q = q.Where(r => r.PartyName!.Contains(searchTerm)); break;
+                    default:
+                        q = q.Where(r =>
+                            r.PartyName!.Contains(searchTerm) ||
+                            r.Status!.Contains(searchTerm));
+                        break;
+                }
+            }
+            return await q
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int companyId, string? searchTerm, string? searchBy)
+        {
+            var q = _ctx.CblRequests.Where(r => r.CompanyId == companyId);
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                switch ((searchBy ?? "").ToLower())
+                {
+                    case "status":
+                        q = q.Where(r => r.Status!.Contains(searchTerm)); break;
+                    case "party":
+                        q = q.Where(r => r.PartyName!.Contains(searchTerm)); break;
+                    default:
+                        q = q.Where(r =>
+                            r.PartyName!.Contains(searchTerm) ||
+                            r.Status!.Contains(searchTerm));
+                        break;
+                }
+            }
+            return await q.CountAsync();
+        }
     }
 }

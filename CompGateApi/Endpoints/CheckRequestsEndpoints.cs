@@ -3,7 +3,6 @@ using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using AutoMapper;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
@@ -25,18 +24,20 @@ namespace CompGateApi.Endpoints
                 .MapGroup("/api/checkrequests")
                 .WithTags("CheckRequests")
                 .RequireAuthorization("RequireCompanyUser");
-              
 
-            company.MapGet("/", GetMyRequests)
-                   .WithName("GetMyCheckRequests")
+            // List all company check-requests
+            company.MapGet("/", GetCompanyRequests)
+                   .WithName("GetCompanyCheckRequests")
                    .Produces<PagedResult<CheckRequestDto>>(200);
 
-            company.MapGet("/{id:int}", GetMyRequestById)
-                   .WithName("GetMyCheckRequestById")
+            // Get single by Id
+            company.MapGet("/{id:int}", GetCompanyRequestById)
+                   .WithName("GetCompanyCheckRequestById")
                    .Produces<CheckRequestDto>(200)
                    .Produces(404);
 
-            company.MapPost("/", CreateMyRequest)
+            // Create new
+            company.MapPost("/", CreateCompanyRequest)
                    .WithName("CreateCheckRequest")
                    .Accepts<CheckRequestCreateDto>("application/json")
                    .Produces<CheckRequestDto>(201)
@@ -50,11 +51,16 @@ namespace CompGateApi.Endpoints
                 .RequireAuthorization("RequireAdminUser")
                 .RequireAuthorization("AdminAccess");
 
-            admin.MapGet("/", GetAll)
+            admin.MapGet("/", AdminGetAll)
                  .WithName("AdminGetAllCheckRequests")
                  .Produces<PagedResult<CheckRequestDto>>(200);
 
-            admin.MapPut("/{id:int}/status", UpdateStatus)
+            admin.MapGet("/{id:int}", AdminGetById)
+                 .WithName("AdminGetCheckRequestById")
+                 .Produces<CheckRequestDto>(200)
+                 .Produces(404);
+
+            admin.MapPut("/{id:int}/status", AdminUpdateStatus)
                  .WithName("AdminUpdateCheckRequestStatus")
                  .Accepts<CheckRequestStatusUpdateDto>("application/json")
                  .Produces<CheckRequestDto>(200)
@@ -62,22 +68,19 @@ namespace CompGateApi.Endpoints
                  .Produces(404);
         }
 
-        /// <summary>
-        /// Extracts the raw "nameid" claim from the JWT. Throws if missing or invalid.
-        /// </summary>
+        // helper to extract authenticated user
         private static int GetAuthUserId(HttpContext ctx)
         {
             var raw = ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                    ?? ctx.User.FindFirst("nameid")?.Value;
-            if (int.TryParse(raw, out var id))
-                return id;
-
-            throw new UnauthorizedAccessException(
-                $"Missing or invalid 'nameid' claim. Raw='{raw ?? "(null)"}'.");
+            if (!int.TryParse(raw, out var id))
+                throw new UnauthorizedAccessException(
+                    $"Missing or invalid 'nameid' claim. Raw='{raw ?? "(null)"}'.");
+            return id;
         }
 
-        // ── COMPANY: list own check-requests ────────────────────────────
-        public static async Task<IResult> GetMyRequests(
+        // ── COMPANY: list requests by company ───────────────────────────
+        public static async Task<IResult> GetCompanyRequests(
             HttpContext ctx,
             ICheckRequestRepository repo,
             IUserRepository userRepo,
@@ -87,20 +90,22 @@ namespace CompGateApi.Endpoints
             [FromQuery] int page = 1,
             [FromQuery] int limit = 50)
         {
-            log.LogInformation("GetMyRequests called. Authenticated={IsAuth}",
-                ctx.User.Identity?.IsAuthenticated == true);
-
             try
             {
                 var authId = GetAuthUserId(ctx);
-                log.LogDebug("Parsed AuthUserId = {AuthId}", authId);
-
                 var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
                 var me = await userRepo.GetUserByAuthId(authId, bearer);
                 if (me == null) return Results.Unauthorized();
 
-                var list = await repo.GetAllByUserAsync(me.UserId, searchTerm, searchBy, page, limit);
-                var total = await repo.GetCountByUserAsync(me.UserId, searchTerm, searchBy);
+                // fetch by company
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var cid = me.CompanyId.Value;
+                var list = await repo.GetAllByCompanyAsync(
+                    cid, searchTerm, searchBy, page, limit);
+                var total = await repo.GetCountByCompanyAsync(
+                    cid, searchTerm, searchBy);
 
                 var dtos = list.Select(r => new CheckRequestDto
                 {
@@ -135,28 +140,28 @@ namespace CompGateApi.Endpoints
             }
             catch (UnauthorizedAccessException ex)
             {
-                log.LogError(ex, "Auth error in GetMyRequests");
+                log.LogError(ex, "Unauthorized in GetCompanyRequests");
                 return Results.Unauthorized();
             }
         }
 
-        // ── COMPANY: get single request by ID ──────────────────────────
-        public static async Task<IResult> GetMyRequestById(
+        // ── COMPANY: get single by id ─────────────────────────────────
+        public static async Task<IResult> GetCompanyRequestById(
             int id,
             HttpContext ctx,
             ICheckRequestRepository repo,
             IUserRepository userRepo,
             ILogger<CheckRequestEndpoints> log)
         {
-            log.LogInformation("GetMyRequestById({Id})", id);
             try
             {
                 var authId = GetAuthUserId(ctx);
                 var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
                 var me = await userRepo.GetUserByAuthId(authId, bearer);
-                var ent = await repo.GetByIdAsync(id);
+                if (me == null) return Results.Unauthorized();
 
-                if (me == null || ent == null || ent.UserId != me.UserId)
+                var ent = await repo.GetByIdAsync(id);
+                if (ent == null || !me.CompanyId.HasValue || ent.CompanyId != me.CompanyId.Value)
                     return Results.NotFound("Check request not found.");
 
                 var dto = new CheckRequestDto
@@ -184,13 +189,13 @@ namespace CompGateApi.Endpoints
             }
             catch (UnauthorizedAccessException ex)
             {
-                log.LogError(ex, "Auth error in GetMyRequestById");
+                log.LogError(ex, "Unauthorized in GetCompanyRequestById");
                 return Results.Unauthorized();
             }
         }
 
-        // ── COMPANY: create a new request ─────────────────────────────
-        public static async Task<IResult> CreateMyRequest(
+        // ── COMPANY: create new request ───────────────────────────────
+        public static async Task<IResult> CreateCompanyRequest(
             [FromBody] CheckRequestCreateDto dto,
             HttpContext ctx,
             ICheckRequestRepository repo,
@@ -198,15 +203,9 @@ namespace CompGateApi.Endpoints
             IValidator<CheckRequestCreateDto> validator,
             ILogger<CheckRequestEndpoints> log)
         {
-            log.LogInformation("CreateMyRequest called. Payload={@Dto}", dto);
-
             var validation = await validator.ValidateAsync(dto);
             if (!validation.IsValid)
-            {
-                log.LogWarning("Validation errors: {Errors}",
-                    validation.Errors.Select(e => e.ErrorMessage));
                 return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
-            }
 
             try
             {
@@ -215,9 +214,13 @@ namespace CompGateApi.Endpoints
                 var me = await userRepo.GetUserByAuthId(authId, bearer);
                 if (me == null) return Results.Unauthorized();
 
+                if (!me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
                 var ent = new CheckRequest
                 {
                     UserId = me.UserId,
+                    CompanyId = me.CompanyId.Value,
                     Branch = dto.Branch,
                     BranchNum = dto.BranchNum,
                     Date = dto.Date,
@@ -261,13 +264,13 @@ namespace CompGateApi.Endpoints
             }
             catch (UnauthorizedAccessException ex)
             {
-                log.LogError(ex, "Auth error in CreateMyRequest");
+                log.LogError(ex, "Unauthorized in CreateCompanyRequest");
                 return Results.Unauthorized();
             }
         }
 
-        // ── ADMIN: list all check-requests ──────────────────────────────
-        public static async Task<IResult> GetAll(
+        // ── ADMIN: list all ───────────────────────────────────────────
+        public static async Task<IResult> AdminGetAll(
             ICheckRequestRepository repo,
             ILogger<CheckRequestEndpoints> log,
             [FromQuery] string? searchTerm,
@@ -275,9 +278,6 @@ namespace CompGateApi.Endpoints
             [FromQuery] int page = 1,
             [FromQuery] int limit = 50)
         {
-            log.LogInformation("Admin:GetAll called (search={Search},by={By},page={Page},limit={Limit})",
-                searchTerm, searchBy, page, limit);
-
             var list = await repo.GetAllAsync(searchTerm, searchBy, page, limit);
             var total = await repo.GetCountAsync(searchTerm, searchBy);
 
@@ -313,42 +313,16 @@ namespace CompGateApi.Endpoints
             });
         }
 
-        // ── ADMIN: update request status & audit ─────────────────────────
-        public static async Task<IResult> UpdateStatus(
+        // ── ADMIN: get by id ──────────────────────────────────────────
+        public static async Task<IResult> AdminGetById(
             int id,
-            [FromBody] CheckRequestStatusUpdateDto dto,
-            ICheckRequestRepository repo,
-            IValidator<CheckRequestStatusUpdateDto> validator,
-            IAuditLogRepository auditRepo,
-            HttpContext ctx,
-            ILogger<CheckRequestEndpoints> log)
+            [FromServices] ICheckRequestRepository repo)
         {
-            log.LogInformation("Admin:UpdateStatus({Id}) → {Status}", id, dto.Status);
-
-            var validation = await validator.ValidateAsync(dto);
-            if (!validation.IsValid)
-            {
-                log.LogWarning("Validation errors: {Errors}",
-                    validation.Errors.Select(e => e.ErrorMessage));
-                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
-            }
-
             var ent = await repo.GetByIdAsync(id);
             if (ent == null)
                 return Results.NotFound("Check request not found.");
 
-            ent.Status = dto.Status;
-            await repo.UpdateAsync(ent);
-            log.LogInformation("Updated CheckRequest {Id} to Status={Status}", id, dto.Status);
-
-            var adminId = GetAuthUserId(ctx);
-            await auditRepo.CreateAsync(new AuditLog
-            {
-                UserId = adminId,
-                Action = $"Updated CheckRequest {id} status to '{dto.Status}'"
-            });
-
-            var outDto = new CheckRequestDto
+            var dto = new CheckRequestDto
             {
                 Id = ent.Id,
                 UserId = ent.UserId,
@@ -369,7 +343,58 @@ namespace CompGateApi.Endpoints
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
-            return Results.Ok(outDto);
+            return Results.Ok(dto);
+        }
+
+        // ── ADMIN: update status & audit ─────────────────────────────
+        public static async Task<IResult> AdminUpdateStatus(
+            int id,
+            [FromBody] CheckRequestStatusUpdateDto dto,
+            [FromServices] ICheckRequestRepository repo,
+            [FromServices] IValidator<CheckRequestStatusUpdateDto> validator,
+            [FromServices] IAuditLogRepository auditRepo,
+            HttpContext ctx)
+        {
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null)
+                return Results.NotFound("Check request not found.");
+
+            ent.Status = dto.Status;
+            await repo.UpdateAsync(ent);
+
+            var adminId = GetAuthUserId(ctx);
+            await auditRepo.CreateAsync(new AuditLog
+            {
+                UserId = adminId,
+                Action = $"Updated CheckRequest {id} status to '{dto.Status}'"
+            });
+
+            var dtoOut = new CheckRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                Branch = ent.Branch,
+                BranchNum = ent.BranchNum,
+                Date = ent.Date,
+                CustomerName = ent.CustomerName,
+                CardNum = ent.CardNum,
+                AccountNum = ent.AccountNum,
+                Beneficiary = ent.Beneficiary,
+                Status = ent.Status,
+                LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
+                {
+                    Id = li.Id,
+                    Dirham = li.Dirham,
+                    Lyd = li.Lyd
+                }).ToList(),
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+            return Results.Ok(dtoOut);
         }
     }
 }

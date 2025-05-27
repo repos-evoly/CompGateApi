@@ -13,6 +13,8 @@ namespace CompGateApi.Core.Dtos
         public string CurrencyCode { get; set; } = string.Empty;
         public string PackageName { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public string? Description { get; set; }
+
         public DateTime RequestedAt { get; set; }
     }
 }
@@ -27,6 +29,8 @@ namespace CompGateApi.Core.Dtos
         public string ToAccount { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public int CurrencyId { get; set; }
+        public string? Description { get; set; }
+
     }
 }
 
@@ -45,6 +49,8 @@ namespace CompGateApi.Core.Dtos
     public class AccountDto
     {
         public string AccountString { get; set; } = string.Empty;
+        public decimal AvailableBalance { get; set; }    // ← YBCD01CABL
+        public decimal DebitBalance { get; set; }        // ← YBCD01LDBL
     }
 }
 

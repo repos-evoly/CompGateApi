@@ -14,15 +14,18 @@ namespace CompGateApi.Core.Abstractions
         Task<bool> CanRegisterCompanyAsync(string companyCode);
 
         /// <summary>Create the first “company admin” user under review.</summary>
-        Task<bool> RegisterCompanyAdminAsync(CompanyRegistrationDto dto);
+        Task<CompanyRegistrationResult> RegisterCompanyAdminAsync(CompanyRegistrationDto dto);
 
         Task<bool> UpdateCompanyStatusAsync(string companyCode, CompanyStatusUpdateDto dto);
 
-         Task<IList<CompanyListDto>> GetAllCompaniesAsync(
-            string? searchTerm,
-            KycStatus? statusFilter,
-            int page,
-            int limit);
+        Task<IList<CompanyListDto>> GetAllCompaniesAsync(
+           string? searchTerm,
+           KycStatus? statusFilter,
+           int page,
+           int limit);
         Task<int> GetCompaniesCountAsync(string? searchTerm, KycStatus? statusFilter);
+        Task<Company?> GetByCodeAsync(string code);
+
+        Task CreateAsync(Company company);
     }
 }

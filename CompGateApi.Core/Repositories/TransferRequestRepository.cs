@@ -28,6 +28,40 @@ namespace CompGateApi.Data.Repositories
 
         // ── USER ──────────────────────────────────────────────────────────────────
 
+        public async Task<List<TransferRequest>> GetAllByCompanyAsync(
+       int companyId, string? searchTerm, int page, int limit)
+        {
+            var q = _db.TransferRequests
+                .Include(t => t.TransactionCategory)
+                .Include(t => t.Currency)
+                .Include(t => t.ServicePackage)
+                .Where(t => t.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                q = q.Where(t =>
+                    t.FromAccount.Contains(searchTerm!) ||
+                    t.ToAccount.Contains(searchTerm!) ||
+                    t.Status.Contains(searchTerm!));
+
+            return await q
+                .OrderByDescending(t => t.RequestedAt)
+                .Skip((page - 1) * limit)
+                .Take(limit)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<int> GetCountByCompanyAsync(
+            int companyId, string? searchTerm)
+        {
+            var q = _db.TransferRequests.Where(t => t.CompanyId == companyId);
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                q = q.Where(t =>
+                    t.FromAccount.Contains(searchTerm!) ||
+                    t.ToAccount.Contains(searchTerm!) ||
+                    t.Status.Contains(searchTerm!));
+            return await q.CountAsync();
+        }
         public async Task<List<TransferRequest>> GetAllByUserAsync(
             int userId, string? searchTerm, int page, int limit)
         {
@@ -117,7 +151,9 @@ namespace CompGateApi.Data.Repositories
             return bankDto.Details.Accounts
                 .Select(a => new AccountDto
                 {
-                    AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim()
+                    AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
+                    AvailableBalance = a.YBCD01CABL,
+                    DebitBalance = a.YBCD01LDBL
                 })
                 .ToList();
         }
@@ -247,6 +283,9 @@ namespace CompGateApi.Data.Repositories
             public string? YBCD01AB { get; set; }
             public string? YBCD01AN { get; set; }
             public string? YBCD01AS { get; set; }
+
+            public decimal YBCD01CABL { get; set; }
+            public decimal YBCD01LDBL { get; set; }
         }
     }
 }

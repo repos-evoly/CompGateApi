@@ -12,14 +12,33 @@ namespace CompGateApi.Core.Abstractions
         Task<bool> AssignUserPermissions(int userId, List<UserPermissionAssignmentDto> permissions);
 
         Task<bool> RemoveRolePermissions(int userId);
-        Task<List<UserDetailsDto>> GetUsersAsync(string? searchTerm, string? searchBy, int page, int limit, string authToken);
-        Task<int> GetUserCountAsync(string? searchTerm, string? searchBy);
+        Task<List<UserDetailsDto>> GetUsersAsync(
+              string? searchTerm,
+              string? searchBy,
+              bool? hasCompany,
+              int? roleId,
+              int page,
+              int limit,
+              string authToken
+          ); Task<int> GetUserCountAsync(string? searchTerm, string? searchBy);
         Task<UserDetailsDto?> GetUserById(int userId, string authToken);
         Task<UserDetailsDto?> GetUserByAuthId(int userId, string authToken);
         Task<List<PermissionStatusDto>> GetUserPermissions(int userId);
         Task<bool> EditUser(int userId, EditUserDto editUserDto);
-        Task<List<Role>> GetRoles();
+        Task<List<RoleDto>> GetRolesAsync(bool? isGlobal = null);
         Task<List<Permission>> GetPermissions();
+
+        Task<int> GetUsersCountAsync(
+            string? searchTerm,
+            string? searchBy,
+            bool? hasCompany,
+            int? roleId
+        );
+
+        Task<List<Permission>> GetPermissionsByRoleAsync(int roleId);
+
+        Task<List<Permission>> GetPermissionsByGlobalAsync(bool isGlobal);
+
         Task<List<BasicUserDto>> GetManagementUsersAsync(string currentUserRole);
 
 

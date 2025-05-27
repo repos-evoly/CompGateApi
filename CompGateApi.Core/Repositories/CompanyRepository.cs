@@ -1,14 +1,15 @@
-// CompGateApi.Core.Repositories/CompanyRepository.cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Threading.Tasks;
 
 namespace CompGateApi.Core.Repositories
 {
@@ -31,6 +32,7 @@ namespace CompGateApi.Core.Repositories
             _logger = logger;
         }
 
+        // Public: KYC lookup via external service
         public async Task<KycDto?> LookupKycAsync(string companyCode)
         {
             try
@@ -47,139 +49,210 @@ namespace CompGateApi.Core.Repositories
             }
         }
 
-        // in CompanyRepository.cs
-
+        // Check if external KYC returned a non-empty companyId
         public async Task<bool> CanRegisterCompanyAsync(string companyCode)
         {
             var kyc = await LookupKycAsync(companyCode);
-            // only allow if we got back a non‐empty companyId
             return kyc != null && !string.IsNullOrWhiteSpace(kyc.companyId);
         }
 
 
-        public async Task<bool> RegisterCompanyAdminAsync(CompanyRegistrationDto dto)
+        // Register both Company and its admin user
+
+        public async Task<CompanyRegistrationResult> RegisterCompanyAdminAsync(CompanyRegistrationDto dto)
+
         {
-            // 1) Auth‐service registration
-            var authClient = _httpFactory.CreateClient("AuthApi");
-            var authPayload = new
+            var result = new CompanyRegistrationResult();
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                username = dto.Username,
-                fullNameLT = dto.FirstName,
-                fullNameAR = dto.LastName,
-                email = dto.Email,
-                password = dto.Password,
-                roleId = dto.RoleId
-            };
-            using var authResp = await authClient.PostAsJsonAsync(
-                "/compauthapi/api/auth/register", authPayload);
-            if (!authResp.IsSuccessStatusCode) return false;
+                // 1) Duplicate guard
+                if (await _db.Companies.AnyAsync(c => c.Code == dto.CompanyCode))
+                    return new CompanyRegistrationResult
+                    {
+                        Error = "A company with that code already exists."
+                    };
 
-            var reg = await authResp.Content
-                                     .ReadFromJsonAsync<AuthRegisterResponseDto>();
-            if (reg == null || reg.userId == 0) return false;
+                // 2) KYC guard
+                var kyc = await LookupKycAsync(dto.CompanyCode);
+                if (kyc == null)
+                    return new CompanyRegistrationResult
+                    {
+                        Error = "KYC service unavailable or returned an error."
+                    };
+                if (string.IsNullOrWhiteSpace(kyc.companyId))
+                    return new CompanyRegistrationResult
+                    {
+                        Error = "KYC lookup did not return a valid company ID."
+                    };
 
-            // 2) KYC fetch so we can stamp user
-            var kyc = await LookupKycAsync(dto.CompanyId);
+                // 3) Create the Company
+                var company = new Company
+                {
+                    Code = dto.CompanyCode,
+                    Name = kyc.legalCompanyName,
+                    IsActive = true,
+                    KycRequestedAt = DateTimeOffset.UtcNow,
+                    KycStatus = KycStatus.UnderReview,
+                    KycStatusMessage = null,
+                    ServicePackageId = 1,
+                };
+                _db.Companies.Add(company);
+                await _db.SaveChangesAsync();
 
-            // 3) Build local User
-            var user = new User
+                // 4) Register in Auth service
+                _logger.LogInformation("Calling AuthApi/api/auth/register for {Company}", dto.CompanyCode);
+                using var authClient = _httpFactory.CreateClient("AuthApi");
+                var authPayload = new
+                {
+                    username = dto.Username,
+                    fullNameLT = dto.FirstName,
+                    fullNameAR = dto.LastName,
+                    email = dto.Email,
+                    password = dto.Password,
+                    roleId = dto.RoleId,
+                    KycBranchId = kyc.branchId,
+                    KycLegalCompanyName = kyc.legalCompanyName,
+                    KycLegalCompanyNameLt = kyc.legalCompanyNameLT
+                };
+                using var authResp = await authClient.PostAsJsonAsync("api/auth/register", authPayload);
+
+                var body = await authResp.Content.ReadAsStringAsync();
+                _logger.LogInformation("AuthApi replied {Status}: {Body}", authResp.StatusCode, body);
+
+                if (!authResp.IsSuccessStatusCode)
+                    return new CompanyRegistrationResult
+                    {
+                        Error = $"Auth service error {(int)authResp.StatusCode}"
+                    };
+
+                var reg = JsonSerializer.Deserialize<AuthRegisterResponseDto>(body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (reg == null || reg.userId == 0)
+                    return new CompanyRegistrationResult
+                    {
+                        Error = "Auth service returned an invalid payload."
+                    };
+
+                // 5) Persist the local admin user
+                var user = new User
+                {
+                    AuthUserId = reg.userId,
+                    CompanyId = company.Id,
+                    FirstName = dto.FirstName,
+                    LastName = dto.LastName,
+                    Email = dto.Email,
+                    Phone = dto.Phone,
+                    RoleId = dto.RoleId,
+                    IsCompanyAdmin = true,
+
+                };
+                var added = await _userRepo.AddUser(user);
+                if (!added)
+                    return new CompanyRegistrationResult
+                    {
+                        Error = "Failed to save local admin‐user record."
+                    };
+
+                await tx.CommitAsync();
+                return new CompanyRegistrationResult
+                {
+                    Success = true,
+                    Location = $"/api/companies/{dto.CompanyCode}"
+                };
+            }
+            catch (Exception ex)
             {
-                AuthUserId = reg.userId,
-                CompanyId = dto.CompanyId,
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                Email = dto.Email,
-                Phone = dto.Phone,
-                RoleId = dto.RoleId,
-                ServicePackageId = 1,
-                IsCompanyAdmin = true,
-                KycStatus = KycStatus.UnderReview,
-                KycRequestedAt = DateTime.UtcNow,
-                KycBranchId = kyc?.branchId,
-                KycLegalCompanyName = kyc?.legalCompanyName,
-                KycLegalCompanyNameLt = kyc?.legalCompanyNameLT
-            };
-
-            // 4) Persist (wires default perms)
-            return await _userRepo.AddUser(user);
+                _logger.LogError(ex, "Error during company‐admin registration, rolling back");
+                await tx.RollbackAsync();
+                return new CompanyRegistrationResult
+                {
+                    Error = "Unexpected server error. Check logs for details."
+                };
+            }
         }
-
         public async Task<bool> UpdateCompanyStatusAsync(
             string companyCode,
             CompanyStatusUpdateDto dto)
         {
-            var admin = await _db.Users
-                .FirstOrDefaultAsync(u => u.CompanyId == companyCode && u.IsCompanyAdmin);
-            if (admin == null) return false;
+            var c = await _db.Companies
+                             .FirstOrDefaultAsync(x => x.Code == companyCode);
+            if (c == null) return false;
 
-            admin.KycStatus = dto.Status;
-            admin.KycStatusMessage = dto.Message;
-            admin.KycReviewedAt = DateTime.UtcNow;
+            c.KycStatus = dto.Status;
+            c.KycStatusMessage = dto.Message;
+            c.KycReviewedAt = DateTimeOffset.UtcNow;
 
             await _db.SaveChangesAsync();
             return true;
         }
 
 
+        // Fetch all companies with their admin's KYC details
         public async Task<IList<CompanyListDto>> GetAllCompaniesAsync(
-               string? searchTerm,
-               KycStatus? statusFilter,
-               int page,
-               int limit)
+            string? searchTerm,
+            KycStatus? statusFilter,
+            int page,
+            int limit)
         {
-            var q = _db.Users
-                .AsNoTracking()
-                .Where(u => u.IsCompanyAdmin);
+            var q = _db.Companies.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                q = q.Where(u =>
-                    u.CompanyId!.Contains(searchTerm) ||
-                    (u.KycLegalCompanyName != null && u.KycLegalCompanyName.Contains(searchTerm)));
-            }
-            if (statusFilter.HasValue)
-            {
-                q = q.Where(u => u.KycStatus == statusFilter.Value);
-            }
+                q = q.Where(c =>
+                    c.Code.Contains(searchTerm) ||
+                    (c.KycLegalCompanyNameLt != null && c.KycLegalCompanyNameLt.Contains(searchTerm)));
 
-            var list = await q
-                .OrderBy(u => u.CompanyId)
+            if (statusFilter.HasValue)
+                q = q.Where(c => c.KycStatus == statusFilter.Value);
+
+            return await q
+                .OrderBy(c => c.Code)
                 .Skip((page - 1) * limit)
                 .Take(limit)
-                .Select(u => new CompanyListDto
+                .Select(c => new CompanyListDto
                 {
-                    CompanyId = u.CompanyId!,
-                    BranchId = u.KycBranchId,
-                    LegalNameEn = u.KycLegalCompanyName,
-                    LegalNameLt = u.KycLegalCompanyNameLt,
-                    Status = u.KycStatus,
-                    StatusMessage = u.KycStatusMessage,
-                    RequestedAt = u.KycRequestedAt,
-                    ReviewedAt = u.KycReviewedAt
+                    Code = c.Code,
+                    Name = c.Name,
+                    IsActive = c.IsActive,
+                    KycStatus = c.KycStatus,
+                    KycStatusMessage = c.KycStatusMessage,
+                    KycRequestedAt = c.KycRequestedAt,
+                    KycReviewedAt = c.KycReviewedAt,
+                    KycBranchId = c.KycBranchId,
+                    KycLegalCompanyName = c.KycLegalCompanyName,
+                    KycLegalCompanyNameLt = c.KycLegalCompanyNameLt,
+                    KycMobile = c.KycMobile,
+                    KycNationality = c.KycNationality,
+                    KycCity = c.KycCity
                 })
                 .ToListAsync();
-
-            return list;
         }
 
-        public async Task<int> GetCompaniesCountAsync(
-            string? searchTerm,
-            KycStatus? statusFilter)
+
+        // Count companies matching filters
+        public async Task<int> GetCompaniesCountAsync(string? searchTerm, KycStatus? statusFilter)
         {
-            var q = _db.Users.Where(u => u.IsCompanyAdmin);
-
+            var q = _db.Companies.AsQueryable();
             if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                q = q.Where(u =>
-                    u.CompanyId!.Contains(searchTerm) ||
-                    (u.KycLegalCompanyName != null && u.KycLegalCompanyName.Contains(searchTerm)));
-            }
+                q = q.Where(c =>
+                    c.Code.Contains(searchTerm) ||
+                    (c.KycLegalCompanyNameLt != null && c.KycLegalCompanyNameLt.Contains(searchTerm)));
             if (statusFilter.HasValue)
-            {
-                q = q.Where(u => u.KycStatus == statusFilter.Value);
-            }
-
+                q = q.Where(c => c.KycStatus == statusFilter.Value);
             return await q.CountAsync();
         }
+
+        // Helper: fetch Company entity by its code
+        public async Task<Company?> GetByCodeAsync(string code)
+        {
+            return await _db.Companies.FirstOrDefaultAsync(c => c.Code == code);
+        }
+
+        public async Task CreateAsync(Company company)
+        {
+            _db.Companies.Add(company);
+            await _db.SaveChangesAsync();
+        }
+
     }
 }

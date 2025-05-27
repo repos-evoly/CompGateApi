@@ -25,65 +25,42 @@ namespace CompGateApi.Endpoints
 
             var users = app.MapGroup("/api/users").RequireAuthorization("RequireCompanyUser");
 
-            users.MapPost("/add", AddUser)
-                 .WithName("AddUser")
-                 .Accepts<UserRegistrationDto>("application/json")
-                 .Produces(200)
-                 .Produces(400);
-
-            users.MapPost("/assign-role", AssignRole)
-
-                .Produces(200)
-                .Produces(400);
-
-            users.MapPost("/assign-permissions", AssignUserPermissions)
-
-                .Produces(200)
-                .Produces(400);
-
             users.MapGet("/", GetUsers)
-
-                .Produces(200);
+                 .WithName("GetUsers")
+                 .Produces<PagedResult<UserDetailsDto>>(200);
 
             users.MapGet("/{userId:int}", GetUserById)
-
-                .Produces(200);
+                 .WithName("GetUserById")
+                 .Produces<UserDetailsDto>(200)
+                 .Produces(404);
 
             users.MapPut("/edit/{userId:int}", EditUser)
-
-                .Produces(200)
-                .Produces(400);
+                 .WithName("EditUser")
+                 .Produces<string>(200)      // your “User updated successfully.” message
+                 .Produces(400);
 
             users.MapPut("/edit-permissions/{userId:int}", EditUserRolePermissions)
-
-                .Produces(200)
-                .Produces(400);
-
-            users.MapGet("/roles", GetRoles)
-
-                .Produces<List<Role>>(200);
-
-            users.MapGet("/permissions", GetPermissions)
-
-                .Produces<List<Permission>>(200);
+                 .WithName("EditUserPermissions")
+                 .Produces<string>(200)
+                 .Produces(400);
 
             users.MapGet("/{userId:int}/permissions", GetUserPermissions)
-
-                .Produces<List<string>>(200)
-                .Produces(404);
+                 .WithName("GetUserPermissions")
+                 .Produces<List<string>>(200)
+                 .Produces(404);
 
             users.MapGet("/by-auth/{authId:int}", GetUserByAuthId)
-
-                .Produces(200)
-                .Produces(404);
+                 .WithName("GetUserByAuthId")
+                 .Produces<UserDetailsDto>(200)
+                 .Produces(404);
 
             users.MapGet("/management", GetManagementUsers)
-
-                .Produces<List<UserDetailsDto>>(200);
+                 .WithName("GetManagementUsers")
+                 .Produces<List<UserDetailsDto>>(200);
 
             users.MapPost("cookies/set", SetCookies)
-
-            .Produces(200);
+                 .WithName("SetCookies")
+                 .Produces<string>(200);
 
         }
 
@@ -114,10 +91,18 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> RegisterCompany(
-            [FromBody] CompanyRegistrationDto dto,
-            [FromServices] IUserRepository repo,
-            ILogger<UserEndpoints> log)
+    [FromBody] CompanyRegistrationDto dto,
+    [FromServices] ICompanyRepository companyRepo,
+    [FromServices] IUserRepository userRepo,
+    ILogger<UserEndpoints> log)
         {
+            // 0) Resolve or create the Company record
+            var company = await companyRepo.GetByCodeAsync(dto.CompanyCode);
+            if (company == null)
+            {
+                company = new Company { Code = dto.CompanyCode, Name = dto.CompanyCode };
+                await companyRepo.CreateAsync(company);
+            }
             // 1️⃣ Call Auth register
             var authPayload = new
             {
@@ -147,7 +132,7 @@ namespace CompGateApi.Endpoints
             var user = new User
             {
                 AuthUserId = reg.userId,
-                CompanyId = dto.CompanyId,
+                CompanyId = company.Id,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = dto.Email,
@@ -155,13 +140,13 @@ namespace CompGateApi.Endpoints
                 RoleId = dto.RoleId
             };
 
-            if (!await repo.AddUser(user))
-                return Results.BadRequest("Failed to save company locally.");
+            if (!await userRepo.AddUser(user))
+                return Results.BadRequest("Failed to save company user locally.");
 
             return Results.Ok(new
             {
                 reg.message,
-                LocalCompanyId = user.Id,
+                LocalCompanyUserId = user.Id,
                 AuthUserId = reg.userId
             });
         }
@@ -271,25 +256,45 @@ namespace CompGateApi.Endpoints
 
 
         public static async Task<IResult> GetUsers(
-           HttpContext context,
-           [FromServices] IUserRepository userRepository,
-           [FromServices] IMapper mapper,
-           [FromQuery] string? searchTerm,
-           [FromQuery] string? searchBy,
-           [FromQuery] int page = 1,
-           [FromQuery] int limit = 100000)
+    HttpContext ctx,
+    [FromServices] IUserRepository repo,
+    [FromQuery] string? searchTerm,
+    [FromQuery] string? searchBy,
+    [FromQuery] bool? hasCompany,
+    [FromQuery] int? roleId,
+    [FromQuery] int page = 1,
+    [FromQuery] int limit = 50
+)
         {
-            var authToken = context.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            // 1) Extract bearer token for any downstream Auth calls
+            var token = ctx.Request.Headers["Authorization"]
+                           .ToString()
+                           .Replace("Bearer ", "");
 
-            // Retrieve paginated users.
-            var users = await userRepository.GetUsersAsync(searchTerm, searchBy, page, limit, authToken);
+            // 2) Fetch the filtered/paginated users
+            var users = await repo.GetUsersAsync(
+                searchTerm, searchBy, hasCompany, roleId, page, limit, token
+            );
 
-            // Retrieve total count for the filters.
-            int totalCount = await userRepository.GetUserCountAsync(searchTerm, searchBy);
-            int totalPages = (int)System.Math.Ceiling((double)totalCount / limit);
+            // 3) Fetch the total COUNT of users matching the same filters
+            var total = await repo.GetUsersCountAsync(
+                searchTerm, searchBy, hasCompany, roleId
+            );
 
-            return Results.Ok(new { Data = users, TotalPages = totalPages });
+            // 4) Compute total pages
+            var totalPages = (int)Math.Ceiling(total / (double)limit);
+
+            // 5) Return a PagedResult<T> just like your other endpoints
+            return Results.Ok(new PagedResult<UserDetailsDto>
+            {
+                Data = users,
+                Page = page,
+                Limit = limit,
+                TotalRecords = total,
+                TotalPages = totalPages
+            });
         }
+
 
         public static async Task<IResult> GetUserById(
             int id,
@@ -386,25 +391,6 @@ namespace CompGateApi.Endpoints
             return Results.Ok(permissions); // Return permissions with 0/1 value
         }
 
-
-
-        public static async Task<IResult> GetRoles(
-            [FromServices] IUserRepository userRepository,
-            ILogger<UserEndpoints> logger)
-        {
-            logger.LogInformation("Fetching all roles");
-            var roles = await userRepository.GetRoles();
-            return Results.Ok(roles);
-        }
-
-        public static async Task<IResult> GetPermissions(
-            [FromServices] IUserRepository userRepository,
-            ILogger<UserEndpoints> logger)
-        {
-            logger.LogInformation("Fetching all permissions");
-            var permissions = await userRepository.GetPermissions();
-            return Results.Ok(permissions);
-        }
 
         private static int AuthUserId(HttpContext context)
         {
