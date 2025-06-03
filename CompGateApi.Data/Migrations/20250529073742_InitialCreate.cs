@@ -36,6 +36,7 @@ namespace CompGateApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsGlobal = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -234,6 +235,34 @@ namespace CompGateApi.Data.Migrations
                         name: "FK_TransferLimits_TransactionCategories_TransactionCategoryId",
                         column: x => x.TransactionCategoryId,
                         principalTable: "TransactionCategories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Attachments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AttSubject = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    AttFileName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    AttOriginalFileName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    AttMime = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    AttSize = table.Column<int>(type: "int", nullable: false),
+                    AttUrl = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    CompanyId = table.Column<int>(type: "int", maxLength: 8, nullable: false),
+                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Attachments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Attachments_Companies_CompanyId",
+                        column: x => x.CompanyId,
+                        principalTable: "Companies",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -855,6 +884,11 @@ namespace CompGateApi.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Attachments_CompanyId",
+                table: "Attachments",
+                column: "CompanyId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AuditLogs_CheckRequestId",
                 table: "AuditLogs",
                 column: "CheckRequestId");
@@ -1079,6 +1113,9 @@ namespace CompGateApi.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "Attachments");
+
             migrationBuilder.DropTable(
                 name: "AuditLogs");
 

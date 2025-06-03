@@ -48,7 +48,7 @@ namespace CompGateApi.Data.Context
               public DbSet<CreditFacilitiesOrLetterOfGuaranteeRequest> CreditFacilitiesOrLetterOfGuaranteeRequests => Set<CreditFacilitiesOrLetterOfGuaranteeRequest>();
 
               public DbSet<CertifiedBankStatementRequest> CertifiedBankStatementRequests => Set<CertifiedBankStatementRequest>();
-
+              public DbSet<Attachment> Attachments => Set<Attachment>();
 
               protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
               {
@@ -152,6 +152,19 @@ namespace CompGateApi.Data.Context
                             .HasForeignKey(u => u.ServicePackageId)
                             .OnDelete(DeleteBehavior.Restrict)
                             .IsRequired(false);
+
+                     //Attachments
+                     builder.Entity<Attachment>(b =>
+                            {
+                                   b.ToTable("Attachments");
+                                   b.HasKey(a => a.Id);
+
+                                   b.HasOne(a => a.Company)
+                                   .WithMany(c => c.Attachments)
+                                   .HasForeignKey(a => a.CompanyId)
+                                   .OnDelete(DeleteBehavior.Cascade);
+                            });
+
 
 
 
@@ -389,8 +402,11 @@ namespace CompGateApi.Data.Context
                             .HasForeignKey(x => x.CompanyId)
                             .OnDelete(DeleteBehavior.Cascade);
 
-                            // (no extra precision needed unless you add decimal fields)
+                            b.OwnsOne(x => x.ServiceRequests);
+                            b.OwnsOne(x => x.StatementRequest);
                      });
+
+
 
 
                      // ── CHECKBOOK REQUESTS ────────────────────────────────────────────────

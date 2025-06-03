@@ -186,6 +186,10 @@ namespace CompGateApi.Core.Repositories
                 {
                     UserId = user.Id,
                     AuthUserId = authUser?.Id ?? 0,
+                    Username = authUser?.Username,
+                    CompanyId = user.CompanyId,
+                    IsCompanyAdmin = user.IsCompanyAdmin,   // ← set it here
+                    CompanyCode = user.Company?.Code,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     Email = user.Email,
@@ -312,11 +316,16 @@ namespace CompGateApi.Core.Repositories
 
             return new UserDetailsDto
             {
-                AuthUserId = user.Id,
+                AuthUserId = user.AuthUserId,
+                UserId = user.Id,
+                Username = authUser?.Username,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
                 Phone = user.Phone,
+                CompanyId = user.CompanyId,
+                CompanyCode = user.Company?.Code,
+                IsCompanyAdmin = user.IsCompanyAdmin,  
                 Role = new RoleDto
                 {
                     Id = user.Role.Id,
@@ -416,8 +425,8 @@ namespace CompGateApi.Core.Repositories
                 Accounts = accounts,
                 // ServicePackageId = user.ServicePackageId,
                 IsCompanyAdmin = user.IsCompanyAdmin,
-                CompanyStatus = user.Company?.KycStatus ?? KycStatus.Missing,
-                CompanyStatusMessage = user.Company?.KycStatusMessage,
+                CompanyStatus = user.Company?.RegistrationStatus ?? RegistrationStatus.Error,
+                CompanyStatusMessage = user.Company?.RegistrationStatusMessage,
             };
         }
         private async Task<AuthUserDto?> FetchAuthUserDetails(int authUserId, string authToken)

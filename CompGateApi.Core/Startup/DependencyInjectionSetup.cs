@@ -84,12 +84,14 @@ namespace CompGateApi.Core.Startup
                     builder =>
                     {
                       builder.WithOrigins("http://localhost:3000",
-                                          "http://localhost:3010",
-                                          "http://10.3.3.11:3010",
-                                          "http://localhost:3011",
-                                          "http://10.3.3.11:3011",
+                                          "http://localhost:3012",
+                                          "http://10.3.3.11:3012",
+                                          "http://10.3.3.11:3013",
+                                          "http://localhost:3012",
+                                          "http://10.3.3.11:3012",
                                           "http://localhost:5000",
-                                          "http://10.1.1.205:3010")
+                                          "http://10.1.1.205:3012",
+                                          "http://10.1.1.205:3013")
                              .AllowAnyHeader()
                              .AllowAnyMethod()
                              .AllowCredentials();
@@ -201,8 +203,8 @@ namespace CompGateApi.Core.Startup
 
       validators.AddScoped<IValidator<DefinitionCreateDto>, DefinitionCreateDtoValidator>();
       validators.AddScoped<IValidator<DefinitionUpdateDto>, DefinitionUpdateDtoValidator>();
-      validators.AddScoped<IValidator<TransactionCreateDto>, TransactionCreateDtoValidator>();
-      validators.AddScoped<IValidator<TransactionUpdateDto>, TransactionUpdateDtoValidator>();
+      // validators.AddScoped<IValidator<TransactionCreateDto>, TransactionCreateDtoValidator>();
+      // validators.AddScoped<IValidator<TransactionUpdateDto>, TransactionUpdateDtoValidator>();
       validators.AddScoped<IValidator<CurrencyCreateDto>, CurrencyCreateDtoValidator>();
       validators.AddScoped<IValidator<CurrencyUpdateDto>, CurrencyUpdateDtoValidator>();
       validators.AddScoped<IValidator<CheckBookRequestCreateDto>, CheckBookRequestCreateDtoValidator>();
@@ -220,7 +222,9 @@ namespace CompGateApi.Core.Startup
       validators.AddScoped<IValidator<ServicePackageCreateDto>, ServicePackageCreateDtoValidator>();
       validators.AddScoped<IValidator<ServicePackageUpdateDto>, ServicePackageUpdateDtoValidator>();
       validators.AddScoped<IValidator<ForeignTransferCreateDto>, ForeignTransferCreateDtoValidator>();
+      validators.AddScoped<IValidator<ForeignTransferStatusUpdateDto>, ForeignTransferStatusUpdateDtoValidator>();
       validators.AddScoped<IValidator<VisaRequestCreateDto>, VisaRequestCreateDtoValidator>();
+      validators.AddScoped<IValidator<VisaRequestStatusUpdateDto>, VisaRequestStatusUpdateDtoValidator>();
       validators.AddScoped<IValidator<CompanyEmployeeRegistrationDto>, CompanyEmployeeRegistrationDtoValidator>();
       validators.AddScoped<IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto>, CreditFacilitiesOrLetterOfGuaranteeRequestCreateDtoValidator>();
       validators.AddScoped<IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto>, CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDtoValidator>();
@@ -249,7 +253,7 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.1.1.205:7070");
+        client.BaseAddress = new Uri("http://10.3.3.11:7070");
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
@@ -278,6 +282,9 @@ namespace CompGateApi.Core.Startup
 
       // Bank Accounts
       services.AddScoped<IBankAccountRepository, BankAccountRepository>();
+
+      //attachments
+      services.AddScoped<IAttachmentRepository, AttachmentRepository>();
 
       // Service Packages
       services.AddScoped<IServicePackageRepository, ServicePackageRepository>();

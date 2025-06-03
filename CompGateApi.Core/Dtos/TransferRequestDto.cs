@@ -30,6 +30,7 @@ namespace CompGateApi.Core.Dtos
         public decimal Amount { get; set; }
         public int CurrencyId { get; set; }
         public string? Description { get; set; }
+        public bool CommissionOnRecipient { get; set; }
 
     }
 }

@@ -25,6 +25,10 @@ namespace CompGateApi.Endpoints
 
             var users = app.MapGroup("/api/users").RequireAuthorization("RequireCompanyUser");
 
+            users.MapPost("/add", AddUser)
+               .Produces(200)
+               .Produces(400);
+
             users.MapGet("/", GetUsers)
                  .WithName("GetUsers")
                  .Produces<PagedResult<UserDetailsDto>>(200);

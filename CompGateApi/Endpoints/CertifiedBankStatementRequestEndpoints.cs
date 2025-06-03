@@ -137,6 +137,8 @@ namespace CompGateApi.Endpoints
                 AccountHolderName = ent.AccountHolderName,
                 AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
                 AccountNumber = ent.AccountNumber,
+                OldAccountNumber = ent.OldAccountNumber,
+                NewAccountNumber = ent.NewAccountNumber,
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -170,22 +172,26 @@ namespace CompGateApi.Endpoints
                 AccountHolderName = dto.AccountHolderName,
                 AuthorizedOnTheAccountName = dto.AuthorizedOnTheAccountName,
                 AccountNumber = dto.AccountNumber,
-                ServiceRequests = dto.ServiceRequests == null ? null : new ServicesRequest
+                ServiceRequests = new ServicesRequest
                 {
-                    // Map each property from dto.ServiceRequests to ServicesRequest here
-                    // Example:
-                    // Property1 = dto.ServiceRequests.Property1,
-                    // Property2 = dto.ServiceRequests.Property2,
-                    // Add all necessary property mappings
+                    ReactivateIdfaali = dto.ServiceRequests?.ReactivateIdfaali ?? false,
+                    DeactivateIdfaali = dto.ServiceRequests?.DeactivateIdfaali ?? false,
+                    ResetDigitalBankPassword = dto.ServiceRequests?.ResetDigitalBankPassword ?? false,
+                    ResendMobileBankingPin = dto.ServiceRequests?.ResendMobileBankingPin ?? false,
+                    ChangePhoneNumber = dto.ServiceRequests?.ChangePhoneNumber ?? false
                 },
-                StatementRequest = dto.StatementRequest == null ? null : new StatementRequest
+                StatementRequest = new StatementRequest
                 {
-                    // Map each property from dto.StatementRequest to StatementRequest here
-                    // Example:
-                    // Property1 = dto.StatementRequest.Property1,
-                    // Property2 = dto.StatementRequest.Property2,
-                    // Add all necessary property mappings
+                    CurrentAccountStatementArabic = dto.StatementRequest?.CurrentAccountStatementArabic,
+                    CurrentAccountStatementEnglish = dto.StatementRequest?.CurrentAccountStatementEnglish,
+                    VisaAccountStatement = dto.StatementRequest?.VisaAccountStatement,
+                    AccountStatement = dto.StatementRequest?.AccountStatement,
+                    JournalMovement = dto.StatementRequest?.JournalMovement,
+                    NonFinancialCommitment = dto.StatementRequest?.NonFinancialCommitment,
+                    FromDate = dto.StatementRequest?.FromDate,
+                    ToDate = dto.StatementRequest?.ToDate
                 },
+
                 OldAccountNumber = dto.OldAccountNumber,
                 NewAccountNumber = dto.NewAccountNumber,
                 Status = "Pending",

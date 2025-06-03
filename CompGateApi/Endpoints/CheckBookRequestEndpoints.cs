@@ -245,6 +245,7 @@ namespace CompGateApi.Endpoints
                 var ent = new CheckBookRequest
                 {
                     UserId = me.UserId,
+                    CompanyId = me.CompanyId.Value,
                     FullName = dto.FullName,
                     Address = dto.Address,
                     AccountNumber = dto.AccountNumber,

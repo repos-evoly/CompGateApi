@@ -6,14 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompGateApi.Data.Models
 {
-    public enum KycStatus
-    {
-        Missing,      // not yet looked up
-        UnderReview,  // looked up & awaiting admin approval
-        Approved,
-        Rejected
-    }
-
+   
     [Table("Users")]
     [Index(nameof(Email), IsUnique = true, Name = "Unique_Email")]
     [Index(nameof(CompanyId), IsUnique = false)]

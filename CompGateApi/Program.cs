@@ -22,11 +22,11 @@ if (args.Length == 1 && args[0].ToLower() == "seeddata") SeedData(app);
 
 app.ConfigureSwagger();
 app.ConfigureExceptionHandler();
-app.ConfigureStaticFiles();
+
 
 
 app.UseCors("AllowSpecificOrigins");
-
+app.ConfigureStaticFiles();
 app.UseAuthentication();
 
 app.UseAuthorization();

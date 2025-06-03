@@ -33,28 +33,15 @@ namespace CompGateApi.Endpoints
 
             return TypedResults.Ok(mapper.Map<SettingsDto>(settings));
         }
-
-        // 🔹 PATCH settings (allow partial updates)
-
+        // 🔹 PATCH to update Settings
         public static async Task<IResult> Patch([FromServices] ISettingsRepository settingsRepository, [FromServices] IMapper mapper, [FromBody] SettingsPatchDto settingsDto)
         {
             var settings = await settingsRepository.GetFirstSettingsAsync(); // Fetch the first row
             if (settings == null) return TypedResults.NotFound("Settings not found.");
 
-            // Validation for TransactionAmount: It cannot be less than 50,000
-
-
-            // Validation for TransactionTimeTo: It cannot be greater than 15
-
-
             // Only update the fields that are provided
-            if (settingsDto.TopAtmRefundLimit.HasValue)
-                settings.TopAtmRefundLimit = settingsDto.TopAtmRefundLimit.Value;
-
-            if (settingsDto.TopReasonLimit.HasValue)
-                settings.TopReasonLimit = settingsDto.TopReasonLimit.Value;
-
-
+            if (!string.IsNullOrEmpty(settingsDto.CommissionAccount))
+                settings.CommissionAccount = settingsDto.CommissionAccount;
 
             settingsRepository.Update(settings);
             await settingsRepository.SaveAsync();

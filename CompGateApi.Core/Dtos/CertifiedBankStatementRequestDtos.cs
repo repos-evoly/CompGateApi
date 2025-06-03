@@ -35,8 +35,8 @@ namespace CompGateApi.Core.Dtos
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
 
-        public ServicesRequestDto ServiceRequests { get; set; } = new();
-        public StatementRequestDto StatementRequest { get; set; } = new();
+        public ServicesRequestDto? ServiceRequests { get; set; }
+        public StatementRequestDto? StatementRequest { get; set; }
 
         public string Status { get; set; } = null!;
         public string? Reason { get; set; }

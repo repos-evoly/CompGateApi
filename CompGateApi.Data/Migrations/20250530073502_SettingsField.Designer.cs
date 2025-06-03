@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250530073502_SettingsField")]
+    partial class SettingsField
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -620,16 +623,16 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset?>("KycReviewedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int>("KycStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("KycStatusMessage")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
-
-                    b.Property<int>("RegistrationStatus")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RegistrationStatusMessage")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ServicePackageId")
                         .HasColumnType("int");

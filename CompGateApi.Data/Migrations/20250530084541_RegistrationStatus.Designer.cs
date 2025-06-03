@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    [Migration("20250527102538_IsGlobalRole")]
-    partial class IsGlobalRole
+    [Migration("20250530084541_RegistrationStatus")]
+    partial class RegistrationStatus
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,65 @@ namespace CompGateApi.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("CompGateApi.Data.Models.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AttFileName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("AttMime")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("AttOriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("AttSize")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AttSubject")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("AttUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("CompanyId")
+                        .HasMaxLength(8)
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.ToTable("Attachments", (string)null);
+                });
 
             modelBuilder.Entity("CompGateApi.Data.Models.AuditLog", b =>
                 {
@@ -564,16 +623,16 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset?>("KycReviewedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int>("KycStatus")
-                        .HasColumnType("int");
-
-                    b.Property<string>("KycStatusMessage")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RegistrationStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RegistrationStatusMessage")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ServicePackageId")
                         .HasColumnType("int");
@@ -1058,14 +1117,13 @@ namespace CompGateApi.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CommissionAccount")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("TopAtmRefundLimit")
-                        .HasColumnType("int");
-
-                    b.Property<int>("TopReasonLimit")
-                        .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -1398,6 +1456,17 @@ namespace CompGateApi.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("VisaRequests", (string)null);
+                });
+
+            modelBuilder.Entity("CompGateApi.Data.Models.Attachment", b =>
+                {
+                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
+                        .WithMany("Attachments")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.AuditLog", b =>
@@ -1883,6 +1952,8 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.Company", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("CblRequests");
 
                     b.Navigation("CertifiedBankStatementRequests");

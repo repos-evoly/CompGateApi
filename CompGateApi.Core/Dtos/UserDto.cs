@@ -25,6 +25,13 @@ namespace CompGateApi.Core.Dtos
         public int RoleId { get; set; }
     }
 
+    public class PublicEditUserDto
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+    }
+
     public class AssignRoleDto
     {
         public int UserId { get; set; }
@@ -58,6 +65,7 @@ namespace CompGateApi.Core.Dtos
         public int? CompanyId { get; set; }  // six‐digit, optional
         public string? CompanyCode { get; set; }// the 6-digit code
 
+
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
@@ -74,7 +82,7 @@ namespace CompGateApi.Core.Dtos
         public List<string> Accounts { get; set; } = new();  // new
         public int ServicePackageId { get; set; }
         public bool IsCompanyAdmin { get; set; }
-        public KycStatus CompanyStatus { get; set; }
+        public RegistrationStatus CompanyStatus { get; set; }
         public string? CompanyStatusMessage { get; set; }
         public int CompanyServicePackageId { get; set; }
     }

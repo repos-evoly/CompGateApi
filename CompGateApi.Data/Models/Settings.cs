@@ -9,9 +9,8 @@ namespace CompGateApi.Data.Models
         [Key]
         public int Id { get; set; }
 
+        [Required, MaxLength(50)]
+        public string CommissionAccount { get; set; } = string.Empty;
 
-        public int TopAtmRefundLimit { get; set; } = 5; // default to 5
-
-        public int TopReasonLimit { get; set; } = 10; // default to 10
     }
 }

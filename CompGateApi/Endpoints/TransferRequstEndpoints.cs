@@ -135,15 +135,15 @@ namespace CompGateApi.Endpoints
 
 
         public static async Task<IResult> CreateTransfer(
-       [FromBody] TransferRequestCreateDto dto,
-       HttpContext ctx,
-       ITransferRequestRepository repo,
-       IUserRepository userRepo,
-       IValidator<TransferRequestCreateDto> validator,
-       IMapper mapper,
-       ILogger<TransferRequestEndpoints> log,
-       IHttpClientFactory httpFactory,
-       CompGateApiDbContext db)
+    [FromBody] TransferRequestCreateDto dto,
+    HttpContext ctx,
+    ITransferRequestRepository repo,
+    IUserRepository userRepo,
+    IValidator<TransferRequestCreateDto> validator,
+    IMapper mapper,
+    ILogger<TransferRequestEndpoints> log,
+    IHttpClientFactory httpFactory,
+    CompGateApiDbContext db)
         {
             // 1) Validate DTO
             var validation = await validator.ValidateAsync(dto);
@@ -161,7 +161,7 @@ namespace CompGateApi.Endpoints
 
             // 3) Fetch limits for both packages
             var userPkgId = me.ServicePackageId;
-            var companyPkgId = me.CompanyServicePackageId; // however you expose it on UserDetailsDto
+            var companyPkgId = me.CompanyServicePackageId;
 
             // get all user‐level limits
             var userLimits = await db.TransferLimits
@@ -223,7 +223,7 @@ namespace CompGateApi.Endpoints
                 }
                 else
                 {
-                    // sum *all users in the company* (so if company total is exhausted nobody can send more)
+                    // sum *all users in the company*
                     sumInPeriod = await db.TransferRequests
                         .Where(tr =>
                             tr.CompanyId == me.CompanyId.Value &&
@@ -238,7 +238,37 @@ namespace CompGateApi.Endpoints
                         $"Your total for this {limit.Period} would exceed the maximum of {effectiveMax}.");
             }
 
-            // 4) External API call
+            // ⬅ commission logic
+            // fetch the commission settings
+            var settings = await db.Settings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings == null || string.IsNullOrEmpty(settings.CommissionAccount))
+                return Results.BadRequest("Commission account is not configured.");
+
+            // find the package‐detail for this user/package + category
+            var detail = await db.ServicePackageDetails
+                .Where(d =>
+                    d.ServicePackageId == me.ServicePackageId &&
+                    d.TransactionCategoryId == dto.TransactionCategoryId)
+                .FirstOrDefaultAsync();
+            if (detail == null)
+                return Results.BadRequest("No commission configuration found.");
+
+            // compute commission
+            var pctRaw = detail.CommissionPct / 100m;              // e.g. 0.5% → 0.005
+            var feeByPct = dto.Amount * pctRaw;
+            var commissionAmount = Math.Max(feeByPct, detail.FeeFixed);
+            commissionAmount = decimal.Round(commissionAmount, 3);      // clamp decimals
+
+            // decide who pays
+            decimal netAmount = dto.CommissionOnRecipient
+                ? dto.Amount - commissionAmount
+                : dto.Amount;
+
+            // convert to bank format (×1000 → 15-digit)
+            long trfAmt = (long)(netAmount * 1000m);
+            long trfAmt2 = (long)(commissionAmount * 1000m);
+
+            // 4) External API call, two‐leg transfer
             var bankClient = httpFactory.CreateClient("BankApi");
             var extPayload = new
             {
@@ -253,12 +283,14 @@ namespace CompGateApi.Endpoints
                 },
                 Details = new Dictionary<string, string>
         {
-            { "@TRFCCY", dto.CurrencyId.ToString() },
-            { "@SRCACC", dto.FromAccount },
-            { "@DSTACC", dto.ToAccount },
-            { "@APLYTRN2","N" },
-            { "@TRFAMT", ((long)(dto.Amount * 1000)).ToString("D15") },
-            { "@NR2",     "" }
+            { "@TRFCCY",  dto.CurrencyId.ToString() },
+            { "@SRCACC",  dto.FromAccount },
+            { "@DSTACC",  dto.ToAccount },
+            { "@DSTACC2", settings.CommissionAccount },
+            { "@APLYTRN2","Y" },
+            { "@TRFAMT",  trfAmt.ToString("D15") },
+            { "@TRFAMT2", trfAmt2.ToString("D15") },
+            { "@NR2",     dto.Description ?? "" }
         }
             };
 
@@ -290,6 +322,7 @@ namespace CompGateApi.Endpoints
             var outDto = mapper.Map<TransferRequestDto>(tr);
             return Results.Created($"/api/transfers/{tr.Id}", outDto);
         }
+
 
 
         public static async Task<IResult> LookupAccounts(

@@ -93,8 +93,8 @@ namespace CompGateApi.Core.Repositories
                     Name = kyc.legalCompanyName,
                     IsActive = true,
                     KycRequestedAt = DateTimeOffset.UtcNow,
-                    KycStatus = KycStatus.UnderReview,
-                    KycStatusMessage = null,
+                    RegistrationStatus = RegistrationStatus.UnderReview,
+                    RegistrationStatusMessage = null,
                     ServicePackageId = 1,
                 };
                 _db.Companies.Add(company);
@@ -123,7 +123,7 @@ namespace CompGateApi.Core.Repositories
                 if (!authResp.IsSuccessStatusCode)
                     return new CompanyRegistrationResult
                     {
-                        Error = $"Auth service error {(int)authResp.StatusCode}"
+                        Error = $"Username or Email Already Exists {(int)authResp.StatusCode}"
                     };
 
                 var reg = JsonSerializer.Deserialize<AuthRegisterResponseDto>(body,
@@ -179,8 +179,8 @@ namespace CompGateApi.Core.Repositories
                              .FirstOrDefaultAsync(x => x.Code == companyCode);
             if (c == null) return false;
 
-            c.KycStatus = dto.Status;
-            c.KycStatusMessage = dto.Message;
+            c.RegistrationStatus = dto.Status;
+            c.RegistrationStatusMessage = dto.Message;
             c.KycReviewedAt = DateTimeOffset.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -191,7 +191,7 @@ namespace CompGateApi.Core.Repositories
         // Fetch all companies with their admin's KYC details
         public async Task<IList<CompanyListDto>> GetAllCompaniesAsync(
             string? searchTerm,
-            KycStatus? statusFilter,
+            RegistrationStatus? statusFilter,
             int page,
             int limit)
         {
@@ -203,7 +203,7 @@ namespace CompGateApi.Core.Repositories
                     (c.KycLegalCompanyNameLt != null && c.KycLegalCompanyNameLt.Contains(searchTerm)));
 
             if (statusFilter.HasValue)
-                q = q.Where(c => c.KycStatus == statusFilter.Value);
+                q = q.Where(c => c.RegistrationStatus == statusFilter.Value);
 
             return await q
                 .OrderBy(c => c.Code)
@@ -214,8 +214,8 @@ namespace CompGateApi.Core.Repositories
                     Code = c.Code,
                     Name = c.Name,
                     IsActive = c.IsActive,
-                    KycStatus = c.KycStatus,
-                    KycStatusMessage = c.KycStatusMessage,
+                    RegistrationStatus = c.RegistrationStatus,
+                    RegistrationStatusMessage = c.RegistrationStatusMessage,
                     KycRequestedAt = c.KycRequestedAt,
                     KycReviewedAt = c.KycReviewedAt,
                     KycBranchId = c.KycBranchId,
@@ -230,7 +230,7 @@ namespace CompGateApi.Core.Repositories
 
 
         // Count companies matching filters
-        public async Task<int> GetCompaniesCountAsync(string? searchTerm, KycStatus? statusFilter)
+        public async Task<int> GetCompaniesCountAsync(string? searchTerm, RegistrationStatus? statusFilter)
         {
             var q = _db.Companies.AsQueryable();
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -238,14 +238,15 @@ namespace CompGateApi.Core.Repositories
                     c.Code.Contains(searchTerm) ||
                     (c.KycLegalCompanyNameLt != null && c.KycLegalCompanyNameLt.Contains(searchTerm)));
             if (statusFilter.HasValue)
-                q = q.Where(c => c.KycStatus == statusFilter.Value);
+                q = q.Where(c => c.RegistrationStatus == statusFilter.Value);
             return await q.CountAsync();
         }
 
         // Helper: fetch Company entity by its code
         public async Task<Company?> GetByCodeAsync(string code)
         {
-            return await _db.Companies.FirstOrDefaultAsync(c => c.Code == code);
+            return await _db.Companies.Include(c => c.Attachments)
+                                        .FirstOrDefaultAsync(c => c.Code == code);
         }
 
         public async Task CreateAsync(Company company)

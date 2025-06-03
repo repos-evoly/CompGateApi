@@ -40,10 +40,19 @@ namespace CompGateApi
             CreateMap<ReasonCreateDto, Reason>();
             CreateMap<ReasonUpdateDto, Reason>();
 
+            //attachments
+            CreateMap<Attachment, AttachmentDto>()
+                .ForMember(dest => dest.AttUrl, opt => opt.MapFrom(src => src.AttUrl))
+                .ForMember(dest => dest.AttFileName, opt => opt.MapFrom(src => src.AttFileName))
+                .ForMember(dest => dest.AttMime, opt => opt.MapFrom(src => src.AttMime))
+                .ForMember(dest => dest.AttSize, opt => opt.MapFrom(src => src.AttSize))
+                .ForMember(dest => dest.CreatedBy, opt => opt.MapFrom(src => src.CreatedBy))
+                .ReverseMap();
+
 
             CreateMap<Settings, SettingsDto>()
-              .ForMember(dest => dest.TopAtmRefundLimit, opt => opt.MapFrom(src => src.TopAtmRefundLimit))
-              .ForMember(dest => dest.TopReasonLimit, opt => opt.MapFrom(src => src.TopReasonLimit))
+              .ForMember(dest => dest.CommissionAccount, opt => opt.MapFrom(src => src.CommissionAccount))
+            //   .ForMember(dest => dest.TopReasonLimit, opt => opt.MapFrom(src => src.TopReasonLimit))
               .ReverseMap();
         }
     }

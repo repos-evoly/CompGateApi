@@ -20,8 +20,8 @@ namespace CompGateApi.Data.Models
 
         public bool IsActive { get; set; } = true;
 
-        public KycStatus KycStatus { get; set; } = KycStatus.UnderReview;
-        public string? KycStatusMessage { get; set; }
+        public RegistrationStatus RegistrationStatus { get; set; } = RegistrationStatus.UnderReview;
+        public string? RegistrationStatusMessage { get; set; }
         public DateTimeOffset KycRequestedAt { get; set; } = DateTimeOffset.Now;
         public DateTimeOffset? KycReviewedAt { get; set; }
 
@@ -78,5 +78,21 @@ namespace CompGateApi.Data.Models
         // ── **New** Certified bank-statement requests
         public ICollection<CertifiedBankStatementRequest> CertifiedBankStatementRequests
         { get; set; } = new List<CertifiedBankStatementRequest>();
+
+        public ICollection<Attachment> Attachments { get; set; }
+       = new List<Attachment>();
     }
+
+    public enum RegistrationStatus
+    {
+        MissingsDocuments,
+        MissingKyc,
+        MissingInformation,
+        UnderReview,
+        Approved,
+        Active,
+        Rejected,
+        Error
+    }
+
 }

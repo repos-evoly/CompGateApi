@@ -20,10 +20,10 @@ namespace CompGateApi.Core.Abstractions
 
         Task<IList<CompanyListDto>> GetAllCompaniesAsync(
            string? searchTerm,
-           KycStatus? statusFilter,
+           RegistrationStatus? statusFilter,
            int page,
            int limit);
-        Task<int> GetCompaniesCountAsync(string? searchTerm, KycStatus? statusFilter);
+        Task<int> GetCompaniesCountAsync(string? searchTerm, RegistrationStatus? statusFilter);
         Task<Company?> GetByCodeAsync(string code);
 
         Task CreateAsync(Company company);

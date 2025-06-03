@@ -2,14 +2,18 @@ namespace CompGateApi.Core.Dtos
 {
     public class SettingsDto
     {
-        public int TopAtmRefundLimit { get; set; }
-        public int TopReasonLimit { get; set; }
+
+
+        public string CommissionAccount { get; set; } = string.Empty;
+
+
     }
 
     public class SettingsPatchDto
     {
 
-        public int? TopAtmRefundLimit { get; set; }
-        public int? TopReasonLimit { get; set; }
+
+
+        public string? CommissionAccount { get; set; }
     }
 }

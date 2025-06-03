@@ -57,7 +57,7 @@ namespace CompGateApi.Core.Dtos
     public class CompanyStatusUpdateDto
     {
         [Required]
-        public KycStatus Status { get; set; }
+        public RegistrationStatus Status { get; set; }
 
         [MaxLength(500)]
         public string? Message { get; set; }
@@ -130,8 +130,8 @@ namespace CompGateApi.Core.Dtos
         public string Code { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public bool IsActive { get; set; }
-        public KycStatus KycStatus { get; set; }
-        public string? KycStatusMessage { get; set; }
+        public RegistrationStatus RegistrationStatus { get; set; }
+        public string? RegistrationStatusMessage { get; set; }
         public DateTimeOffset KycRequestedAt { get; set; }
         public DateTimeOffset? KycReviewedAt { get; set; }
         public string? KycBranchId { get; set; }
@@ -140,6 +140,9 @@ namespace CompGateApi.Core.Dtos
         public string? KycMobile { get; set; }
         public string? KycNationality { get; set; }
         public string? KycCity { get; set; }
+
+        public List<AttachmentDto> Attachments { get; set; } = new();
+
     }
 
 }

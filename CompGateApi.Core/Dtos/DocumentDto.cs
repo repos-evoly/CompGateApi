@@ -10,7 +10,7 @@ namespace CompGateApi.Core.Dtos
         public string? Description { get; set; }
 
         [Required]
-        public string DocumentType { get; set; } = "reports"; // ✅ "reports" or "cbl_bank_documents"
+        public string DocumentType { get; set; } = "reports"; 
 
         [Required]
         public int UploadedByUserId { get; set; }

@@ -35,21 +35,26 @@ namespace CompGateApi.Data.Seeding
             // the Taha/Nader/user@example.com pieces
         }
 
+        // in DataSeeder.cs
         private void SeedRoles()
         {
             var desired = new[]
             {
-                "SuperAdmin", "Admin", "Support", "Auditor",
-                "CompanyManager", "Accountant", "Maker", "Checker", "Viewer",
-                "CompanyUser"
-            };
+        "SuperAdmin",
+        "Admin",
+        "CompanyManager",
+        "CompanyUser",
+        "CompanyAccountant",
+        "CompanyAuditor",
+        "Maker",
+        "Checker",
+        "Viewer"
+    };
 
-            // look up existing names
             var existing = _context.Roles
-                                   .Select(r => r.NameLT)
-                                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .Select(r => r.NameLT)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            // only add the ones that aren't there yet
             var toAdd = desired
                 .Where(name => !existing.Contains(name))
                 .Select(name => new Role { NameLT = name })
@@ -65,16 +70,30 @@ namespace CompGateApi.Data.Seeding
         private void SeedPermissions()
         {
             if (_context.Permissions.Any()) return;
+
             var perms = new[]
             {
-                new Permission { Name="ManageRoles",       Description="Create/Update/Delete Roles" },
-                new Permission { Name="ManagePermissions", Description="Create/Update/Delete Permissions" },
-                new Permission { Name="ViewDocuments",     Description="Can view uploaded documents" },
-                new Permission { Name="ManageSettings",    Description="Can modify system settings" },
-                new Permission { Name="ExecuteTransfers",  Description="Can initiate transfers" },
-                new Permission { Name="ApproveTransfers",  Description="Can approve transfer requests" },
-                new Permission { Name="ViewReports",       Description="Can view system reports" }
-            };
+        // Company + employee perms
+        new Permission { Name = "CompanyCanViewDashboard",         Description = "Company: view dashboard" },
+        new Permission { Name = "CompanyCanStatementOfAccounts",   Description = "Company: statement of accounts" },
+        new Permission { Name = "CompanyCanTransfer",              Description = "Company: initiate transfers" },
+        new Permission { Name = "CompanyCanRequest",               Description = "Company: submit requests" },
+        new Permission { Name = "CompanyCanCurrency",              Description = "Company: manage currencies" },
+        new Permission { Name = "CompanyCanInternalTransfer",      Description = "Company: internal transfers" },
+        new Permission { Name = "CompanyCanExternalTransfer",      Description = "Company: external transfers" },
+        new Permission { Name = "CompanyCanAddEmployee",           Description = "Company: add employee" },
+        new Permission { Name = "CompanyCanEditEmployee",          Description = "Company: edit employee" },
+
+        // System employee/admin perms
+        new Permission { Name = "EmployeeCanCheckTransfers",       Description = "Employee: check transfers" },
+        new Permission { Name = "EmployeeCanCheckRequests",        Description = "Employee: check requests" },
+        new Permission { Name = "EmployeeCanUpdateRequests",       Description = "Employee: update requests" },
+        new Permission { Name = "EmployeeCanEditCurrency",         Description = "Employee: edit currency" },
+        new Permission { Name = "EmployeeCanSettings",             Description = "Employee: manage settings" },
+        new Permission { Name = "EmployeeCanApproveCompanies",     Description = "Employee: approve companies" },
+        new Permission { Name = "EmployeeCanAddEmployees",         Description = "Employee: add employees" }
+    };
+
             _context.Permissions.AddRange(perms);
             _context.SaveChanges();
         }
@@ -82,54 +101,96 @@ namespace CompGateApi.Data.Seeding
         private void SeedRolePermissions()
         {
             if (_context.RolePermissions.Any()) return;
-            var allRoles = _context.Roles.ToList();
-            var allPerms = _context.Permissions.ToList();
 
-            foreach (var role in allRoles)
+            var allRoles = _context.Roles.ToDictionary(r => r.NameLT, r => r.Id, StringComparer.OrdinalIgnoreCase);
+            var allPerms = _context.Permissions.ToDictionary(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
+
+            void Add(string role, params string[] permissionNames)
             {
-                // SuperAdmin gets everything
-                if (role.NameLT == "SuperAdmin")
+                var roleId = allRoles[role];
+                foreach (var pn in permissionNames)
                 {
-                    foreach (var p in allPerms)
-                        _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = p.Id });
-                }
-                // Admin: core management perms
-                else if (role.NameLT == "Admin")
-                {
-                    foreach (var p in allPerms.Where(x => x.Name.StartsWith("Manage") || x.Name == "ViewReports"))
-                        _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = p.Id });
-                }
-                // Maker: ExecuteTransfers, ViewDocuments
-                else if (role.NameLT == "Maker")
-                {
-                    var makerPerms = allPerms.Where(x => x.Name == "ExecuteTransfers" || x.Name == "ViewDocuments");
-                    foreach (var p in makerPerms)
-                        _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = p.Id });
-                }
-                // Checker: ApproveTransfers + ViewReports
-                else if (role.NameLT == "Checker")
-                {
-                    var chkPerms = allPerms.Where(x => x.Name == "ApproveTransfers" || x.Name == "ViewReports");
-                    foreach (var p in chkPerms)
-                        _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = p.Id });
-                }
-                // Others: only view
-                else
-                {
-                    var view = allPerms.First(p => p.Name == "ViewDocuments");
-                    _context.RolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = view.Id });
+                    var pid = allPerms[pn];
+                    _context.RolePermissions.Add(new RolePermission
+                    {
+                        RoleId = roleId,
+                        PermissionId = pid
+                    });
                 }
             }
+
+            // SuperAdmin → all
+            Add("SuperAdmin", allPerms.Keys.ToArray());
+
+            // Admin → all system perms
+            Add("Admin",
+                "EmployeeCanCheckTransfers",
+                "EmployeeCanCheckRequests",
+                "EmployeeCanUpdateRequests",
+                "EmployeeCanEditCurrency",
+                "EmployeeCanSettings",
+                "EmployeeCanApproveCompanies",
+                "EmployeeCanAddEmployees"
+            );
+
+            // CompanyManager → all company perms
+            Add("CompanyManager",
+                "CompanyCanViewDashboard",
+                "CompanyCanStatementOfAccounts",
+                "CompanyCanTransfer",
+                "CompanyCanRequest",
+                "CompanyCanCurrency",
+                "CompanyCanInternalTransfer",
+                "CompanyCanExternalTransfer",
+                "CompanyCanAddEmployee",
+                "CompanyCanEditEmployee"
+            );
+
+            // CompanyAccountant
+            Add("CompanyAccountant",
+                "CompanyCanViewDashboard",
+                "CompanyCanStatementOfAccounts",
+                "CompanyCanCurrency"
+            );
+
+            // CompanyUser
+            Add("CompanyUser",
+                "CompanyCanViewDashboard",
+                "CompanyCanTransfer",
+                "CompanyCanRequest"
+            );
+
+            // CompanyAuditor
+            Add("CompanyAuditor",
+                "CompanyCanStatementOfAccounts"
+            );
+
+            // Maker
+            Add("Maker",
+                "EmployeeCanUpdateRequests"
+            );
+
+            // Checker
+            Add("Checker",
+                "EmployeeCanCheckTransfers",
+                "EmployeeCanCheckRequests"
+            );
+
+            // Viewer
+            Add("Viewer",
+                "EmployeeCanCheckRequests"
+            );
+
             _context.SaveChanges();
         }
+
 
         private void SeedSettings()
         {
             if (_context.Settings.Any()) return;
             _context.Settings.Add(new Settings
             {
-                TopAtmRefundLimit = 10,
-                TopReasonLimit = 10
+                CommissionAccount = "0010932019840"
             });
             _context.SaveChanges();
         }
