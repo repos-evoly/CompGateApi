@@ -1,11 +1,10 @@
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CompGateApi.Data.Models
 {
-    [Table("TransactionCategories")]
-    public class TransactionCategory : Auditable
+    [Table("EconomicSectors")]
+    public class EconomicSector : Auditable
     {
         [Key]
         public int Id { get; set; }
@@ -13,9 +12,9 @@ namespace CompGateApi.Data.Models
         [Required, MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        public bool HasLimits { get; set; } = false;
+        [MaxLength(500)]
+        public string Description { get; set; } = string.Empty;
 
-        public ICollection<ServicePackageDetail> PackageDetails { get; set; }
-= new List<ServicePackageDetail>();
+        public ICollection<TransferRequest> Transfers { get; set; } = new List<TransferRequest>();
     }
 }

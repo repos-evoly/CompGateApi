@@ -1,33 +1,36 @@
-// CompGateApi.Data.Models/ServicePackageDetail.cs
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CompGateApi.Data.Models
 {
-    /// <summary>
-    /// Links a ServicePackage to one TransactionCategory, 
-    /// specifying commission (%) or fixed fee.
-    /// </summary>
+    // CompGateApi.Data.Models/ServicePackageDetail.cs
     [Table("ServicePackageDetails")]
     public class ServicePackageDetail : Auditable
     {
         [Key]
         public int Id { get; set; }
 
-        [Required]
+        [Required, ForeignKey(nameof(ServicePackage))]
         public int ServicePackageId { get; set; }
         public ServicePackage ServicePackage { get; set; } = null!;
 
-        [Required]
+        [Required, ForeignKey(nameof(TransactionCategory))]
         public int TransactionCategoryId { get; set; }
         public TransactionCategory TransactionCategory { get; set; } = null!;
 
-        /// <summary>Commission percentage (e.g. 0.5 = 0.5%).</summary>
-        [Column(TypeName = "decimal(18,4)")]
-        public decimal CommissionPct { get; set; }
+        /// <summary>Enable/disable category for this package</summary>
+        [Required]
+        public bool IsEnabledForPackage { get; set; }
 
-        /// <summary>Optional fixed fee per transaction.</summary>
-        [Column(TypeName = "decimal(18,4)")]
-        public decimal FeeFixed { get; set; }
+        // make all of these nullable:
+        public decimal? B2BTransactionLimit { get; set; }
+        public decimal? B2CTransactionLimit { get; set; }
+        public decimal? B2BFixedFee { get; set; }
+        public decimal? B2CFixedFee { get; set; }
+        public decimal? B2BMinPercentage { get; set; }
+        public decimal? B2CMinPercentage { get; set; }
+        public decimal? B2BCommissionPct { get; set; }
+        public decimal? B2CCommissionPct { get; set; }
     }
+
 }

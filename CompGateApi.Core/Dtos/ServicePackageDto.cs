@@ -1,35 +1,58 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// CompGateApi.Core.Dtos/ServicePackageDtos.cs
-// ─────────────────────────────────────────────────────────────────────────────
-namespace CompGateApi.Core.Dtos
+// for GET /api/servicepackages
+public class ServicePackageListDto
 {
-    // Returned to client
-    public class ServicePackageDto
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = null!;
-        public string? Description { get; set; }
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public string? Description { get; set; }
+    public decimal DailyLimit { get; set; }
+    public decimal MonthlyLimit { get; set; }
 
-        public IReadOnlyList<ServicePackageDetailDto> Details { get; set; } = Array.Empty<ServicePackageDetailDto>();
-        public IReadOnlyList<TransferLimitDto> Limits { get; set; } = Array.Empty<TransferLimitDto>();
-    }
+    public IReadOnlyList<ServicePackageCategoryDto> Categories { get; set; }
+        = Array.Empty<ServicePackageCategoryDto>();
+}
 
-    // Used to create a new package
-    public class ServicePackageCreateDto
-    {
-        public string Name { get; set; } = null!;
-        public string? Description { get; set; }
-    }
+// for GET /api/servicepackages/{id}
+public class ServicePackageDetailsDto : ServicePackageListDto { }
 
-    // Used to update existing package metadata
-    public class ServicePackageUpdateDto
-    {
-        public string Name { get; set; } = null!;
-        public string? Description { get; set; }
-    }
+// each category + its per-package settings
+public class ServicePackageCategoryDto
+{
+    public int ServicePackageId { get; set; }
+    public string ServicePackageName { get; set; } = null!;
 
-   
+    public int TransactionCategoryId { get; set; }
+    public string TransactionCategoryName { get; set; } = null!;
 
-    // Per-period limits for a package/category/currency
-    
+    public bool TransactionCategoryHasLimits { get; set; }          // ← new
+
+    public bool IsEnabledForPackage { get; set; }
+
+    // ← make all of these nullable ↓
+    public decimal? B2BTransactionLimit { get; set; }
+    public decimal? B2CTransactionLimit { get; set; }
+    public decimal? B2BFixedFee { get; set; }
+    public decimal? B2CFixedFee { get; set; }
+    public decimal? B2BMinPercentage { get; set; }
+    public decimal? B2CMinPercentage { get; set; }
+
+    public decimal? B2BCommissionPct { get; set; }
+    public decimal? B2CCommissionPct { get; set; }
+}
+
+// for POST
+public class ServicePackageCreateDto
+{
+    public string Name { get; set; } = null!;
+    public string? Description { get; set; }
+    public decimal DailyLimit { get; set; }
+    public decimal MonthlyLimit { get; set; }
+}
+
+// for PUT
+public class ServicePackageUpdateDto
+{
+    public string Name { get; set; } = null!;
+    public string? Description { get; set; }
+    public decimal DailyLimit { get; set; }
+    public decimal MonthlyLimit { get; set; }
 }

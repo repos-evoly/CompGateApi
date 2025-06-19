@@ -18,38 +18,35 @@ namespace CompGateApi.Data.Seeding
         {
             SeedRoles();
             SeedPermissions();
-            SeedRolePermissions();       // map perms → roles
+            SeedRolePermissions();
             SeedSettings();
             SeedCurrencies();
 
             SeedTransactionCategories();
             SeedServicePackages();
             SeedServicePackageDetails();
-            SeedTransferLimits();
             SeedCompanies();
             SeedCompanyAdmins();
-            SeedAdminUser();             // after roles & perms
-            SeedUserRolePermissions();   // map perms → admin
-            SeedSampleTransferRequests();
-            // SeedSampleRequests();        // CBL, CheckBook, Check, RTGS
-            // the Taha/Nader/user@example.com pieces
+
+            SeedAdminUser();
+            SeedUserRolePermissions();
+            // SeedSampleTransferRequests();
         }
 
-        // in DataSeeder.cs
         private void SeedRoles()
         {
             var desired = new[]
             {
-        "SuperAdmin",
-        "Admin",
-        "CompanyManager",
-        "CompanyUser",
-        "CompanyAccountant",
-        "CompanyAuditor",
-        "Maker",
-        "Checker",
-        "Viewer"
-    };
+                "SuperAdmin",
+                "Admin",
+                "CompanyManager",
+                "CompanyUser",
+                "CompanyAccountant",
+                "CompanyAuditor",
+                "Maker",
+                "Checker",
+                "Viewer"
+            };
 
             var existing = _context.Roles
                 .Select(r => r.NameLT)
@@ -71,30 +68,54 @@ namespace CompGateApi.Data.Seeding
         {
             if (_context.Permissions.Any()) return;
 
-            var perms = new[]
+            var permissions = new[]
             {
-        // Company + employee perms
-        new Permission { Name = "CompanyCanViewDashboard",         Description = "Company: view dashboard" },
-        new Permission { Name = "CompanyCanStatementOfAccounts",   Description = "Company: statement of accounts" },
-        new Permission { Name = "CompanyCanTransfer",              Description = "Company: initiate transfers" },
-        new Permission { Name = "CompanyCanRequest",               Description = "Company: submit requests" },
-        new Permission { Name = "CompanyCanCurrency",              Description = "Company: manage currencies" },
-        new Permission { Name = "CompanyCanInternalTransfer",      Description = "Company: internal transfers" },
-        new Permission { Name = "CompanyCanExternalTransfer",      Description = "Company: external transfers" },
-        new Permission { Name = "CompanyCanAddEmployee",           Description = "Company: add employee" },
-        new Permission { Name = "CompanyCanEditEmployee",          Description = "Company: edit employee" },
+        // company-scoped (IsGlobal = false)
+        new Permission { Name = "CompanyCanDashboard",                        Description = "Company: view dashboard",                          IsGlobal = false },
+        new Permission { Name = "CompanyCanStatementOfAccount",              Description = "Company: statement of accounts",                     IsGlobal = false },
+        new Permission { Name = "CompanyCanEmployees",                       Description = "Company: manage employees",                          IsGlobal = false },
+        new Permission { Name = "CompanyCanTransfer",                        Description = "Company: initiate transfers",                        IsGlobal = false },
+        new Permission { Name = "CompanyCanTransferInternal",                Description = "Company: internal transfers",                         IsGlobal = false },
+        new Permission { Name = "CompanyCanTransferExternal",                Description = "Company: external transfers",                         IsGlobal = false },
+        new Permission { Name = "CompanyCanRequests",                        Description = "Company: submit requests",                            IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestCheckBook",                Description = "Company: request check book",                         IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestCertifiedCheck",           Description = "Company: request certified check",                    IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestGuaranteeLetter",          Description = "Company: request guarantee letter",                   IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestCreditFacility",           Description = "Company: request credit facility",                    IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestVisa",                     Description = "Company: request visa",                                IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestCertifiedBankStatement",   Description = "Company: request certified bank statement",           IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestRTGS",                     Description = "Company: request RTGS",                                IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestForeignTransfers",         Description = "Company: request foreign transfers",                  IsGlobal = false },
+        new Permission { Name = "CompanyCanRequestCBL",                      Description = "Company: request CBL",                                 IsGlobal = false },
+        new Permission { Name = "CompanyCanCurrencies",                      Description = "Company: manage currencies",                           IsGlobal = false },
+        new Permission { Name = "CompanyCanServicePackages",                 Description = "Company: manage service packages",                     IsGlobal = false },
+        new Permission { Name = "CompanyCanCompanies",                       Description = "Company: manage companies",                            IsGlobal = false },
+        new Permission { Name = "CompanyCanSettings",                        Description = "Company: manage settings",                            IsGlobal = false },
 
-        // System employee/admin perms
-        new Permission { Name = "EmployeeCanCheckTransfers",       Description = "Employee: check transfers" },
-        new Permission { Name = "EmployeeCanCheckRequests",        Description = "Employee: check requests" },
-        new Permission { Name = "EmployeeCanUpdateRequests",       Description = "Employee: update requests" },
-        new Permission { Name = "EmployeeCanEditCurrency",         Description = "Employee: edit currency" },
-        new Permission { Name = "EmployeeCanSettings",             Description = "Employee: manage settings" },
-        new Permission { Name = "EmployeeCanApproveCompanies",     Description = "Employee: approve companies" },
-        new Permission { Name = "EmployeeCanAddEmployees",         Description = "Employee: add employees" }
+        // employee-scoped (IsGlobal = true)
+        new Permission { Name = "EmployeeCanDashboard",                      Description = "Employee: view dashboard",                            IsGlobal = true  },
+        new Permission { Name = "EmployeeCanStatementOfAccount",            Description = "Employee: view statement of accounts",                IsGlobal = true  },
+        new Permission { Name = "EmployeeCanEmployees",                     Description = "Employee: manage employees",                          IsGlobal = true  },
+        new Permission { Name = "EmployeeCanTransfer",                      Description = "Employee: initiate transfers",                        IsGlobal = true  },
+        new Permission { Name = "EmployeeCanTransferInternal",              Description = "Employee: internal transfers",                         IsGlobal = true  },
+        new Permission { Name = "EmployeeCanTransferExternal",              Description = "Employee: external transfers",                         IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequests",                      Description = "Employee: submit requests",                            IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestCheckBook",              Description = "Employee: request check book",                         IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestCertifiedCheck",         Description = "Employee: request certified check",                    IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestGuaranteeLetter",        Description = "Employee: request guarantee letter",                   IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestCreditFacility",         Description = "Employee: request credit facility",                    IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestVisa",                   Description = "Employee: request visa",                                IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestCertifiedBankStatement", Description = "Employee: request certified bank statement",           IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestRTGS",                   Description = "Employee: request RTGS",                                IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestForeignTransfers",       Description = "Employee: request foreign transfers",                  IsGlobal = true  },
+        new Permission { Name = "EmployeeCanRequestCBL",                    Description = "Employee: request CBL",                                 IsGlobal = true  },
+        new Permission { Name = "EmployeeCanCurrencies",                    Description = "Employee: manage currencies",                           IsGlobal = true  },
+        new Permission { Name = "EmployeeCanServicePackages",               Description = "Employee: manage service packages",                     IsGlobal = true  },
+        new Permission { Name = "EmployeeCanCompanies",                     Description = "Employee: manage companies",                            IsGlobal = true  },
+        new Permission { Name = "EmployeeCanSettings",                      Description = "Employee: manage settings",                            IsGlobal = true  },
     };
 
-            _context.Permissions.AddRange(perms);
+            _context.Permissions.AddRange(permissions);
             _context.SaveChanges();
         }
 
@@ -102,83 +123,106 @@ namespace CompGateApi.Data.Seeding
         {
             if (_context.RolePermissions.Any()) return;
 
-            var allRoles = _context.Roles.ToDictionary(r => r.NameLT, r => r.Id, StringComparer.OrdinalIgnoreCase);
-            var allPerms = _context.Permissions.ToDictionary(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
+            // build lookup dictionaries
+            var roleIds = _context.Roles
+                .ToDictionary(r => r.NameLT, r => r.Id, StringComparer.OrdinalIgnoreCase);
+            var permIds = _context.Permissions
+                .ToDictionary(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
 
-            void Add(string role, params string[] permissionNames)
+            void AddPerms(string role, params string[] perms)
             {
-                var roleId = allRoles[role];
-                foreach (var pn in permissionNames)
+                var rid = roleIds[role];
+                foreach (var pn in perms)
                 {
-                    var pid = allPerms[pn];
                     _context.RolePermissions.Add(new RolePermission
                     {
-                        RoleId = roleId,
-                        PermissionId = pid
+                        RoleId = rid,
+                        PermissionId = permIds[pn]
                     });
                 }
             }
 
-            // SuperAdmin → all
-            Add("SuperAdmin", allPerms.Keys.ToArray());
+            // SuperAdmin gets everything
+            AddPerms("SuperAdmin", permIds.Keys.ToArray());
 
-            // Admin → all system perms
-            Add("Admin",
-                "EmployeeCanCheckTransfers",
-                "EmployeeCanCheckRequests",
-                "EmployeeCanUpdateRequests",
-                "EmployeeCanEditCurrency",
-                "EmployeeCanSettings",
-                "EmployeeCanApproveCompanies",
-                "EmployeeCanAddEmployees"
+            // Admin (back-office) gets all employee-scoped perms
+            AddPerms("Admin",
+                permIds.Keys
+                    .Where(n => n.StartsWith("EmployeeCan", StringComparison.OrdinalIgnoreCase))
+                    .ToArray()
             );
 
-            // CompanyManager → all company perms
-            Add("CompanyManager",
-                "CompanyCanViewDashboard",
-                "CompanyCanStatementOfAccounts",
+            // CompanyManager gets the full company footprint
+            AddPerms("CompanyManager",
+                "CompanyCanDashboard",
+                "CompanyCanStatementOfAccount",
+                "CompanyCanEmployees",
                 "CompanyCanTransfer",
-                "CompanyCanRequest",
-                "CompanyCanCurrency",
-                "CompanyCanInternalTransfer",
-                "CompanyCanExternalTransfer",
-                "CompanyCanAddEmployee",
-                "CompanyCanEditEmployee"
+                "CompanyCanTransferInternal",
+                "CompanyCanTransferExternal",
+                "CompanyCanRequests",
+                "CompanyCanRequestCheckBook",
+                "CompanyCanRequestCertifiedCheck",
+                "CompanyCanRequestGuaranteeLetter",
+                "CompanyCanRequestCreditFacility",
+                "CompanyCanRequestVisa",
+                "CompanyCanRequestCertifiedBankStatement",
+                "CompanyCanRequestRTGS",
+                "CompanyCanRequestForeignTransfers",
+                "CompanyCanRequestCBL",
+                "CompanyCanCurrencies",
+                "CompanyCanServicePackages",
+                "CompanyCanCompanies",
+                "CompanyCanSettings"
             );
 
-            // CompanyAccountant
-            Add("CompanyAccountant",
-                "CompanyCanViewDashboard",
-                "CompanyCanStatementOfAccounts",
-                "CompanyCanCurrency"
+            // CompanyAccountant: dashboard, statements, currency
+            AddPerms("CompanyAccountant",
+                "CompanyCanDashboard",
+                "CompanyCanStatementOfAccount",
+                "CompanyCanCurrencies"
             );
 
-            // CompanyUser
-            Add("CompanyUser",
-                "CompanyCanViewDashboard",
+            // CompanyUser: dashboard + basic transfer & request
+            AddPerms("CompanyUser",
+                "CompanyCanDashboard",
                 "CompanyCanTransfer",
-                "CompanyCanRequest"
+                "CompanyCanRequests"
             );
 
-            // CompanyAuditor
-            Add("CompanyAuditor",
-                "CompanyCanStatementOfAccounts"
+            // CompanyAuditor: statements only
+            AddPerms("CompanyAuditor",
+                "CompanyCanStatementOfAccount"
             );
 
-            // Maker
-            Add("Maker",
-                "EmployeeCanUpdateRequests"
+            // Maker: can update requests
+            AddPerms("Maker",
+                "EmployeeCanRequestCheckBook",
+                "EmployeeCanRequestCertifiedCheck",
+                "EmployeeCanRequestGuaranteeLetter",
+                "EmployeeCanRequestCreditFacility",
+                "EmployeeCanRequestVisa",
+                "EmployeeCanRequestCertifiedBankStatement",
+                "EmployeeCanRequestRTGS",
+                "EmployeeCanRequestForeignTransfers",
+                "EmployeeCanRequestCBL",
+                "EmployeeCanRequests",
+                "EmployeeCanTransfer"
             );
 
-            // Checker
-            Add("Checker",
-                "EmployeeCanCheckTransfers",
-                "EmployeeCanCheckRequests"
+            // Checker: can inspect
+            AddPerms("Checker",
+                "EmployeeCanDashboard",
+                "EmployeeCanStatementOfAccount",
+                "EmployeeCanTransfer",
+                "EmployeeCanRequests"
             );
 
-            // Viewer
-            Add("Viewer",
-                "EmployeeCanCheckRequests"
+            // Viewer: read-only
+            AddPerms("Viewer",
+                "EmployeeCanDashboard",
+                "EmployeeCanStatementOfAccount",
+                "EmployeeCanRequests"
             );
 
             _context.SaveChanges();
@@ -190,7 +234,7 @@ namespace CompGateApi.Data.Seeding
             if (_context.Settings.Any()) return;
             _context.Settings.Add(new Settings
             {
-                CommissionAccount = "0010932019840"
+                GlobalLimit = 1000000m
             });
             _context.SaveChanges();
         }
@@ -200,9 +244,8 @@ namespace CompGateApi.Data.Seeding
             if (_context.Currencies.Any()) return;
             _context.Currencies.AddRange(new[]
             {
-                new Currency { Code="LYD", Rate=1m,    Description="Libyan Dinar" },
-                new Currency { Code="USD", Rate=6.25m, Description="US Dollar" },
-                new Currency { Code="EUR", Rate=0.85m, Description="Euro" }
+                new Currency { Code = "001", Rate = 1m, Description = "LYD" },
+                new Currency { Code = "002", Rate = 6.25m, Description = "USD" },
             });
             _context.SaveChanges();
         }
@@ -210,15 +253,17 @@ namespace CompGateApi.Data.Seeding
         private void SeedTransactionCategories()
         {
             if (_context.TransactionCategories.Any()) return;
+
             var cats = new[]
             {
-                new TransactionCategory { Name="Internal",    Description="Same-bank transfer" },
-                new TransactionCategory { Name="External",    Description="Inter-bank transfer" },
-                new TransactionCategory { Name="International",Description="Cross-border transfer" },
-                new TransactionCategory { Name="RTGS",        Description="Real-time gross settlement" },
-                new TransactionCategory { Name="CBL",         Description="Certificate of bank letter" },
-                new TransactionCategory { Name="CheckBook",   Description="Check book request" }
-            };
+        new TransactionCategory { Name = "Internal" },
+        new TransactionCategory { Name = "External" },
+        new TransactionCategory { Name = "International" },
+        new TransactionCategory { Name = "RTGS" },
+        new TransactionCategory { Name = "CBL" },
+        new TransactionCategory { Name = "CheckBook" }
+    };
+
             _context.TransactionCategories.AddRange(cats);
             _context.SaveChanges();
         }
@@ -226,12 +271,13 @@ namespace CompGateApi.Data.Seeding
         private void SeedServicePackages()
         {
             if (_context.ServicePackages.Any()) return;
+
             var packages = new[]
             {
-                new ServicePackage { Name="Inquiry", Description="Read-only access" },
-                new ServicePackage { Name="Standard",Description="Standard transfers" },
-                new ServicePackage { Name="Premium", Description="High volume & limits" }
-            };
+                new ServicePackage { Name = "Inquiry Package",  Description = "Inquiry Package", DailyLimit = 1000m,   MonthlyLimit = 10000m },
+                new ServicePackage { Name = "Full Package", Description = "Full Package", DailyLimit = 5000m,   MonthlyLimit = 50000m },
+                };
+
             _context.ServicePackages.AddRange(packages);
             _context.SaveChanges();
         }
@@ -239,81 +285,93 @@ namespace CompGateApi.Data.Seeding
         private void SeedServicePackageDetails()
         {
             if (_context.ServicePackageDetails.Any()) return;
+
             var pkgs = _context.ServicePackages.ToList();
             var cats = _context.TransactionCategories.ToList();
 
             foreach (var pkg in pkgs)
+            {
                 foreach (var cat in cats)
                 {
-                    // Commission % tiers
-                    decimal pct = pkg.Name == "Premium" ? 0.25m
-                                 : pkg.Name == "Standard" ? 0.5m
-                                 : 1.0m;
-                    // Fixed fee tiers
-                    decimal fee = pkg.Name == "Premium" ? 1.00m
-                               : pkg.Name == "Standard" ? 2.50m
-                               : 5.00m;
+                    // default values per package
+                    decimal b2bLimit, b2cLimit, b2bFee, b2cFee, b2bMinPct, b2cMinPct, b2bCommPct, b2cCommPct;
+
+
+                    switch (pkg.Name)
+                    {
+                        case "Full Package":
+                            b2bLimit = 16000m; b2cLimit = 8000m;
+                            b2bFee = 1.5m; b2cFee = 3m;
+                            b2bMinPct = 0.10m; b2cMinPct = 0.20m;
+                            b2bCommPct = 0.30m; b2cCommPct = 0.50m;
+                            break;
+
+                        default: // Inquiry
+                            b2bLimit = 1000m; b2cLimit = 500m;
+                            b2bFee = 5m; b2cFee = 10m;
+                            b2bMinPct = 0.50m; b2cMinPct = 1.00m;
+                            b2bCommPct = 1.00m; b2cCommPct = 1.50m;
+                            break;
+                    }
 
                     _context.ServicePackageDetails.Add(new ServicePackageDetail
                     {
                         ServicePackageId = pkg.Id,
                         TransactionCategoryId = cat.Id,
-                        CommissionPct = pct,
-                        FeeFixed = fee
+                        IsEnabledForPackage = true,
+                        B2BTransactionLimit = b2bLimit,
+                        B2CTransactionLimit = b2cLimit,
+                        B2BFixedFee = b2bFee,
+                        B2CFixedFee = b2cFee,
+                        B2BMinPercentage = b2bMinPct,
+                        B2CMinPercentage = b2cMinPct,
+
+                        B2BCommissionPct = b2bCommPct,
+
+                        B2CCommissionPct = b2cCommPct
                     });
                 }
+            }
+
             _context.SaveChanges();
         }
 
-        private void SeedTransferLimits()
+        private void SeedCompanies()
         {
-            if (_context.TransferLimits.Any()) return;
-            var pkgs = _context.ServicePackages.ToList();
-            var cats = _context.TransactionCategories.ToList();
-            var currs = _context.Currencies.ToList();
+            if (_context.Companies.Any()) return;
 
-            foreach (var pkg in pkgs)
-                foreach (var cat in cats)
-                    foreach (var cur in currs)
-                    {
-                        // Minimum is always 1.00
-                        decimal minAmt = 1.00m;
-                        // Max tiers
-                        decimal maxDaily = pkg.Name == "Premium" ? 100000m : pkg.Name == "Standard" ? 50000m : 10000m;
-                        decimal maxWeekly = maxDaily * 5;
-                        decimal maxMonthly = maxDaily * 20;
+            var standardPkg = _context.ServicePackages.Single(p => p.Name == "Standard");
 
-                        _context.TransferLimits.AddRange(new[]
-                        {
-                    new TransferLimit
-                    {
-                        ServicePackageId      = pkg.Id,
-                        TransactionCategoryId = cat.Id,
-                        CurrencyId            = cur.Id,
-                        Period                = LimitPeriod.Daily,
-                        MinAmount             = minAmt,
-                        MaxAmount             = maxDaily
-                    },
-                    new TransferLimit
-                    {
-                        ServicePackageId      = pkg.Id,
-                        TransactionCategoryId = cat.Id,
-                        CurrencyId            = cur.Id,
-                        Period                = LimitPeriod.Weekly,
-                        MinAmount             = minAmt,
-                        MaxAmount             = maxWeekly
-                    },
-                    new TransferLimit
-                    {
-                        ServicePackageId      = pkg.Id,
-                        TransactionCategoryId = cat.Id,
-                        CurrencyId            = cur.Id,
-                        Period                = LimitPeriod.Monthly,
-                        MinAmount             = minAmt,
-                        MaxAmount             = maxMonthly
-                    }
+            var companies = new[]
+            {
+                new Company { Code = "725010", Name = "Company 725010", IsActive = true, ServicePackageId = standardPkg.Id }
+            };
+
+            _context.Companies.AddRange(companies);
+            _context.SaveChanges();
+        }
+
+        private void SeedCompanyAdmins()
+        {
+            var managerRole = _context.Roles.Single(r => r.NameLT == "CompanyManager");
+
+
+            var co1 = _context.Companies.Single(c => c.Code == "725010");
+            if (!_context.Users.Any(u => u.Email == "nader@gmail.com"))
+            {
+                _context.Users.Add(new User
+                {
+                    AuthUserId = 8,
+                    CompanyId = co1.Id,
+                    FirstName = "Nader",
+                    LastName = "Owner",
+                    Email = "nader@gmail.com",
+                    Phone = "8888888888",
+                    RoleId = managerRole.Id,
+                    IsCompanyAdmin = true
                 });
-                    }
+            }
+
             _context.SaveChanges();
         }
 
@@ -321,7 +379,6 @@ namespace CompGateApi.Data.Seeding
         {
             if (_context.Users.Any(u => u.Email == "admin@example.com")) return;
             var adminRole = _context.Roles.Single(r => r.NameLT == "Admin");
-            var stdPackage = _context.ServicePackages.Single(p => p.Name == "Standard");
 
             var admin = new User
             {
@@ -331,97 +388,10 @@ namespace CompGateApi.Data.Seeding
                 Email = "admin@example.com",
                 Phone = "999999999",
                 RoleId = adminRole.Id,
-                // ServicePackageId = stdPackage.Id
+                IsCompanyAdmin = false
             };
+
             _context.Users.Add(admin);
-            _context.SaveChanges();
-        }
-
-        private void SeedCompanies()
-        {
-            if (_context.Companies.Any()) return;
-
-            // pick a default service package (must already have been seeded)
-            var defaultPkg = _context.ServicePackages
-                                     .Single(p => p.Name == "Standard");
-
-            _context.Companies.AddRange(
-                new Company
-                {
-                    Code = "549117",
-                    Name = "Company 549117",
-                    IsActive = true,
-                    ServicePackageId = defaultPkg.Id
-                },
-                new Company
-                {
-                    Code = "725010",
-                    Name = "Company 725010",
-                    IsActive = true,
-                    ServicePackageId = defaultPkg.Id
-                }
-            );
-            _context.SaveChanges();
-        }
-
-
-        private void SeedCompanyAdmins()
-        {
-            var pkg = _context.ServicePackages.Single(p => p.Name == "Standard");
-            var role = _context.Roles.Single(r => r.NameLT == "CompanyManager");  // role Id = 5
-            var usrRole = _context.Roles.Single(r => r.NameLT == "CompanyUser");  // for normal employees
-
-            var co1 = _context.Companies.Single(c => c.Code == "549117");
-            if (!_context.Users.Any(u => u.Email == "taha@gmail.com"))
-            {
-                _context.Users.Add(new User
-                {
-                    AuthUserId = 7,
-                    CompanyId = co1.Id,
-                    FirstName = "Taha",
-                    LastName = "Owner",
-                    Email = "taha@gmail.com",
-                    Phone = "7777777777",
-                    RoleId = role.Id,
-                    // ServicePackageId = pkg.Id,
-                    IsCompanyAdmin = true
-                });
-            }
-
-            var co2 = _context.Companies.Single(c => c.Code == "725010");
-            if (!_context.Users.Any(u => u.Email == "nader@gmail.com"))
-            {
-                _context.Users.Add(new User
-                {
-                    AuthUserId = 8,
-                    CompanyId = co2.Id,
-                    FirstName = "Nader",
-                    LastName = "Owner",
-                    Email = "nader@gmail.com",
-                    Phone = "8888888888",
-                    RoleId = role.Id,
-                    // ServicePackageId = pkg.Id,
-                    IsCompanyAdmin = true
-                });
-            }
-
-            // a normal employee in co2
-            if (!_context.Users.Any(u => u.Email == "user@example.com"))
-            {
-                _context.Users.Add(new User
-                {
-                    AuthUserId = 9,
-                    CompanyId = co2.Id,
-                    FirstName = "Normal",
-                    LastName = "User",
-                    Email = "user@example.com",
-                    Phone = "9999999999",
-                    RoleId = usrRole.Id,
-                    // ServicePackageId = pkg.Id,
-                    IsCompanyAdmin = false
-                });
-            }
-
             _context.SaveChanges();
         }
 
@@ -430,14 +400,10 @@ namespace CompGateApi.Data.Seeding
             var admin = _context.Users.SingleOrDefault(u => u.Email == "admin@example.com");
             if (admin == null) return;
 
-            // map every RolePermission → UserRolePermission
             var rolePerms = _context.RolePermissions.Where(rp => rp.RoleId == admin.RoleId).ToList();
             foreach (var rp in rolePerms)
             {
-                if (!_context.UserRolePermissions.Any(urp =>
-                    urp.UserId == admin.Id
-                    && urp.RoleId == rp.RoleId
-                    && urp.PermissionId == rp.PermissionId))
+                if (!_context.UserRolePermissions.Any(urp => urp.UserId == admin.Id && urp.RoleId == rp.RoleId && urp.PermissionId == rp.PermissionId))
                 {
                     _context.UserRolePermissions.Add(new UserRolePermission
                     {
@@ -447,136 +413,35 @@ namespace CompGateApi.Data.Seeding
                     });
                 }
             }
+
             _context.SaveChanges();
         }
 
-        private void SeedSampleTransferRequests()
-        {
-            if (_context.TransferRequests.Any()) return;
-            var user = _context.Users.First(u => u.CompanyId > 0);
-            var cats = _context.TransactionCategories.ToList();
-            var cur = _context.Currencies.First();
-            var pkg = _context.ServicePackages.First(p => p.Name == "Standard");
-
-            foreach (var cat in cats)
-            {
-                _context.TransferRequests.Add(new TransferRequest
-                {
-                    UserId = user.Id,
-                    CompanyId = user.CompanyId ?? 0,    // ← add this line, default to 0 if null
-                    TransactionCategoryId = cat.Id,
-                    FromAccount = "ACCT-0001",
-                    ToAccount = "ACCT-1001",
-                    Amount = 100m * (cats.IndexOf(cat) + 1),
-                    CurrencyId = cur.Id,
-                    ServicePackageId = pkg.Id,
-                    Status = "Pending",
-                    RequestedAt = DateTime.UtcNow.AddDays(-cats.IndexOf(cat))
-                });
-            }
-            _context.SaveChanges();
-        }
-
-        // private void SeedSampleRequests()
+        // private void SeedSampleTransferRequests()
         // {
-        //     // reuse admin user
-        //     var admin = _context.Users.Single(u => u.Email == "admin@example.com");
+        //     if (_context.TransferRequests.Any()) return;
+        //     var user = _context.Users.First(u => u.CompanyId.HasValue);
+        //     var cats = _context.TransactionCategories.ToList();
+        //     var pkg = _context.ServicePackages.Single(p => p.Name == "Standard");
 
-        //     if (!_context.CblRequests.Any())
+        //     foreach (var cat in cats)
         //     {
-        //         _context.CblRequests.Add(new CblRequest
+        //         _context.TransferRequests.Add(new TransferRequest
         //         {
-        //             UserId = admin.Id,
-        //             PartyName = "Example Co. LLC",
-        //             Capital = 250000m,
-        //             FoundingDate = DateTime.Today.AddYears(-4),
-        //             LegalForm = "LLC",
-        //             BranchOrAgency = "Main Branch",
-        //             CurrentAccount = "AC-100200",
-        //             AccountOpening = DateTime.Today.AddYears(-3),
-        //             CommercialLicense = "LIC-2025-001",
-        //             ValidatyLicense = DateTime.Today.AddYears(1),
-        //             CommercialRegistration = "REG-12345",
-        //             ValidatyRegister = DateTime.Today.AddMonths(6),
-        //             StatisticalCode = "ST-98765",
-        //             ValidatyCode = DateTime.Today.AddYears(2),
-        //             ChamberNumber = "CH-54321",
-        //             ValidatyChamber = DateTime.Today.AddYears(3),
-        //             TaxNumber = "TAX-112233",
-        //             Office = "HQ",
-        //             LegalRepresentative = "Alice Manager",
-        //             RepresentativeNumber = "REP-2025",
-        //             BirthDate = new DateTime(1980, 1, 1),
-        //             PassportNumber = "P-567890",
-        //             PassportIssuance = new DateTime(2015, 5, 1),
-        //             PassportExpiry = new DateTime(2025, 5, 1),
-        //             Mobile = "+218912345678",
-        //             Address = "123 Corporate Ave",
-        //             PackingDate = DateTime.Today,
-        //             SpecialistName = "Bob Specialist"
+        //             UserId = user.Id,
+        //             CompanyId = user.CompanyId!.Value,
+        //             TransactionCategoryId = cat.Id,
+        //             FromAccount = "ACCT-0001",
+        //             ToAccount = "ACCT-1001",
+        //             Amount = 10000,
+        //             CurrencyId = _context.Currencies.First().Id,
+        //             ServicePackageId = pkg.Id,
+        //             Status = "Pending",
+        //             RequestedAt = DateTime.UtcNow
         //         });
-        //         _context.SaveChanges();
         //     }
 
-        //     if (!_context.CheckBookRequests.Any())
-        //     {
-        //         _context.CheckBookRequests.Add(new CheckBookRequest
-        //         {
-        //             UserId = admin.Id,
-        //             FullName = "John Doe",
-        //             Address = "456 Finance St",
-        //             AccountNumber = "AC-334455",
-        //             PleaseSend = "Mail to HQ",
-        //             Branch = "Downtown",
-        //             Date = DateTime.Today,
-        //             BookContaining = "50 leaves"
-        //         });
-        //         _context.SaveChanges();
-        //     }
-
-        //     if (!_context.CheckRequests.Any())
-        //     {
-        //         var chk = new CheckRequest
-        //         {
-        //             UserId = admin.Id,
-        //             Branch = "Central",
-        //             BranchNum = "C-100",
-        //             Date = DateTime.Today,
-        //             CustomerName = "Mary Customer",
-        //             CardNum = "CARD-998877",
-        //             AccountNum = "AC-112233",
-        //             Beneficiary = "Vendor Ltd."
-        //         };
-        //         chk.LineItems.Add(new CheckRequestLineItem { Dirham = "100", Lyd = "450" });
-        //         chk.LineItems.Add(new CheckRequestLineItem { Dirham = "250", Lyd = "1125" });
-        //         _context.CheckRequests.Add(chk);
-        //         _context.SaveChanges();
-        //     }
-
-        //     if (!_context.RtgsRequests.Any())
-        //     {
-        //         _context.RtgsRequests.Add(new RtgsRequest
-        //         {
-        //             UserId = admin.Id,
-        //             RefNum = DateTime.Now,
-        //             Date = DateTime.Now,
-        //             PaymentType = "Domestic",
-        //             AccountNo = "RTGS-556677",
-        //             ApplicantName = "Sam Sender",
-        //             Address = "789 Payments Blvd",
-        //             BeneficiaryName = "Receiver Co.",
-        //             BeneficiaryAccountNo = "BEN-445566",
-        //             BeneficiaryBank = "OtherBank",
-        //             BranchName = "North Branch",
-        //             Amount = "2000",
-        //             RemittanceInfo = "Invoice #2025",
-        //             Invoice = true,
-        //             Contract = true,
-        //             Claim = false,
-        //             OtherDoc = false
-        //         });
-        //         _context.SaveChanges();
-        //     }
+        //     _context.SaveChanges();
         // }
 
         public static void Initialize(IServiceProvider services)

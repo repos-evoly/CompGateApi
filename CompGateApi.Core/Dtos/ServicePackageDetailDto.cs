@@ -1,28 +1,33 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // CompGateApi.Core.Dtos/ServicePackageDetailDtos.cs
-// ─────────────────────────────────────────────────────────────────────────────
 namespace CompGateApi.Core.Dtos
 {
-    public class ServicePackageDetailDto
+    public class ServicePackageCategoryDto
     {
-        public int Id { get; set; }
-        public int ServicePackageId { get; set; }
         public int TransactionCategoryId { get; set; }
-        public decimal CommissionPct { get; set; }
-        public decimal FeeFixed { get; set; }
+        public string TransactionCategoryName { get; set; } = null!;
+        public bool IsEnabledForPackage { get; set; }
+
+        public decimal B2BTransactionLimit { get; set; }
+        public decimal B2CTransactionLimit { get; set; }
+        public decimal B2BFixedFee { get; set; }
+        public decimal B2CFixedFee { get; set; }
+        public decimal B2BMinPercentage { get; set; }
+        public decimal B2CMinPercentage { get; set; }
+
+        public decimal B2BCommissionPct { get; set; }
+        public decimal B2CCommissionPct { get; set; }
     }
 
-    public class ServicePackageDetailCreateDto
+    public class ServicePackageCategoryUpdateDto
     {
-        public int ServicePackageId { get; set; }
-        public int TransactionCategoryId { get; set; }
-        public decimal CommissionPct { get; set; }
-        public decimal FeeFixed { get; set; }
-    }
-
-    public class ServicePackageDetailUpdateDto
-    {
-        public decimal CommissionPct { get; set; }
-        public decimal FeeFixed { get; set; }
+        public bool IsEnabledForPackage { get; set; }
+        public decimal B2BTransactionLimit { get; set; }
+        public decimal B2CTransactionLimit { get; set; }
+        public decimal B2BFixedFee { get; set; }
+        public decimal B2CFixedFee { get; set; }
+        public decimal B2BMinPercentage { get; set; }
+        public decimal B2CMinPercentage { get; set; }
+        public decimal B2BCommissionPct { get; set; }
+        public decimal B2CCommissionPct { get; set; }
     }
 }

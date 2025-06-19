@@ -288,9 +288,9 @@ namespace CompGateApi.Core.Startup
 
       // Service Packages
       services.AddScoped<IServicePackageRepository, ServicePackageRepository>();
-      services.AddScoped<IServicePackageDetailRepository, ServicePackageDetailRepository>();
+      // services.AddScoped<IServicePackageDetailRepository, ServicePackageDetailRepository>();
       services.AddScoped<ITransactionCategoryRepository, TransactionCategoryRepository>();
-      services.AddScoped<ITransferLimitRepository, TransferLimitRepository>();
+      // services.AddScoped<ITransferLimitRepository, TransferLimitRepository>();
 
 
       // CBL Request
@@ -321,6 +321,8 @@ namespace CompGateApi.Core.Startup
 
       services.AddScoped<ICertifiedBankStatementRequestRepository, CertifiedBankStatementRequestRepository>();
 
+      //economic sector
+      services.AddScoped<IEconomicSectorRepository, EconomicSectorRepository>();
 
       return services;
     }

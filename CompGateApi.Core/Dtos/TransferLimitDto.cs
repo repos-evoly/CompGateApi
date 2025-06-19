@@ -12,6 +12,9 @@ namespace CompGateApi.Core.Dtos
         public string Period { get; set; } = string.Empty;
         public decimal MinAmount { get; set; }
         public decimal MaxAmount { get; set; }
+
+        public string TransactionCategoryName { get; set; } = string.Empty; // new
+        public string CurrencyCode { get; set; } = string.Empty; // new
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }

@@ -1,7 +1,5 @@
-// CompGateApi.Data.Repositories/TransferRequestRepository.cs
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
-using CompGateApi.Data;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +10,8 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+
 
 namespace CompGateApi.Data.Repositories
 {
@@ -20,22 +20,41 @@ namespace CompGateApi.Data.Repositories
         private readonly CompGateApiDbContext _db;
         private readonly IHttpClientFactory _httpFactory;
 
-        public TransferRequestRepository(CompGateApiDbContext db, IHttpClientFactory httpFactory)
+        private readonly ILogger<TransferRequestRepository> _log;
+
+
+        public TransferRequestRepository(
+            CompGateApiDbContext db,
+            IHttpClientFactory httpFactory,
+            ILogger<TransferRequestRepository> log)
         {
             _db = db;
             _httpFactory = httpFactory;
+            _log = log;
         }
 
-        // ── USER ──────────────────────────────────────────────────────────────────
+        // ── COMPANY (“my transfers”) ────────────────────────────────────────
 
-        public async Task<List<TransferRequest>> GetAllByCompanyAsync(
-       int companyId, string? searchTerm, int page, int limit)
+        public async Task<int> GetCountByCompanyAsync(int companyId, string? searchTerm)
         {
             var q = _db.TransferRequests
-                .Include(t => t.TransactionCategory)
-                .Include(t => t.Currency)
-                .Include(t => t.ServicePackage)
-                .Where(t => t.CompanyId == companyId);
+                       .Where(t => t.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                q = q.Where(t =>
+                    t.FromAccount.Contains(searchTerm!) ||
+                    t.ToAccount.Contains(searchTerm!) ||
+                    t.Status.Contains(searchTerm!));
+
+            return await q.CountAsync();
+        }
+
+        public async Task<List<TransferRequest>> GetAllByCompanyAsync(
+            int companyId, string? searchTerm, int page, int limit)
+        {
+            var q = _db.TransferRequests
+                       .Include(t => t.TransactionCategory)
+                       .Where(t => t.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = q.Where(t =>
@@ -51,77 +70,75 @@ namespace CompGateApi.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<int> GetCountByCompanyAsync(
-            int companyId, string? searchTerm)
+        // ── ADMIN ───────────────────────────────────────────────────────────
+
+        public async Task<int> GetCountAsync(string? searchTerm)
         {
-            var q = _db.TransferRequests.Where(t => t.CompanyId == companyId);
+            var q = _db.TransferRequests.AsQueryable();
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = q.Where(t =>
                     t.FromAccount.Contains(searchTerm!) ||
                     t.ToAccount.Contains(searchTerm!) ||
                     t.Status.Contains(searchTerm!));
+
             return await q.CountAsync();
         }
-        public async Task<List<TransferRequest>> GetAllByUserAsync(
-            int userId, string? searchTerm, int page, int limit)
+
+        public async Task<List<TransferRequest>> GetAllAsync(
+            string? searchTerm, int page, int limit)
         {
             var q = _db.TransferRequests
-                .Include(t => t.TransactionCategory)
-                .Include(t => t.Currency)
-                .Include(t => t.ServicePackage)
-                .Where(t => t.UserId == userId);
+                       .Include(t => t.TransactionCategory);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
-                q = q.Where(t =>
+                q = (Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<TransferRequest, TransactionCategory>)q.Where(t =>
                     t.FromAccount.Contains(searchTerm!) ||
                     t.ToAccount.Contains(searchTerm!) ||
                     t.Status.Contains(searchTerm!));
 
             return await q
                 .OrderByDescending(t => t.RequestedAt)
-                .Skip((page - 1) * limit).Take(limit)
-                .AsNoTracking().ToListAsync();
-        }
-
-        public async Task<int> GetCountByUserAsync(int userId, string? searchTerm)
-        {
-            var q = _db.TransferRequests.Where(t => t.UserId == userId);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-                q = q.Where(t =>
-                    t.FromAccount.Contains(searchTerm!) ||
-                    t.ToAccount.Contains(searchTerm!) ||
-                    t.Status.Contains(searchTerm!));
-            return await q.CountAsync();
-        }
-
-        public async Task<TransferRequest?> GetByIdAsync(int id) =>
-            await _db.TransferRequests
-                .Include(t => t.TransactionCategory)
-                .Include(t => t.Currency)
-                .Include(t => t.ServicePackage)
+                .Skip((page - 1) * limit)
+                .Take(limit)
                 .AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == id);
+                .ToListAsync();
+        }
 
-        public async Task CreateAsync(TransferRequest e)
+        // ── SINGLE LOOKUP ───────────────────────────────────────────────────
+
+        public async Task<TransferRequest?> GetByIdAsync(int id)
+            => await _db.TransferRequests
+                        .Include(t => t.TransactionCategory)
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(t => t.Id == id);
+
+        // ── CREATE / UPDATE ─────────────────────────────────────────────────
+
+        public async Task CreateAsync(TransferRequest tr)
         {
-            _db.TransferRequests.Add(e);
+            _db.TransferRequests.Add(tr);
             await _db.SaveChangesAsync();
         }
 
-        // ── EXTERNAL CALLS ────────────────────────────────────────────────────────
+        public async Task UpdateAsync(TransferRequest tr)
+        {
+            _db.TransferRequests.Update(tr);
+            await _db.SaveChangesAsync();
+        }
+
+        // ── EXTERNAL ACCOUNT LOOKUP ─────────────────────────────────────────
 
         public async Task<List<AccountDto>> GetAccountsAsync(string codeOrAccount)
         {
-            // 1) Derive the 6-digit customer code
             string code = codeOrAccount.Length == 6
                 ? codeOrAccount
                 : codeOrAccount.Length == 13
                     ? codeOrAccount.Substring(4, 6)
                     : throw new ArgumentException("Must be 6 or 13 digits", nameof(codeOrAccount));
 
-            // 2) Build & call the bank API
             var client = _httpFactory.CreateClient("BankApi");
-            var payload = new
+
+            var accountsTask = client.PostAsJsonAsync("/api/mobile/accounts", new
             {
                 Header = new
                 {
@@ -132,31 +149,67 @@ namespace CompGateApi.Data.Repositories
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
                 },
-                Details = new Dictionary<string, string>
-        {
-            { "@CID",   code },
+                Details = new Dictionary<string, string> {
+            { "@CID", code },
             { "@GETAVB","Y" }
         }
-            };
+            });
 
-            var resp = await client.PostAsJsonAsync("/api/mobile/accounts", payload);
-            if (!resp.IsSuccessStatusCode)
-                return new List<AccountDto>();
-
-            var bankDto = await resp.Content.ReadFromJsonAsync<ExternalAccountsResponseDto>();
-            if (bankDto?.Details?.Accounts == null)
-                return new List<AccountDto>();
-
-            // 3) Reconstruct each full 13-digit account string
-            return bankDto.Details.Accounts
-                .Select(a => new AccountDto
+            var stcodTask = client.PostAsJsonAsync("/api/mobile/GetCustomerInfo", new
+            {
+                Header = new
                 {
-                    AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
-                    AvailableBalance = a.YBCD01CABL,
-                    DebitBalance = a.YBCD01LDBL
-                })
-                .ToList();
+                    system = "MOBILE",
+                    referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
+                    userName = "TEDMOB",
+                    customerNumber = code,
+                    requestTime = DateTime.UtcNow.ToString("o"),
+                    language = "AR"
+                },
+                Details = new Dictionary<string, string> {
+            { "@CID", code }
         }
+            });
+
+            await Task.WhenAll(accountsTask, stcodTask);
+
+            var accountsResp = accountsTask.Result;
+            var stcodResp = stcodTask.Result;
+
+            if (!accountsResp.IsSuccessStatusCode) return new();
+
+            var bankDto = await accountsResp.Content.ReadFromJsonAsync<ExternalAccountsResponseDto>();
+            if (bankDto?.Details?.Accounts == null) return new();
+
+            string? transferType = null;
+            if (stcodResp.IsSuccessStatusCode)
+            {
+                using var json = JsonDocument.Parse(await stcodResp.Content.ReadAsStringAsync());
+                if (json.RootElement.TryGetProperty("Details", out var details) &&
+                    details.TryGetProperty("CustInfo", out var custArr) &&
+                    custArr.GetArrayLength() > 0)
+                {
+                    var stcod = custArr[0].GetProperty("STCOD").GetString()?.Trim();
+                    transferType = stcod switch
+                    {
+                        "CD" => "B2B",
+                        "EA" => "B2C",
+                        _ => null
+                    };
+                }
+            }
+
+            return bankDto.Details.Accounts.Select(a => new AccountDto
+            {
+                AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
+                AvailableBalance = a.YBCD01CABL,
+                DebitBalance = a.YBCD01LDBL,
+                TransferType = transferType
+            }).ToList();
+        }
+
+        // ── EXTERNAL STATEMENT ───────────────────────────────────────────────
+
         public async Task<List<StatementEntryDto>> GetStatementAsync(string account, DateTime from, DateTime to)
         {
             var client = _httpFactory.CreateClient("BankApi");
@@ -171,8 +224,7 @@ namespace CompGateApi.Data.Repositories
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
                 },
-                Details = new Dictionary<string, string>
-                {
+                Details = new Dictionary<string, string> {
                     { "@ACC",   account },
                     { "@BYDTE", "Y" },
                     { "@FDATE", from.ToString("yyyyMMdd") },
@@ -185,31 +237,18 @@ namespace CompGateApi.Data.Repositories
             var resp = await client.PostAsJsonAsync("/api/mobile/transactions", payload);
             resp.EnsureSuccessStatusCode();
 
-            var json = await resp.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            if (!doc.RootElement.TryGetProperty("Details", out var d) ||
+                d.ValueKind != JsonValueKind.Object ||
+                !d.TryGetProperty("Transactions", out var txns) ||
+                txns.ValueKind != JsonValueKind.Array)
+                return new();
 
-            // 1) If no "Details" object, return empty
-            if (!root.TryGetProperty("Details", out var detailsElem)
-                || detailsElem.ValueKind != JsonValueKind.Object)
-            {
-                return new List<StatementEntryDto>();
-            }
-
-            // 2) If "Transactions" is missing or not an array, return empty
-            if (!detailsElem.TryGetProperty("Transactions", out var txnsElem)
-                || txnsElem.ValueKind != JsonValueKind.Array)
-            {
-                return new List<StatementEntryDto>();
-            }
-
-            // 3) Parse each entry
             var list = new List<StatementEntryDto>();
-            foreach (var el in txnsElem.EnumerateArray())
+            foreach (var el in txns.EnumerateArray())
             {
-                // guard against missing fields
-                var date = el.GetProperty("YBCD04POD").GetString()?.Trim() ?? string.Empty;
-                var drcr = el.GetProperty("YBCD04DRCR").GetString() ?? string.Empty;
+                var date = el.GetProperty("YBCD04POD").GetString()?.Trim() ?? "";
+                var drcr = el.GetProperty("YBCD04DRCR").GetString() ?? "";
                 var amt = el.GetProperty("YBCD04AMA").GetDecimal();
 
                 var narrs = new List<string>();
@@ -220,7 +259,7 @@ namespace CompGateApi.Data.Repositories
 
                 list.Add(new StatementEntryDto
                 {
-                    PostingDate = date,
+                    PostingDate = DateTime.TryParse(date, out var parsedDate) ? parsedDate : default,
                     DrCr = drcr,
                     Amount = amt,
                     Narratives = narrs
@@ -230,45 +269,74 @@ namespace CompGateApi.Data.Repositories
             return list;
         }
 
-        // ── ADMIN ─────────────────────────────────────────────────────────────────
-
-        public async Task<List<TransferRequest>> GetAllAsync(
-            string? searchTerm, int page, int limit)
+        public async Task<string?> GetStCodeByAccount(string account)
         {
-            var q = _db.TransferRequests
-                .Include(t => t.TransactionCategory)
-                .Include(t => t.Currency)
-                .Include(t => t.ServicePackage);
+            try
+            {
+                var client = _httpFactory.CreateClient("BankApi");
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-                q = (Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<TransferRequest, ServicePackage>)q.Where(t =>
-                    t.FromAccount.Contains(searchTerm!) ||
-                    t.ToAccount.Contains(searchTerm!) ||
-                    t.Status.Contains(searchTerm!));
+                var cid = account.Substring(4, 6);
 
-            return await q
-                .OrderByDescending(t => t.RequestedAt)
-                .Skip((page - 1) * limit).Take(limit)
-                .AsNoTracking().ToListAsync();
+                var payload = new
+                {
+                    Header = new
+                    {
+                        system = "MOBILE",
+                        referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
+                        userName = "TEDMOB",
+                        customerNumber = account,
+                        requestTime = DateTime.UtcNow.ToString("o"),
+                        language = "AR"
+                    },
+
+                    Details = new Dictionary<string, string>
+            {
+                { "@CID", cid }
+            }
+                };
+
+                var response = await client.PostAsJsonAsync("/api/mobile/GetCustomerInfo", payload);
+                var raw = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _log.LogError("GetCustomerInfo failed for account {Account} with status {Status}", account, response.StatusCode);
+                    return null;
+                }
+
+                using var doc = JsonDocument.Parse(raw);
+                if (!doc.RootElement.TryGetProperty("Details", out var details))
+                {
+                    _log.LogError("Missing 'Details' in response for account {Account}. Raw: {Raw}", account, raw);
+                    return null;
+                }
+
+                if (!details.TryGetProperty("CustInfo", out var custArr) || custArr.ValueKind != JsonValueKind.Array || custArr.GetArrayLength() == 0)
+                {
+                    _log.LogError("Missing or empty 'CustInfo' for account {Account}. Raw: {Raw}", account, raw);
+                    return null;
+                }
+
+                var stcod = custArr[0].GetProperty("STCOD").GetString();
+                if (string.IsNullOrWhiteSpace(stcod))
+                {
+                    _log.LogWarning("STCOD is empty or null for account: {Account}", account);
+                    return null;
+                }
+
+                _log.LogInformation("Fetched STCOD={Stcod} for account {Account}", stcod, account);
+                return stcod;
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to fetch STCOD for account {Account}", account);
+                return null;
+            }
         }
 
-        public async Task<int> GetCountAsync(string? searchTerm) =>
-            await _db.TransferRequests
-                     .Where(t =>
-                        string.IsNullOrWhiteSpace(searchTerm) ||
-                        t.FromAccount.Contains(searchTerm!) ||
-                        t.ToAccount.Contains(searchTerm!) ||
-                        t.Status.Contains(searchTerm!))
-                     .CountAsync();
 
-        public async Task UpdateAsync(TransferRequest e)
-        {
-            _db.TransferRequests.Update(e);
-            await _db.SaveChangesAsync();
-        }
 
-        // ── HELPERS: external DTOs ────────────────────────────────────────────────
-
+        // ── helper classes for external JSON ────────────────────────────────
         private class ExternalAccountsResponseDto
         {
             public object Header { get; set; } = null!;
@@ -283,7 +351,6 @@ namespace CompGateApi.Data.Repositories
             public string? YBCD01AB { get; set; }
             public string? YBCD01AN { get; set; }
             public string? YBCD01AS { get; set; }
-
             public decimal YBCD01CABL { get; set; }
             public decimal YBCD01LDBL { get; set; }
         }

@@ -70,7 +70,9 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    DailyLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MonthlyLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -85,8 +87,8 @@ namespace CompGateApi.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    TopAtmRefundLimit = table.Column<int>(type: "int", nullable: false),
-                    TopReasonLimit = table.Column<int>(type: "int", nullable: false),
+                    CommissionAccount = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    GlobalLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -102,7 +104,6 @@ namespace CompGateApi.Data.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(250)", maxLength: 250, nullable: true),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -148,8 +149,8 @@ namespace CompGateApi.Data.Migrations
                     Code = table.Column<string>(type: "nvarchar(6)", maxLength: 6, nullable: false),
                     Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    KycStatus = table.Column<int>(type: "int", nullable: false),
-                    KycStatusMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RegistrationStatus = table.Column<int>(type: "int", nullable: false),
+                    RegistrationStatusMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     KycRequestedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     KycReviewedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     KycBranchId = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
@@ -179,8 +180,17 @@ namespace CompGateApi.Data.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ServicePackageId = table.Column<int>(type: "int", nullable: false),
                     TransactionCategoryId = table.Column<int>(type: "int", nullable: false),
-                    CommissionPct = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
-                    FeeFixed = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    IsEnabledForPackage = table.Column<bool>(type: "bit", nullable: false),
+                    B2BTransactionLimit = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    B2CTransactionLimit = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    B2BFixedFee = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    B2CFixedFee = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    B2BMinPercentage = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    B2CMinPercentage = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    IsB2BCommissionEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    B2BCommissionPct = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
+                    IsB2CCommissionEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    B2CCommissionPct = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -195,44 +205,6 @@ namespace CompGateApi.Data.Migrations
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_ServicePackageDetails_TransactionCategories_TransactionCategoryId",
-                        column: x => x.TransactionCategoryId,
-                        principalTable: "TransactionCategories",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TransferLimits",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    ServicePackageId = table.Column<int>(type: "int", nullable: false),
-                    TransactionCategoryId = table.Column<int>(type: "int", nullable: false),
-                    CurrencyId = table.Column<int>(type: "int", nullable: false),
-                    Period = table.Column<int>(type: "int", nullable: false),
-                    MinAmount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
-                    MaxAmount = table.Column<decimal>(type: "decimal(18,4)", precision: 18, scale: 4, nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
-                    UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TransferLimits", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TransferLimits_Currencies_CurrencyId",
-                        column: x => x.CurrencyId,
-                        principalTable: "Currencies",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_TransferLimits_ServicePackages_ServicePackageId",
-                        column: x => x.ServicePackageId,
-                        principalTable: "ServicePackages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_TransferLimits_TransactionCategories_TransactionCategoryId",
                         column: x => x.TransactionCategoryId,
                         principalTable: "TransactionCategories",
                         principalColumn: "Id",
@@ -304,8 +276,7 @@ namespace CompGateApi.Data.Migrations
                         name: "FK_Users_ServicePackages_ServicePackageId",
                         column: x => x.ServicePackageId,
                         principalTable: "ServicePackages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -670,6 +641,8 @@ namespace CompGateApi.Data.Migrations
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CommissionAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    CommissionOnRecipient = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false)
                 },
@@ -1024,21 +997,6 @@ namespace CompGateApi.Data.Migrations
                 column: "TransactionCategoryId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TransferLimits_CurrencyId",
-                table: "TransferLimits",
-                column: "CurrencyId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TransferLimits_ServicePackageId",
-                table: "TransferLimits",
-                column: "ServicePackageId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TransferLimits_TransactionCategoryId",
-                table: "TransferLimits",
-                column: "TransactionCategoryId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_TransferRequests_CompanyId",
                 table: "TransferRequests",
                 column: "CompanyId");
@@ -1154,9 +1112,6 @@ namespace CompGateApi.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "Settings");
-
-            migrationBuilder.DropTable(
-                name: "TransferLimits");
 
             migrationBuilder.DropTable(
                 name: "TransferRequests");

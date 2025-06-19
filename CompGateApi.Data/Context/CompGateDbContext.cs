@@ -33,7 +33,6 @@ namespace CompGateApi.Data.Context
               public DbSet<ServicePackage> ServicePackages => Set<ServicePackage>();
               public DbSet<ServicePackageDetail> ServicePackageDetails => Set<ServicePackageDetail>();
               public DbSet<TransactionCategory> TransactionCategories => Set<TransactionCategory>();
-              public DbSet<TransferLimit> TransferLimits => Set<TransferLimit>();
 
               // ── REQUESTS ───────────────────────────────────────────────────────────
               public DbSet<TransferRequest> TransferRequests => Set<TransferRequest>();
@@ -50,6 +49,9 @@ namespace CompGateApi.Data.Context
               public DbSet<CertifiedBankStatementRequest> CertifiedBankStatementRequests => Set<CertifiedBankStatementRequest>();
               public DbSet<Attachment> Attachments => Set<Attachment>();
 
+              public DbSet<EconomicSector> EconomicSectors => Set<EconomicSector>();
+
+
               protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
               {
                      if (!optionsBuilder.IsConfigured)
@@ -65,69 +67,68 @@ namespace CompGateApi.Data.Context
 
                      // ── COMPANY ────────────────────────────────────────────────────────────
                      builder.Entity<Company>(b =>
-                     {
-                            b.ToTable("Companies");
-                            b.HasKey(c => c.Id);
-                            b.Property(c => c.Code).HasMaxLength(6).IsRequired();
-                            b.Property(c => c.Name).HasMaxLength(150).IsRequired();
-                            b.Property(c => c.IsActive);
+            {
+                   b.ToTable("Companies");
+                   b.HasKey(c => c.Id);
+                   b.Property(c => c.Code).HasMaxLength(6).IsRequired();
+                   b.Property(c => c.Name).HasMaxLength(150).IsRequired();
+                   b.Property(c => c.IsActive);
 
-                            b.HasMany(c => c.Users)
-                            .WithOne(u => u.Company)
-                            .HasForeignKey(u => u.CompanyId)
-                            .OnDelete(DeleteBehavior.Restrict);
+                   b.HasMany(c => c.Users)
+                    .WithOne(u => u.Company)
+                    .HasForeignKey(u => u.CompanyId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasOne(c => c.ServicePackage)
-                            .WithMany(p => p.Companies)
-                            .HasForeignKey(c => c.ServicePackageId)
-                            .OnDelete(DeleteBehavior.Restrict);
+                   b.HasOne(c => c.ServicePackage)
+                    .WithMany(p => p.Companies)
+                    .HasForeignKey(c => c.ServicePackageId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasMany(c => c.TransferRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.VisaRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.ForeignTransfers)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.CheckRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.CheckBookRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.CblRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.RtgsRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasMany(c => c.CreditFacilitiesRequests)
-                            .WithOne(r => r.Company)
-                            .HasForeignKey(r => r.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-
-                            // link Company → Certified bank statements
-                            b.HasMany(c => c.CertifiedBankStatementRequests)
+                   b.HasMany(c => c.TransferRequests)
                     .WithOne(r => r.Company)
                     .HasForeignKey(r => r.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
-                     });
+
+                   b.HasMany(c => c.VisaRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.ForeignTransfers)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.CheckRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.CheckBookRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.CblRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.RtgsRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.CreditFacilitiesRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.CertifiedBankStatementRequests)
+                    .WithOne(r => r.Company)
+                    .HasForeignKey(r => r.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
 
                      // ── USER & ROLE ─────────────────────────────────────────────────────
                      builder.Entity<User>()
@@ -144,29 +145,19 @@ namespace CompGateApi.Data.Context
                             .WithMany(c => c.Users)
                             .HasForeignKey(u => u.CompanyId)
                             .OnDelete(DeleteBehavior.Restrict)
-                            .IsRequired(false);     // mark it OPTIONAL
-
-                     builder.Entity<User>()
-                            .HasOne(u => u.ServicePackage)
-                            .WithMany(p => p.Users)
-                            .HasForeignKey(u => u.ServicePackageId)
-                            .OnDelete(DeleteBehavior.Restrict)
                             .IsRequired(false);
 
-                     //Attachments
+                     // ── ATTACHMENTS ─────────────────────────────────────────────────────
                      builder.Entity<Attachment>(b =>
-                            {
-                                   b.ToTable("Attachments");
-                                   b.HasKey(a => a.Id);
+                     {
+                            b.ToTable("Attachments");
+                            b.HasKey(a => a.Id);
 
-                                   b.HasOne(a => a.Company)
-                                   .WithMany(c => c.Attachments)
-                                   .HasForeignKey(a => a.CompanyId)
-                                   .OnDelete(DeleteBehavior.Cascade);
-                            });
-
-
-
+                            b.HasOne(a => a.Company)
+                    .WithMany(c => c.Attachments)
+                    .HasForeignKey(a => a.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                     });
 
                      // ── AUDIT LOG ─────────────────────────────────────────────────────────
                      builder.Entity<AuditLog>()
@@ -220,78 +211,123 @@ namespace CompGateApi.Data.Context
                             .Property(c => c.Rate)
                             .HasPrecision(18, 6);
 
-                     // ── SERVICE PACKAGE DETAILS ────────────────────────────────────────────
-                     builder.Entity<ServicePackageDetail>()
-                            .HasOne(d => d.ServicePackage)
-                            .WithMany(p => p.ServicePackageDetails)
+                     // ── SERVICE PACKAGE & DETAILS ────────────────────────────────────────────
+                     builder.Entity<ServicePackage>(b =>
+                     {
+                            b.ToTable("ServicePackages");
+                            b.HasKey(p => p.Id);
+                            b.Property(p => p.Name).HasMaxLength(100).IsRequired();
+                            b.Property(p => p.Description);
+                            b.Property(p => p.DailyLimit).HasPrecision(18, 2).IsRequired();
+                            b.Property(p => p.MonthlyLimit).HasPrecision(18, 2).IsRequired();
+
+                            b.HasMany(p => p.Details)
+                    .WithOne(d => d.ServicePackage)
+                    .HasForeignKey(d => d.ServicePackageId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     builder.Entity<TransactionCategory>(b =>
+                     {
+                            b.ToTable("TransactionCategories");
+                            b.HasKey(c => c.Id);
+                            b.Property(c => c.Name).HasMaxLength(100).IsRequired();
+
+
+                            b.HasMany(c => c.PackageDetails)
+                    .WithOne(d => d.TransactionCategory)
+                    .HasForeignKey(d => d.TransactionCategoryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     builder.Entity<ServicePackageDetail>(b =>
+                     {
+                            b.ToTable("ServicePackageDetails");
+                            b.HasKey(d => d.Id);
+
+                            b.Property(d => d.IsEnabledForPackage)
+                            .IsRequired();
+
+                            b.Property(d => d.B2BTransactionLimit)
+                            .HasPrecision(18, 4).IsRequired();
+                            b.Property(d => d.B2CTransactionLimit)
+                            .HasPrecision(18, 4).IsRequired();
+
+                            b.Property(d => d.B2BFixedFee)
+                            .HasPrecision(18, 4).IsRequired();
+                            b.Property(d => d.B2CFixedFee)
+                            .HasPrecision(18, 4).IsRequired();
+
+                            b.Property(d => d.B2BMinPercentage)
+                            .HasPrecision(18, 4).IsRequired();
+                            b.Property(d => d.B2CMinPercentage)
+                            .HasPrecision(18, 4).IsRequired();
+
+                            b.HasOne(d => d.ServicePackage)
+                            .WithMany(p => p.Details)
                             .HasForeignKey(d => d.ServicePackageId)
                             .OnDelete(DeleteBehavior.Cascade);
 
-
-                     builder.Entity<ServicePackageDetail>()
-                            .HasOne(d => d.TransactionCategory)
-                            .WithMany(c => c.ServicePackageDetails)
+                            b.HasOne(d => d.TransactionCategory)
+                            .WithMany(c => c.PackageDetails)
                             .HasForeignKey(d => d.TransactionCategoryId)
                             .OnDelete(DeleteBehavior.Cascade);
-                     builder.Entity<ServicePackageDetail>()
-                            .Property(d => d.CommissionPct)
-                            .HasPrecision(18, 4);
-                     builder.Entity<ServicePackageDetail>()
-                            .Property(d => d.FeeFixed)
-                            .HasPrecision(18, 4);
+                     });
 
-                     // ── TRANSFER LIMITS ─────────────────────────────────────────────────────
-                     builder.Entity<TransferLimit>()
-                            .HasOne(l => l.ServicePackage)
-                            .WithMany(p => p.TransferLimits)
-                            .HasForeignKey(l => l.ServicePackageId)
-                            .OnDelete(DeleteBehavior.Cascade);
-                     builder.Entity<TransferLimit>()
-                            .HasOne(l => l.TransactionCategory)
-                            .WithMany(c => c.TransferLimits)
-                            .HasForeignKey(l => l.TransactionCategoryId)
-                            .OnDelete(DeleteBehavior.Cascade);
-                     builder.Entity<TransferLimit>()
-                            .HasOne(l => l.Currency)
-                            .WithMany()
-                            .HasForeignKey(l => l.CurrencyId)
-                            .OnDelete(DeleteBehavior.Restrict);
-                     builder.Entity<TransferLimit>()
-                            .Property(l => l.MinAmount)
-                            .HasPrecision(18, 4);
-                     builder.Entity<TransferLimit>()
-                            .Property(l => l.MaxAmount)
-                            .HasPrecision(18, 4);
+                     // ── ECONOMIC SECTORS ──────────────────────────────────────────────────────
+                     builder.Entity<EconomicSector>(b =>
+                     {
+                            b.ToTable("EconomicSectors");
+                            b.HasKey(es => es.Id);
+                            b.Property(es => es.Name).HasMaxLength(100).IsRequired();
+                            b.Property(es => es.Description).HasMaxLength(500);
+                     });
+
+
+
+                     // ── SETTINGS ─────────────────────────────────────────────────────
+                     builder.Entity<Settings>(b =>
+                     {
+                            b.ToTable("Settings");
+                            b.HasKey(s => s.Id);
+                            b.Property(s => s.GlobalLimit).HasPrecision(18, 2).IsRequired();
+                     });
 
                      // ── TRANSFER REQUESTS ──────────────────────────────────────────────────
-                     builder.Entity<TransferRequest>()
-                            .HasOne(tr => tr.User)
-                            .WithMany(u => u.TransferRequests)
-                            .HasForeignKey(tr => tr.UserId)
-                            .OnDelete(DeleteBehavior.Cascade);
-                     builder.Entity<TransferRequest>()
-                            .HasOne(tr => tr.Company)
-                            .WithMany(c => c.TransferRequests)
-                            .HasForeignKey(tr => tr.CompanyId)
-                            .OnDelete(DeleteBehavior.Cascade);
-                     builder.Entity<TransferRequest>()
-                            .HasOne(tr => tr.Currency)
-                            .WithMany()
-                            .HasForeignKey(tr => tr.CurrencyId)
-                            .OnDelete(DeleteBehavior.Restrict);
-                     builder.Entity<TransferRequest>()
-                            .HasOne(tr => tr.ServicePackage)
-                            .WithMany()
-                            .HasForeignKey(tr => tr.ServicePackageId)
-                            .OnDelete(DeleteBehavior.Restrict);
-                     builder.Entity<TransferRequest>()
-                            .HasOne(tr => tr.TransactionCategory)
-                            .WithMany()
-                            .HasForeignKey(tr => tr.TransactionCategoryId)
-                            .OnDelete(DeleteBehavior.Restrict);
-                     builder.Entity<TransferRequest>()
-                            .Property(tr => tr.Amount)
-                            .HasPrecision(18, 4);
+                     builder.Entity<TransferRequest>(b =>
+                     {
+                            b.HasOne(tr => tr.User)
+                    .WithMany(u => u.TransferRequests)
+                    .HasForeignKey(tr => tr.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(tr => tr.Company)
+                    .WithMany(c => c.TransferRequests)
+                    .HasForeignKey(tr => tr.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(tr => tr.Currency)
+                    .WithMany()
+                    .HasForeignKey(tr => tr.CurrencyId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(tr => tr.ServicePackage)
+                    .WithMany()
+                    .HasForeignKey(tr => tr.ServicePackageId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(tr => tr.TransactionCategory)
+                    .WithMany()
+                    .HasForeignKey(tr => tr.TransactionCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                            b.Property(tr => tr.Amount).HasPrecision(18, 4);
+
+                            b.HasOne(tr => tr.EconomicSector)
+                                     .WithMany(es => es.Transfers)
+                                     .HasForeignKey(tr => tr.EconomicSectorId)
+                                     .OnDelete(DeleteBehavior.Restrict); // or .SetNull if desired
+                     });
 
                      // ── VISA REQUESTS ─────────────────────────────────────────────────────
                      builder.Entity<VisaRequest>(b =>

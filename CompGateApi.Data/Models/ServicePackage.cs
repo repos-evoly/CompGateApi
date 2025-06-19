@@ -1,14 +1,9 @@
-// CompGateApi.Data.Models/ServicePackage.cs
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CompGateApi.Data.Models
 {
-    /// <summary>
-    /// A named bundle of features & limits (e.g. Inquiry, Standard, Premium).
-    /// Users subscribe to one package.
-    /// </summary>
     [Table("ServicePackages")]
     public class ServicePackage : Auditable
     {
@@ -18,25 +13,31 @@ namespace CompGateApi.Data.Models
         [Required, MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        [MaxLength(250)]
-        public string? Description { get; set; }
+        public string Description { get; set; } = string.Empty;
+
+        
 
         /// <summary>
-        /// Which transfer‐types this package allows + their commission/fee.
+        /// Cap per day (all categories combined)
         /// </summary>
-        public ICollection<ServicePackageDetail> ServicePackageDetails { get; set; }
+        [Required]
+        public decimal DailyLimit { get; set; }
+
+        /// <summary>
+        /// Cap per month (all categories combined)
+        /// </summary>
+        [Required]
+        public decimal MonthlyLimit { get; set; }
+
+        /// <summary>
+        /// Per-category details: limits, fees, enable flags
+        /// </summary>
+        public ICollection<ServicePackageDetail> Details { get; set; }
             = new List<ServicePackageDetail>();
 
         /// <summary>
-        /// The per‐period limits for each transfer‐type & currency for this package.
+        /// Companies assigned this package
         /// </summary>
-        public ICollection<TransferLimit> TransferLimits { get; set; }
-            = new List<TransferLimit>();
-
-        public ICollection<Company> Companies { get; set; }
-            = new List<Company>();
-
-        public ICollection<User> Users { get; set; }
-             = new List<User>();
+        public ICollection<Company> Companies { get; set; } = new List<Company>();
     }
 }

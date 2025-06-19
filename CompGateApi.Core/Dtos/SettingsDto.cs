@@ -6,6 +6,8 @@ namespace CompGateApi.Core.Dtos
 
         public string CommissionAccount { get; set; } = string.Empty;
 
+        public decimal GlobalLimit { get; set; }
+
 
     }
 
@@ -15,5 +17,7 @@ namespace CompGateApi.Core.Dtos
 
 
         public string? CommissionAccount { get; set; }
+
+        public decimal? GlobalLimit { get; set; }
     }
 }

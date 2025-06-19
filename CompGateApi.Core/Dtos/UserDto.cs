@@ -75,16 +75,17 @@ namespace CompGateApi.Core.Dtos
         public RoleDto Role { get; set; }
         public int RoleId { get; set; }
 
-        public int AreaId { get; set; }  // keep if used
         public bool IsTwoFactorEnabled { get; set; }
         public string? PasswordResetToken { get; set; }
         public List<string> Permissions { get; set; } = new();  // existing
+        public List<string> EnabledTransactionCategories { get; set; } = new();  // existing
+
         public List<string> Accounts { get; set; } = new();  // new
         public int ServicePackageId { get; set; }
         public bool IsCompanyAdmin { get; set; }
         public RegistrationStatus CompanyStatus { get; set; }
         public string? CompanyStatusMessage { get; set; }
-        public int CompanyServicePackageId { get; set; }
+        //  public int CompanyServicePackageId { get; set; }
     }
 
     public class BasicUserDto

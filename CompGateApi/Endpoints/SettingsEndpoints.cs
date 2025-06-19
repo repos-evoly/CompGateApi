@@ -12,7 +12,7 @@ namespace CompGateApi.Endpoints
     {
         public void RegisterEndpoints(WebApplication app)
         {
-            var settings = app.MapGroup("/api/settings").RequireAuthorization("requireAuthUser");
+            var settings = app.MapGroup("/api/settings").RequireAuthorization("requireAdminUser");
 
             settings.MapGet("/", Get)
                 .WithName("GetSettings")
@@ -42,6 +42,10 @@ namespace CompGateApi.Endpoints
             // Only update the fields that are provided
             if (!string.IsNullOrEmpty(settingsDto.CommissionAccount))
                 settings.CommissionAccount = settingsDto.CommissionAccount;
+
+            // only update global limit if provided
+            if (settingsDto.GlobalLimit.HasValue)
+                settings.GlobalLimit = settingsDto.GlobalLimit.Value;
 
             settingsRepository.Update(settings);
             await settingsRepository.SaveAsync();

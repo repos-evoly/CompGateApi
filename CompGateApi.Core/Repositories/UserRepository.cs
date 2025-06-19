@@ -203,6 +203,7 @@ namespace CompGateApi.Core.Repositories
                         IsGlobal = user.Role.IsGlobal
                     },
                     RoleId = user.Role?.Id ?? 0,
+                    ServicePackageId = user.Company?.ServicePackageId ?? 0,
                     IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                     PasswordResetToken = authUser?.PasswordResetToken,
                     Permissions = (await GetUserPermissions(user.Id))
@@ -239,11 +240,11 @@ namespace CompGateApi.Core.Repositories
         }
 
         public async Task<int> GetUsersCountAsync(
-  string? searchTerm,
-  string? searchBy,
-  bool? hasCompany,
-  int? roleId
-)
+            string? searchTerm,
+            string? searchBy,
+            bool? hasCompany,
+            int? roleId
+            )
         {
             // Start from Users (no need to Include navigation here since we're only counting)
             IQueryable<User> query = _context.Users;
@@ -325,7 +326,7 @@ namespace CompGateApi.Core.Repositories
                 Phone = user.Phone,
                 CompanyId = user.CompanyId,
                 CompanyCode = user.Company?.Code,
-                IsCompanyAdmin = user.IsCompanyAdmin,  
+                IsCompanyAdmin = user.IsCompanyAdmin,
                 Role = new RoleDto
                 {
                     Id = user.Role.Id,
@@ -335,7 +336,7 @@ namespace CompGateApi.Core.Repositories
                     IsGlobal = user.Role.IsGlobal
                 },
                 RoleId = user.Role?.Id ?? 0,
-
+                ServicePackageId = user.Company?.ServicePackageId ?? 0, // default to 0 if not set
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                 PasswordResetToken = authUser?.PasswordResetToken,
                 Permissions = userPermissionNames
@@ -398,6 +399,17 @@ namespace CompGateApi.Core.Repositories
                 }
             }
 
+            var enabledTransactionCategories = new List<string>();
+            if (user.Company?.ServicePackageId is int pkgId)
+            {
+                enabledTransactionCategories = await _context.ServicePackageDetails
+                    .Where(d => d.ServicePackageId == pkgId && d.IsEnabledForPackage)
+                    .Include(d => d.TransactionCategory)
+                    .Select(d => d.TransactionCategory.Name)
+                    .Distinct()
+                    .ToListAsync();
+            }
+
             // e) build result
             return new UserDetailsDto
             {
@@ -418,12 +430,13 @@ namespace CompGateApi.Core.Repositories
                     Description = user.Role.Description,
                     IsGlobal = user.Role.IsGlobal
                 },
+                ServicePackageId = user.Company?.ServicePackageId ?? 0, // default to 0 if not set
                 RoleId = user.Role.Id,
                 IsTwoFactorEnabled = authUser?.IsTwoFactorEnabled ?? false,
                 PasswordResetToken = authUser?.PasswordResetToken,
                 Permissions = userPermissionNames,
+                EnabledTransactionCategories = enabledTransactionCategories,
                 Accounts = accounts,
-                // ServicePackageId = user.ServicePackageId,
                 IsCompanyAdmin = user.IsCompanyAdmin,
                 CompanyStatus = user.Company?.RegistrationStatus ?? RegistrationStatus.Error,
                 CompanyStatusMessage = user.Company?.RegistrationStatusMessage,

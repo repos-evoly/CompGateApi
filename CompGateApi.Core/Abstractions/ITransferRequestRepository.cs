@@ -1,28 +1,32 @@
-// CompGateApi.Core.Abstractions/ITransferRequestRepository.cs
 using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Models;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace CompGateApi.Core.Abstractions
 {
     public interface ITransferRequestRepository
     {
-        // user‐scoped
-        Task<List<TransferRequest>> GetAllByUserAsync(int userId, string? searchTerm, int page, int limit);
-        Task<int> GetCountByUserAsync(int userId, string? searchTerm);
-        Task<TransferRequest?> GetByIdAsync(int id);
-        Task CreateAsync(TransferRequest entity);
+        // company‐scoped (for “my transfers”)
+        Task<int> GetCountByCompanyAsync(int companyId, string? searchTerm);
+        Task<List<TransferRequest>> GetAllByCompanyAsync(int companyId, string? searchTerm, int page, int limit);
 
-        // external‐API calls
-        Task<List<AccountDto>> GetAccountsAsync(string codeOrAccount);
-        Task<List<StatementEntryDto>> GetStatementAsync(string account, DateTime from, DateTime to);
-
-        Task<List<TransferRequest>> GetAllByCompanyAsync(
-           int companyId, string? searchTerm, int page, int limit);
-        Task<int> GetCountByCompanyAsync(
-            int companyId, string? searchTerm);
-        // admin
-        Task<List<TransferRequest>> GetAllAsync(string? searchTerm, int page, int limit);
+        // admin‐scoped
         Task<int> GetCountAsync(string? searchTerm);
-        Task UpdateAsync(TransferRequest entity);
+        Task<List<TransferRequest>> GetAllAsync(string? searchTerm, int page, int limit);
+
+        // single fetch
+        Task<TransferRequest?> GetByIdAsync(int id);
+
+        // create & update
+        Task CreateAsync(TransferRequest tr);
+        Task UpdateAsync(TransferRequest tr);
+
+        // external lookups
+        Task<List<AccountDto>> GetAccountsAsync(string codeOrAccount);
+
+        Task<string?> GetStCodeByAccount(string account);
+        Task<List<StatementEntryDto>> GetStatementAsync(string account, DateTime from, DateTime to);
     }
 }

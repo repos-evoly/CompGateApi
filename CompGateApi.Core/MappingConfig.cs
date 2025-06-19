@@ -8,16 +8,24 @@ namespace CompGateApi
     {
         public MappingConfig()
         {
-
             CreateMap<TransferRequest, TransferRequestDto>()
-                .ForMember(dest => dest.CategoryName,
-                           opt => opt.MapFrom(src => src.TransactionCategory.Name))
-                .ForMember(dest => dest.CurrencyCode,
-                           opt => opt.MapFrom(src => src.Currency.Code))
-                .ForMember(dest => dest.PackageName,
-                           opt => opt.MapFrom(src => src.ServicePackage.Name));
+                       .ForMember(dest => dest.CategoryName,
+                                  opt => opt.MapFrom(src => src.TransactionCategory.Name))
+                       .ForMember(dest => dest.CurrencyCode,
+                                  opt => opt.MapFrom(src => src.Currency.Code))
+                       .ForMember(dest => dest.PackageName,
+                                  opt => opt.MapFrom(src => src.ServicePackage.Name))
+                       .ForMember(dest => dest.CommissionAmount,
+                                  opt => opt.MapFrom(src => src.CommissionAmount))
+                       .ForMember(dest => dest.CommissionOnRecipient,
+                                  opt => opt.MapFrom(src => src.CommissionOnRecipient))
+                        .ForMember(dest => dest.EconomicSectorName, opt => opt.MapFrom(src => src.EconomicSector.Name));
 
-            // (Optionally) CreateTransferCreateDto → TransferRequest
+            // everything else (Id, UserId, FromAccount, ToAccount, Amount, Status, Description, RequestedAt, ServicePackageId)
+            // will be auto-mapped by convention
+            ;
+
+            // ── CreateDto → Domain ────────────────────────────────────────────────
             CreateMap<TransferRequestCreateDto, TransferRequest>()
                 .ForMember(dest => dest.TransactionCategoryId,
                            opt => opt.MapFrom(src => src.TransactionCategoryId))
@@ -31,7 +39,9 @@ namespace CompGateApi
                            opt => opt.MapFrom(src => src.CurrencyId))
                 .ForMember(dest => dest.Description,
                            opt => opt.MapFrom(src => src.Description))
-                .ForAllMembers(opt => opt.Ignore());
+                .ForMember(dest => dest.CommissionOnRecipient,
+                           opt => opt.MapFrom(src => src.CommissionOnRecipient))
+                    .ForAllMembers(opt => opt.Ignore());
             CreateMap<Currency, CurrencyDto>();
             CreateMap<CurrencyCreateDto, Currency>();
             CreateMap<CurrencyUpdateDto, Currency>();
@@ -39,6 +49,11 @@ namespace CompGateApi
             CreateMap<Reason, ReasonDto>();
             CreateMap<ReasonCreateDto, Reason>();
             CreateMap<ReasonUpdateDto, Reason>();
+
+            //Economic Sectors
+            CreateMap<EconomicSector, EconomicSectorDto>();
+            CreateMap<EconomicSectorCreateDto, EconomicSector>();
+            CreateMap<EconomicSectorUpdateDto, EconomicSector>();
 
             //attachments
             CreateMap<Attachment, AttachmentDto>()

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    [Migration("20250530073502_SettingsField")]
-    partial class SettingsField
+    [Migration("20250617102050_TransactionCategoriesAddHasLimits")]
+    partial class TransactionCategoriesAddHasLimits
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -623,16 +623,16 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset?>("KycReviewedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int>("KycStatus")
-                        .HasColumnType("int");
-
-                    b.Property<string>("KycStatusMessage")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RegistrationStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RegistrationStatusMessage")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ServicePackageId")
                         .HasColumnType("int");
@@ -1055,9 +1055,17 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<decimal>("DailyLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Description")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("MonthlyLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1069,7 +1077,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ServicePackages");
+                    b.ToTable("ServicePackages", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.ServicePackageDetail", b =>
@@ -1080,16 +1088,47 @@ namespace CompGateApi.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("CommissionPct")
+                    b.Property<decimal?>("B2BCommissionPct")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("B2BFixedFee")
+                        .IsRequired()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("B2BMinPercentage")
+                        .IsRequired()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("B2BTransactionLimit")
+                        .IsRequired()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("B2CCommissionPct")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("B2CFixedFee")
+                        .IsRequired()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("B2CMinPercentage")
+                        .IsRequired()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("B2CTransactionLimit")
+                        .IsRequired()
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<decimal>("FeeFixed")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                    b.Property<bool>("IsEnabledForPackage")
+                        .HasColumnType("bit");
 
                     b.Property<int>("ServicePackageId")
                         .HasColumnType("int");
@@ -1106,7 +1145,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("TransactionCategoryId");
 
-                    b.ToTable("ServicePackageDetails");
+                    b.ToTable("ServicePackageDetails", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.Settings", b =>
@@ -1125,12 +1164,16 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<decimal>("GlobalLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Settings");
+                    b.ToTable("Settings", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.TransactionCategory", b =>
@@ -1144,9 +1187,8 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
+                    b.Property<bool>("HasLimits")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1158,52 +1200,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TransactionCategories");
-                });
-
-            modelBuilder.Entity("CompGateApi.Data.Models.TransferLimit", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("CurrencyId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("MaxAmount")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<decimal>("MinAmount")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
-
-                    b.Property<int>("Period")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ServicePackageId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("TransactionCategoryId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CurrencyId");
-
-                    b.HasIndex("ServicePackageId");
-
-                    b.HasIndex("TransactionCategoryId");
-
-                    b.ToTable("TransferLimits");
+                    b.ToTable("TransactionCategories", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.TransferRequest", b =>
@@ -1217,6 +1214,12 @@ namespace CompGateApi.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("CommissionOnRecipient")
+                        .HasColumnType("bit");
 
                     b.Property<int>("CompanyId")
                         .HasColumnType("int");
@@ -1779,43 +1782,16 @@ namespace CompGateApi.Data.Migrations
             modelBuilder.Entity("CompGateApi.Data.Models.ServicePackageDetail", b =>
                 {
                     b.HasOne("CompGateApi.Data.Models.ServicePackage", "ServicePackage")
-                        .WithMany("ServicePackageDetails")
+                        .WithMany("Details")
                         .HasForeignKey("ServicePackageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("CompGateApi.Data.Models.TransactionCategory", "TransactionCategory")
-                        .WithMany("ServicePackageDetails")
+                        .WithMany("PackageDetails")
                         .HasForeignKey("TransactionCategoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("ServicePackage");
-
-                    b.Navigation("TransactionCategory");
-                });
-
-            modelBuilder.Entity("CompGateApi.Data.Models.TransferLimit", b =>
-                {
-                    b.HasOne("CompGateApi.Data.Models.Currency", "Currency")
-                        .WithMany()
-                        .HasForeignKey("CurrencyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("CompGateApi.Data.Models.ServicePackage", "ServicePackage")
-                        .WithMany("TransferLimits")
-                        .HasForeignKey("ServicePackageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CompGateApi.Data.Models.TransactionCategory", "TransactionCategory")
-                        .WithMany("TransferLimits")
-                        .HasForeignKey("TransactionCategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Currency");
 
                     b.Navigation("ServicePackage");
 
@@ -1879,9 +1855,8 @@ namespace CompGateApi.Data.Migrations
                         .IsRequired();
 
                     b.HasOne("CompGateApi.Data.Models.ServicePackage", "ServicePackage")
-                        .WithMany("Users")
-                        .HasForeignKey("ServicePackageId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .WithMany()
+                        .HasForeignKey("ServicePackageId");
 
                     b.Navigation("Company");
 
@@ -1995,18 +1970,12 @@ namespace CompGateApi.Data.Migrations
                 {
                     b.Navigation("Companies");
 
-                    b.Navigation("ServicePackageDetails");
-
-                    b.Navigation("TransferLimits");
-
-                    b.Navigation("Users");
+                    b.Navigation("Details");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.TransactionCategory", b =>
                 {
-                    b.Navigation("ServicePackageDetails");
-
-                    b.Navigation("TransferLimits");
+                    b.Navigation("PackageDetails");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.User", b =>

@@ -1,16 +1,17 @@
+using CompGateApi.Data.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using CompGateApi.Data.Models;
 
 namespace CompGateApi.Core.Abstractions
 {
     public interface ITransactionCategoryRepository
     {
-        Task<IList<TransactionCategory>> GetAllAsync(string? searchTerm, int page, int limit);
-        Task<int> GetCountAsync(string? searchTerm);
+        Task<IList<TransactionCategory>> GetAllAsync();
         Task<TransactionCategory?> GetByIdAsync(int id);
-        Task CreateAsync(TransactionCategory entity);
-        Task UpdateAsync(TransactionCategory entity);
+        Task<IList<ServicePackageDetail>> GetByServicePackageAsync(int servicePackageId);
+
+        Task CreateAsync(TransactionCategory cat);
+        Task UpdateAsync(TransactionCategory cat);
         Task DeleteAsync(int id);
     }
 }

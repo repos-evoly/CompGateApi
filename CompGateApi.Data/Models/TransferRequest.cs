@@ -52,5 +52,17 @@ namespace CompGateApi.Data.Models
         public string? Description { get; set; }
 
         public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
+        public decimal CommissionAmount { get; set; }
+        public bool CommissionOnRecipient { get; set; }
+
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal Rate { get; set; }
+
+        public int? EconomicSectorId { get; set; }
+        public EconomicSector? EconomicSector { get; set; } = null!;
+
+
+        [MaxLength(3)]
+        public string TransferMode { get; set; } = "B2B";
     }
 }

@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Mvc;
 using CompGateApi.Data.Context;
+using Microsoft.EntityFrameworkCore;
 
 namespace CompGateApi.Endpoints
 {
@@ -49,6 +50,11 @@ namespace CompGateApi.Endpoints
                         .Accepts<PublicEditUserDto>("application/json")
                         .Produces(StatusCodes.Status204NoContent)
                         .Produces(StatusCodes.Status404NotFound);
+
+            companies.MapGet("/{code}/dashboard", GetCompanyDashboard)
+                    .WithName("GetCompanyDashboard")
+                    .Produces(200)
+                    .Produces(404);
 
             // ── ADMIN portal ───────────────────────────────────────────────
             var admin = companies
@@ -117,6 +123,55 @@ namespace CompGateApi.Endpoints
                 throw new UnauthorizedAccessException("Missing or invalid 'nameid' claim.");
             return id;
         }
+
+
+        public static async Task<IResult> GetCompanyDashboard(
+    string code,
+    [FromServices] CompGateApiDbContext db,
+    [FromServices] ICompanyRepository companyRepo,
+    [FromServices] ILogger<CompanyEndpoints> log)
+        {
+            log.LogInformation("→ GetCompanyDashboard for company {Code}", code);
+
+            var company = await companyRepo.GetByCodeAsync(code);
+            if (company == null)
+                return Results.NotFound($"Company '{code}' not found.");
+
+            var companyId = company.Id;
+
+            // 1️⃣ Total transfer volume and count
+            var transfers = db.TransferRequests.Where(t => t.CompanyId == companyId);
+            var transferVolume = await transfers.SumAsync(t => (decimal?)t.Amount) ?? 0m;
+            var totalTransfers = await transfers.CountAsync();
+
+            // 2️⃣ Number of users
+            var userCount = await db.Users.CountAsync(u => u.CompanyId == companyId);
+
+            // 3️⃣ Sector with most transfers
+            var topSector = await transfers
+                .GroupBy(t => t.EconomicSectorId)
+                .Select(g => new { SectorId = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .FirstOrDefaultAsync();
+
+            string? sectorName = null;
+            if (topSector != null)
+            {
+                var sector = await db.EconomicSectors.FindAsync(topSector.SectorId);
+                sectorName = sector?.Name ?? "Unknown";
+            }
+
+            var dashboard = new
+            {
+                transferVolume,
+                totalTransfers,
+                userCount,
+                mostActiveSector = sectorName
+            };
+
+            return Results.Ok(dashboard);
+        }
+
 
         public static async Task<IResult> GetCompanyInfo(
           [FromRoute] string code,
