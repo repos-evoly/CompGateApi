@@ -20,9 +20,9 @@ namespace CompGateApi.Endpoints
         public void RegisterEndpoints(WebApplication app)
         {
             var grp = app.MapGroup("/api/servicepackages")
-                         .WithTags("ServicePackages")
-                         .RequireAuthorization("RequireAdminUser")
-                         .RequireAuthorization("AdminAccess");
+                         .WithTags("ServicePackages");
+            //  .RequireAuthorization("RequireAdminUser")
+            //  .RequireAuthorization("AdminAccess");
 
             grp.MapGet("/", GetAll)
                .Produces<ServicePackageListDto[]>(200);
@@ -38,21 +38,29 @@ namespace CompGateApi.Endpoints
             grp.MapPut("/{id:int}/categories/{categoryId:int}", UpdateCategoryDetail)
                .Accepts<ServicePackageCategoryUpdateDto>("application/json")
                .Produces<ServicePackageCategoryDto>(200)
+               .RequireAuthorization("RequireAdminUser")
+                 .RequireAuthorization("AdminAccess")
                .Produces(400)
                .Produces(404);
 
             grp.MapPost("/", Create)
                .Accepts<ServicePackageCreateDto>("application/json")
+               .RequireAuthorization("RequireAdminUser")
+                .RequireAuthorization("AdminAccess")
                .Produces<ServicePackageListDto>(201)
                .Produces(400);
 
             grp.MapPut("/{id:int}", Update)
                .Accepts<ServicePackageUpdateDto>("application/json")
+               .RequireAuthorization("RequireAdminUser")
+                .RequireAuthorization("AdminAccess")
                .Produces<ServicePackageListDto>(200)
                .Produces(400)
                .Produces(404);
 
             grp.MapDelete("/{id:int}", Delete)
+              .RequireAuthorization("RequireAdminUser")
+              .RequireAuthorization("AdminAccess")
                .Produces(204)
                .Produces(404);
         }

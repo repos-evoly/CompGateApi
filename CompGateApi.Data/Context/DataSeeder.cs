@@ -340,11 +340,11 @@ namespace CompGateApi.Data.Seeding
         {
             if (_context.Companies.Any()) return;
 
-            var standardPkg = _context.ServicePackages.Single(p => p.Name == "Standard");
+            var Inquiry = _context.ServicePackages.Single(p => p.Name == "Inquiry");
 
             var companies = new[]
             {
-                new Company { Code = "725010", Name = "Company 725010", IsActive = true, ServicePackageId = standardPkg.Id }
+                new Company { Code = "725010", Name = "Company 725010", IsActive = true, ServicePackageId = Inquiry.Id }
             };
 
             _context.Companies.AddRange(companies);

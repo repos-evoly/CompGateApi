@@ -352,7 +352,7 @@ namespace CompGateApi.Endpoints
             [FromBody] CheckRequestStatusUpdateDto dto,
             [FromServices] ICheckRequestRepository repo,
             [FromServices] IValidator<CheckRequestStatusUpdateDto> validator,
-            [FromServices] IAuditLogRepository auditRepo,
+            // [FromServices] IAuditLogRepository auditRepo,
             HttpContext ctx)
         {
             var validation = await validator.ValidateAsync(dto);
@@ -367,11 +367,11 @@ namespace CompGateApi.Endpoints
             await repo.UpdateAsync(ent);
 
             var adminId = GetAuthUserId(ctx);
-            await auditRepo.CreateAsync(new AuditLog
-            {
-                UserId = adminId,
-                Action = $"Updated CheckRequest {id} status to '{dto.Status}'"
-            });
+            // await auditRepo.CreateAsync(new AuditLog
+            // {
+            //     UserId = adminId,
+            //     Action = $"Updated CheckRequest {id} status to '{dto.Status}'"
+            // });
 
             var dtoOut = new CheckRequestDto
             {

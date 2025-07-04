@@ -260,7 +260,7 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("KycApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.1.1.205");
+        c.BaseAddress = new Uri("http://10.3.3.11");
         c.DefaultRequestHeaders.Accept.Add(
           new MediaTypeWithQualityHeaderValue("application/json"));
       });
@@ -320,9 +320,12 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<ICreditFacilitiesOrLetterOfGuaranteeRequestRepository, CreditFacilitiesOrLetterOfGuaranteeRequestRepository>();
 
       services.AddScoped<ICertifiedBankStatementRequestRepository, CertifiedBankStatementRequestRepository>();
-
       //economic sector
       services.AddScoped<IEconomicSectorRepository, EconomicSectorRepository>();
+      //representatives
+      services.AddScoped<IRepresentativeRepository, RepresentativeRepository>();
+      // FormStatus
+      services.AddScoped<IFormStatusRepository, FormStatusRepository>();
 
       return services;
     }

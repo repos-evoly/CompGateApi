@@ -81,6 +81,9 @@ namespace CompGateApi.Data.Models
 
         public ICollection<Attachment> Attachments { get; set; }
        = new List<Attachment>();
+
+        public ICollection<Representative> Representatives { get; set; } = new List<Representative>();
+
     }
 
     public enum RegistrationStatus

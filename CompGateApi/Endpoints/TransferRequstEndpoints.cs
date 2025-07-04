@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using AutoMapper;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
@@ -148,208 +149,172 @@ namespace CompGateApi.Endpoints
         // ── Create a new transfer ───────────────────────────────────────────────
 
         public static async Task<IResult> CreateTransfer(
-        HttpContext ctx,
-        [FromBody] TransferRequestCreateDto dto,
-        [FromServices] ITransferRequestRepository repo,
-        [FromServices] IUserRepository userRepo,
-        [FromServices] IValidator<TransferRequestCreateDto> validator,
-        [FromServices] IMapper mapper,
-        [FromServices] ILogger<TransferRequestEndpoints> log,
-        [FromServices] IHttpClientFactory httpFactory,
-        [FromServices] CompGateApiDbContext db)
+    HttpContext ctx,
+    [FromBody] TransferRequestCreateDto dto,
+    [FromServices] ITransferRequestRepository repo,
+    [FromServices] IUserRepository userRepo,
+    [FromServices] IValidator<TransferRequestCreateDto> validator,
+    [FromServices] IMapper mapper,
+    [FromServices] ILogger<TransferRequestEndpoints> log,
+    [FromServices] IHttpClientFactory httpFactory,
+    [FromServices] CompGateApiDbContext db)
         {
             try
             {
-                log.LogInformation("Starting CreateTransfer with FromAccount={FromAccount} ToAccount={ToAccount}", dto.FromAccount, dto.ToAccount);
+                log.LogInformation("🔁 CreateTransfer started");
 
-                // Validate DTO
                 var validation = await validator.ValidateAsync(dto);
                 if (!validation.IsValid)
                 {
-                    log.LogWarning("Validation failed: {Errors}", string.Join(", ", validation.Errors.Select(e => e.ErrorMessage)));
-                    return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+                    var errors = validation.Errors.Select(e => e.ErrorMessage);
+                    log.LogWarning("❌ Validation failed: {Errors}", string.Join(", ", errors));
+                    return Results.BadRequest(errors);
                 }
 
-                // Get Authenticated User
                 var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-                var raw = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
-                    ?? ctx.User.FindFirstValue("nameid")
-                    ?? ctx.User.FindFirstValue("sub");
+                var rawAuthId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                                  ?? ctx.User.FindFirstValue("nameid")
+                                  ?? ctx.User.FindFirstValue("sub");
 
-                if (!int.TryParse(raw, out var authId))
+                if (!int.TryParse(rawAuthId, out var authId))
                 {
-                    log.LogWarning("Unauthorized: invalid or missing authId claim");
+                    log.LogWarning("❌ Missing or invalid auth ID");
                     return Results.Unauthorized();
                 }
 
                 var me = await userRepo.GetUserByAuthId(authId, token);
                 if (me == null || !me.CompanyId.HasValue)
-                {
-                    log.LogWarning("Unauthorized: user not found or missing CompanyId");
                     return Results.Unauthorized();
-                }
 
                 var companyId = me.CompanyId.Value;
                 var pkgId = me.ServicePackageId;
-                log.LogInformation("Authenticated user: {UserId}, CompanyId: {CompanyId}, PackageId: {PackageId}", me.UserId, companyId, pkgId);
-
                 if (pkgId <= 0)
-                {
-                    log.LogWarning("Invalid service package ID");
-                    return Results.BadRequest("Your company does not have a service package configured.");
-                }
+                    return Results.BadRequest("No service package configured");
 
-                // Get STCOD from receiver
-                string? stcod = null;
-                try
-                {
-                    stcod = await repo.GetStCodeByAccount(dto.ToAccount);
-                }
-                catch (Exception ex)
-                {
-                    log.LogError(ex, "Failed to fetch STCOD from account: {ToAccount}", dto.ToAccount);
-                    return Results.BadRequest("Unable to determine transfer type from receiver account.");
-                }
-
+                var stcod = await repo.GetStCodeByAccount(dto.ToAccount);
                 if (string.IsNullOrWhiteSpace(stcod))
-                {
-                    log.LogWarning("STCOD is empty or null for account: {ToAccount}", dto.ToAccount);
-                    return Results.BadRequest("Unable to determine transfer type from receiver account.");
-                }
+                    return Results.BadRequest("Receiver account type unknown");
 
-                var isB2B = stcod == "CD";
-                var transferMode = isB2B ? "B2B" : "B2C";
+                bool isB2B = stcod == "CD";
+                string transferMode = isB2B ? "B2B" : "B2C";
 
-                // Currency + rate
                 var currency = await db.Currencies.FindAsync(dto.CurrencyId);
                 if (currency == null)
-                {
-                    log.LogWarning("Invalid currency selected: {CurrencyId}", dto.CurrencyId);
-                    return Results.BadRequest("Invalid currency selected.");
-                }
+                    return Results.BadRequest("Invalid currency");
 
-                var rate = currency.Rate;
-                var amountInBase = dto.Amount * rate;
-                log.LogInformation("Currency validated. Rate={Rate}, BaseAmount={AmountInBase}", rate, amountInBase);
+                decimal rate = currency.Rate;
+                decimal amountInBase = dto.Amount * rate;
 
-                // Global system-wide limit
                 var settings = await db.Settings.FirstOrDefaultAsync();
                 if (settings == null)
-                {
-                    log.LogError("Global settings not found in DB");
-                    return Results.BadRequest("System configuration missing.");
-                }
+                    return Results.BadRequest("System settings missing");
+
+
 
                 if (amountInBase > settings.GlobalLimit)
-                {
-                    log.LogWarning("Global limit exceeded: {AmountInBase} > {GlobalLimit}", amountInBase, settings.GlobalLimit);
-                    return Results.BadRequest($"Global limit of {settings.GlobalLimit} exceeded.");
-                }
-
-                // Service package + details
-                var servicePackage = await db.ServicePackages.FindAsync(pkgId);
-                if (servicePackage == null)
-                {
-                    log.LogWarning("Service package not found: {PackageId}", pkgId);
-                    return Results.BadRequest("Invalid service package.");
-                }
+                    return Results.BadRequest("Global limit exceeded");
 
                 var detail = await db.ServicePackageDetails
                     .Include(d => d.TransactionCategory)
-                    .FirstOrDefaultAsync(d => d.ServicePackageId == pkgId && d.TransactionCategoryId == dto.TransactionCategoryId);
+                    .FirstOrDefaultAsync(d =>
+                        d.ServicePackageId == pkgId &&
+                        d.TransactionCategoryId == dto.TransactionCategoryId);
 
                 if (detail == null || !detail.IsEnabledForPackage)
-                {
-                    log.LogWarning("Category not enabled for package: {TransactionCategoryId}", dto.TransactionCategoryId);
-                    return Results.BadRequest("This category is not enabled in your service package.");
-                }
+                    return Results.BadRequest("Internal Transfer not allowed");
 
-                // Per-transaction limit
-                var transactionLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
-                if (transactionLimit.HasValue && amountInBase > transactionLimit.Value)
-                {
-                    log.LogWarning("Transaction limit exceeded: {AmountInBase} > {Limit}", amountInBase, transactionLimit.Value);
-                    return Results.BadRequest($"Transaction limit exceeded ({transactionLimit.Value}).");
-                }
+                decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
+                if (txnLimit.HasValue && amountInBase > txnLimit.Value)
+                    return Results.BadRequest("Transaction limit exceeded");
 
-                // Daily limit
                 var today = DateTime.UtcNow.Date;
-                var dailyBaseSum = await db.TransferRequests
-                    .Where(t => t.CompanyId == companyId && t.RequestedAt.Date == today)
-                    .Select(t => t.Amount * t.Rate)
-                    .SumAsync();
-
-                if (dailyBaseSum + amountInBase > servicePackage.DailyLimit)
-                {
-                    log.LogWarning("Daily limit exceeded: {Sum} + {AmountInBase} > {Limit}", dailyBaseSum, amountInBase, servicePackage.DailyLimit);
-                    return Results.BadRequest($"Daily limit of {servicePackage.DailyLimit} exceeded.");
-                }
-
-                // Monthly limit
                 var monthStart = new DateTime(today.Year, today.Month, 1);
-                var monthlyBaseSum = await db.TransferRequests
+
+                var todayTotal = await db.TransferRequests
+                    .Where(t => t.CompanyId == companyId && t.RequestedAt.Date == today)
+                    .Select(t => t.Amount * t.Rate).SumAsync();
+
+                var monthTotal = await db.TransferRequests
                     .Where(t => t.CompanyId == companyId && t.RequestedAt >= monthStart)
-                    .Select(t => t.Amount * t.Rate)
-                    .SumAsync();
+                    .Select(t => t.Amount * t.Rate).SumAsync();
 
-                if (monthlyBaseSum + amountInBase > servicePackage.MonthlyLimit)
+                var pkg = await db.ServicePackages.FindAsync(pkgId);
+                if (todayTotal + amountInBase > pkg!.DailyLimit)
+                    return Results.BadRequest("Daily limit exceeded");
+                if (monthTotal + amountInBase > pkg.MonthlyLimit)
+                    return Results.BadRequest("Monthly limit exceeded");
+
+                decimal fixedFee = isB2B ? detail.B2BFixedFee ?? 0 : detail.B2CFixedFee ?? 0;
+                decimal pct = isB2B ? detail.B2BCommissionPct ?? 0 : detail.B2CCommissionPct ?? 0;
+                decimal pctFee = dto.Amount * (pct / 100m);
+                decimal commission = Math.Round(Math.Max(fixedFee, pctFee), 3);
+
+                string currencyCode = currency.Id switch
                 {
-                    log.LogWarning("Monthly limit exceeded: {Sum} + {AmountInBase} > {Limit}", monthlyBaseSum, amountInBase, servicePackage.MonthlyLimit);
-                    return Results.BadRequest($"Monthly limit of {servicePackage.MonthlyLimit} exceeded.");
-                }
+                    1 => "LYD",
+                    2 => "USD",
+                    3 => "EUR",
+                    _ => "LYD"
+                };
 
-                // Commission Calculation
-                var fixedFee = isB2B ? detail.B2BFixedFee ?? 0m : detail.B2CFixedFee ?? 0m;
-                var pct = isB2B ? detail.B2BCommissionPct ?? 0m : detail.B2CCommissionPct ?? 0m;
-                var pctFee = dto.Amount * (pct / 100m);
-                var commission = Math.Max(fixedFee, pctFee);
-                commission = decimal.Round(commission, 3);
+                const int DECIMALS = 3;
+                decimal scale = (decimal)Math.Pow(10, DECIMALS);
+                string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
+                string commStr = ((long)(commission * scale)).ToString("D15");
 
-                log.LogInformation("Commission calculated: Fixed={Fixed}, Percent={Percent}, Result={Commission}", fixedFee, pctFee, commission);
+                string senderTotal = dto.CommissionOnRecipient
+                    ? dto.Amount.ToString("0.000")
+                    : (dto.Amount + commission).ToString("0.000");
 
-                // Bank API Call
-                var bankPayload = new
+                string receiverTotal = dto.CommissionOnRecipient
+                    ? (dto.Amount - commission).ToString("0.000")
+                    : dto.Amount.ToString("0.000");
+
+                string commissionAccount = currencyCode == "USD"
+                    ? settings.CommissionAccountUSD
+                    : settings.CommissionAccount;
+
+                var payload = new
                 {
                     Header = new
                     {
                         system = "MOBILE",
-                        referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
+                        referenceId = Guid.NewGuid().ToString("N")[..16],
                         userName = "TEDMOB",
-                        customerNumber = dto.FromAccount,
+                        customerNumber = dto.ToAccount,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
                     },
                     Details = new Dictionary<string, string>
                     {
+                        ["@TRFCCY"] = currencyCode,
                         ["@SRCACC"] = dto.FromAccount,
+                        ["@SRCACC2"] = dto.CommissionOnRecipient ? dto.ToAccount : dto.FromAccount,
                         ["@DSTACC"] = dto.ToAccount,
+                        ["@DSTACC2"] = commissionAccount,
+                        ["@TRFAMT"] = amountStr,
                         ["@APLYTRN2"] = "Y",
-                        ["@TRFAMT"] = ((long)((dto.Amount - commission) * 1000m)).ToString("D15"),
+                        ["@TRFAMT2"] = commStr,
                         ["@NR2"] = dto.Description ?? ""
                     }
                 };
 
-                var bankClient = httpFactory.CreateClient("BankApi");
-                var response = await bankClient.PostAsJsonAsync("/api/mobile/postTransfer", bankPayload);
+                log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
+
+                var httpClient = httpFactory.CreateClient();
+                var response = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/flexPostTransfer", payload);
+                var bankRaw = await response.Content.ReadAsStringAsync();
+
+                log.LogInformation("📥 Bank response: {Raw}", bankRaw);
+
                 if (!response.IsSuccessStatusCode)
-                {
-                    log.LogError("Bank API failed. Status={Status}, Content={Content}", response.StatusCode, await response.Content.ReadAsStringAsync());
-                    return Results.BadRequest("Bank transfer failed.");
-                }
+                    return Results.BadRequest("Bank error: " + response.StatusCode);
 
-                // Validate Economic Sector
-                if (dto.EconomicSectorId != 0)
-                {
-                    var exists = await db.EconomicSectors.AnyAsync(e => e.Id == dto.EconomicSectorId);
-                    if (!exists)
-                    {
-                        log.LogWarning("Invalid economic sector: {EconomicSectorId}", dto.EconomicSectorId);
-                        return Results.BadRequest("Invalid Economic Sector.");
-                    }
-                }
+                var bankRes = JsonSerializer.Deserialize<BankResponseDto>(bankRaw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (bankRes?.Header?.ReturnCode?.ToLower() != "success")
+                    return Results.BadRequest("Bank rejected: " + bankRes?.Header?.ReturnMessage);
 
-                // Save
-                var transfer = new TransferRequest
+                var entity = new TransferRequest
                 {
                     UserId = me.UserId,
                     CompanyId = companyId,
@@ -359,25 +324,39 @@ namespace CompGateApi.Endpoints
                     Amount = dto.Amount,
                     CurrencyId = dto.CurrencyId,
                     ServicePackageId = pkgId,
-                    Status = "Completed",
                     Description = dto.Description,
                     RequestedAt = DateTime.UtcNow,
+                    Status = "Completed",
+                    EconomicSectorId = dto.EconomicSectorId,
                     CommissionAmount = commission,
                     CommissionOnRecipient = dto.CommissionOnRecipient,
                     Rate = rate,
-                    TransferMode = transferMode,
-                    EconomicSectorId = dto.EconomicSectorId,
+                    TransferMode = transferMode
                 };
 
-                await repo.CreateAsync(transfer);
-                log.LogInformation("Transfer created successfully: {TransferId}", transfer.Id);
+                await repo.CreateAsync(entity);
+                var dtoResult = mapper.Map<TransferRequestDto>(entity);
 
-                var resultDto = mapper.Map<TransferRequestDto>(transfer);
-                return Results.Created($"/api/transfers/{transfer.Id}", resultDto);
+                return Results.Ok(new
+                {
+                    message = "✅ Transfer successful",
+                    transfer = dtoResult,
+                    totalTakenFromSender = senderTotal,
+                    totalReceivedByRecipient = receiverTotal,
+                    commission = commission.ToString("0.000"),
+                    limits = new
+                    {
+                        globalLimit = settings.GlobalLimit,
+                        dailyLimit = pkg.DailyLimit,
+                        usedToday = (todayTotal + amountInBase).ToString("0.000"),
+                        monthlyLimit = pkg.MonthlyLimit,
+                        usedThisMonth = (monthTotal + amountInBase).ToString("0.000")
+                    }
+                });
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Unhandled exception in CreateTransfer");
+                log.LogError(ex, "Unhandled error in CreateTransfer");
                 return Results.StatusCode(500);
             }
         }
@@ -391,7 +370,7 @@ namespace CompGateApi.Endpoints
             ITransferRequestRepository repo)
         {
             if (account.Length != 6 && account.Length != 13)
-                return Results.BadRequest("Account must be 6-digit code or 13-digit account.");
+                return Results.BadRequest("Account must be 13 digit.");
 
             var all = await repo.GetAccountsAsync(account);
             if (account.Length == 6)

@@ -12,6 +12,8 @@ namespace CompGateApi.Data.Models
         [Required, MaxLength(50)]
         public string CommissionAccount { get; set; } = string.Empty;
 
+        public string CommissionAccountUSD { get; set; } = string.Empty;
+
         public decimal GlobalLimit { get; set; }
 
 

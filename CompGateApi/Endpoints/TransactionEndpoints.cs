@@ -421,7 +421,7 @@
 //         }
 //             };
 
-//             using var client = new HttpClient { BaseAddress = new Uri("http://10.1.1.205:7070") };
+//             using var client = new HttpClient { BaseAddress = new Uri("http://10.3.3.11:7070") };
 //             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 //             var resp = await client.PostAsJsonAsync("/api/mobile/transactions", payload);
 //             var body = await resp.Content.ReadAsStringAsync();

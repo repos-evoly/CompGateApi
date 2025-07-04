@@ -51,6 +51,12 @@ namespace CompGateApi.Data.Context
 
               public DbSet<EconomicSector> EconomicSectors => Set<EconomicSector>();
 
+              public DbSet<Representative> Representatives => Set<Representative>();
+
+              public DbSet<FormStatus> FormStatuses => Set<FormStatus>();
+
+
+
 
               protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
               {
@@ -128,6 +134,11 @@ namespace CompGateApi.Data.Context
                     .WithOne(r => r.Company)
                     .HasForeignKey(r => r.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                   b.HasMany(c => c.Representatives)
+                     .WithOne(r => r.Company)
+                     .HasForeignKey(r => r.CompanyId)
+                     .OnDelete(DeleteBehavior.Cascade);
             });
 
                      // ── USER & ROLE ─────────────────────────────────────────────────────

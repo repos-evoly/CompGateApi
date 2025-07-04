@@ -78,6 +78,16 @@ namespace CompGateApi.Endpoints
             .Produces<CompanyListDto>(200)
             .Produces(404);
 
+            admin.MapPut("/{code}", UpdateCompany)
+                .WithName("UpdateCompany")
+                .Accepts<CompanyUpdateDto>("application/json")
+                .Produces(204)
+                .Produces(404);
+
+            admin.MapGet("/dashboard", GetAdminDashboardStats)
+                .WithName("GetAdminDashboardStats")
+                .Produces(200);
+
             // ── COMPANY-ADMIN portal ────────────────────────────────────
             var companyAdmin = companies
                 .MapGroup("/{code}/users")
@@ -166,6 +176,41 @@ namespace CompGateApi.Endpoints
                 transferVolume,
                 totalTransfers,
                 userCount,
+                mostActiveSector = sectorName
+            };
+
+            return Results.Ok(dashboard);
+        }
+
+        public static async Task<IResult> GetAdminDashboardStats(
+     [FromServices] CompGateApiDbContext db)
+        {
+            // 1️⃣ Total transfer volume and count
+            var totalTransfers = await db.TransferRequests.CountAsync();
+            var totalVolume = await db.TransferRequests.SumAsync(t => (decimal?)t.Amount) ?? 0m;
+
+            // 2️⃣ Total companies
+            var totalCompanies = await db.Companies.CountAsync();
+
+            // 3️⃣ Sector with most transfers
+            var topSector = await db.TransferRequests
+                .GroupBy(t => t.EconomicSectorId)
+                .Select(g => new { SectorId = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .FirstOrDefaultAsync();
+
+            string? sectorName = null;
+            if (topSector != null)
+            {
+                var sector = await db.EconomicSectors.FindAsync(topSector.SectorId);
+                sectorName = sector?.Name ?? "Unknown";
+            }
+
+            var dashboard = new
+            {
+                totalTransfers,
+                totalTransferVolume = totalVolume,
+                totalCompanies,
                 mostActiveSector = sectorName
             };
 
@@ -317,11 +362,11 @@ namespace CompGateApi.Endpoints
 
             // 0️⃣ Prevent lookup for codes already in our DB
             var existing = await repo.GetByCodeAsync(code);
-            if (existing != null)
-            {
-                // you can choose BadRequest(400) or Conflict(409)
-                return Results.BadRequest(new { error = "Company code already registered." });
-            }
+            // if (existing != null)
+            // {
+            //     // you can choose BadRequest(400) or Conflict(409)
+            //     return Results.BadRequest(new { error = "Company code already registered." });
+            // }
 
             if (code.Length != 6)
                 return Results.BadRequest("Company code must be exactly 6 characters.");
@@ -545,6 +590,8 @@ namespace CompGateApi.Endpoints
                 KycMobile = c.KycMobile,
                 KycNationality = c.KycNationality,
                 KycCity = c.KycCity,
+                ServicePackageId = c.ServicePackageId,
+                ServicePackageName = c.ServicePackage.Name,
                 Attachments = c.Attachments
                                          .Select(a => new AttachmentDto
                                          {
@@ -689,6 +736,34 @@ namespace CompGateApi.Endpoints
             log.LogInformation("← EditCompanyUser complete for {UserId}", userId);
             return Results.NoContent();
         }
+
+
+
+        public static async Task<IResult> UpdateCompany(
+    string code,
+    [FromBody] CompanyUpdateDto dto,
+    [FromServices] ICompanyRepository companyRepo,
+    [FromServices] CompGateApiDbContext db,
+    [FromServices] ILogger<CompanyEndpoints> log)
+        {
+            log.LogInformation("→ UpdateCompany {Code}", code);
+
+            var company = await db.Companies.FirstOrDefaultAsync(c => c.Code == code);
+            if (company == null)
+            {
+                log.LogWarning("  Company '{Code}' not found", code);
+                return Results.NotFound($"Company '{code}' not found.");
+            }
+
+
+            company.ServicePackageId = dto.ServicePackageId;
+
+            await db.SaveChangesAsync();
+
+            log.LogInformation("← UpdateCompany {Code} updated successfully", code);
+            return Results.Ok(dto);
+        }
+
 
 
     }

@@ -67,7 +67,8 @@ namespace CompGateApi
 
             CreateMap<Settings, SettingsDto>()
               .ForMember(dest => dest.CommissionAccount, opt => opt.MapFrom(src => src.CommissionAccount))
-            //   .ForMember(dest => dest.TopReasonLimit, opt => opt.MapFrom(src => src.TopReasonLimit))
+              .ForMember(dest => dest.CommissionAccountUSD, opt => opt.MapFrom(src => src.CommissionAccountUSD))
+
               .ReverseMap();
         }
     }

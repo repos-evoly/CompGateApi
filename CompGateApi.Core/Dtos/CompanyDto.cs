@@ -121,6 +121,12 @@ namespace CompGateApi.Core.Dtos
         /// <summary>A flat list of permission keys that this user has</summary>
         public List<string> Permissions { get; set; } = new List<string>();
     }
+
+    public class CompanyUpdateDto
+    {
+
+        public int ServicePackageId { get; set; }
+    }
 }
 
 namespace CompGateApi.Core.Dtos
@@ -140,6 +146,11 @@ namespace CompGateApi.Core.Dtos
         public string? KycMobile { get; set; }
         public string? KycNationality { get; set; }
         public string? KycCity { get; set; }
+
+        public int ServicePackageId { get; set; }
+        public string? ServicePackageName { get; set; }
+
+
 
         public List<AttachmentDto> Attachments { get; set; } = new();
 

@@ -32,9 +32,9 @@ public class CertifiedBankStatementRequestStatusUpdateDtoValidator
     public CertifiedBankStatementRequestStatusUpdateDtoValidator()
     {
         RuleFor(x => x.Status)
-            .NotEmpty()
-            .Must(s => new[] { "Pending", "Approved", "Declined" }.Contains(s))
-            .WithMessage("Status must be Pending, Approved or Declined");
+            .NotEmpty();
+            // .Must(s => new[] { "Pending", "Approved", "Declined" }.Contains(s))
+            // .WithMessage("Status must be Pending, Approved or Declined");
         RuleFor(x => x.Reason)
             .NotEmpty()
             .When(x => x.Status != "Pending");

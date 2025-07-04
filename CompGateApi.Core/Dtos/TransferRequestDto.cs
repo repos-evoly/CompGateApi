@@ -79,4 +79,16 @@ namespace CompGateApi.Core.Dtos
         public decimal Amount { get; set; }
         public List<string> Narratives { get; set; } = new();
     }
+
+    public class BankResponseDto
+    {
+        public BankHeaderDto? Header { get; set; }
+    }
+
+    public class BankHeaderDto
+    {
+        public string? ReturnCode { get; set; }
+        public string? ReturnMessage { get; set; }
+        public string? ReturnMessageCode { get; set; }
+    }
 }

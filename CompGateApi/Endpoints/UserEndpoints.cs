@@ -33,7 +33,7 @@ namespace CompGateApi.Endpoints
                  .WithName("GetUsers")
                  .Produces<PagedResult<UserDetailsDto>>(200);
 
-            users.MapGet("/{userId:int}", GetUserById)
+            users.MapGet("/{id}", GetUserById)
                  .WithName("GetUserById")
                  .Produces<UserDetailsDto>(200)
                  .Produces(404);

@@ -91,6 +91,7 @@ namespace CompGateApi.Core.Repositories
                 {
                     Code = dto.CompanyCode,
                     Name = kyc.legalCompanyName,
+                    //needs fix isActive
                     IsActive = true,
                     KycRequestedAt = DateTimeOffset.UtcNow,
                     RegistrationStatus = RegistrationStatus.UnderReview,
@@ -190,12 +191,15 @@ namespace CompGateApi.Core.Repositories
 
         // Fetch all companies with their admin's KYC details
         public async Task<IList<CompanyListDto>> GetAllCompaniesAsync(
-            string? searchTerm,
-            RegistrationStatus? statusFilter,
-            int page,
-            int limit)
+      string? searchTerm,
+      RegistrationStatus? statusFilter,
+      int page,
+      int limit)
         {
-            var q = _db.Companies.AsNoTracking();
+            var q = _db.Companies
+                       .AsNoTracking()
+                       .Include(c => c.ServicePackage)
+                       .AsQueryable(); // ✅ fix the type mismatch
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = q.Where(c =>
@@ -223,7 +227,9 @@ namespace CompGateApi.Core.Repositories
                     KycLegalCompanyNameLt = c.KycLegalCompanyNameLt,
                     KycMobile = c.KycMobile,
                     KycNationality = c.KycNationality,
-                    KycCity = c.KycCity
+                    KycCity = c.KycCity,
+                    ServicePackageId = c.ServicePackageId,
+                    ServicePackageName = c.ServicePackage.Name
                 })
                 .ToListAsync();
         }
@@ -246,6 +252,7 @@ namespace CompGateApi.Core.Repositories
         public async Task<Company?> GetByCodeAsync(string code)
         {
             return await _db.Companies.Include(c => c.Attachments)
+                                        .Include(c => c.ServicePackage)
                                         .FirstOrDefaultAsync(c => c.Code == code);
         }
 

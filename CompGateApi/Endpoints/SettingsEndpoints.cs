@@ -43,6 +43,9 @@ namespace CompGateApi.Endpoints
             if (!string.IsNullOrEmpty(settingsDto.CommissionAccount))
                 settings.CommissionAccount = settingsDto.CommissionAccount;
 
+              if (!string.IsNullOrEmpty(settingsDto.CommissionAccountUSD))
+                settings.CommissionAccountUSD = settingsDto.CommissionAccountUSD;
+
             // only update global limit if provided
             if (settingsDto.GlobalLimit.HasValue)
                 settings.GlobalLimit = settingsDto.GlobalLimit.Value;
