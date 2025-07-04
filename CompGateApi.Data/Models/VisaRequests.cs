@@ -52,5 +52,8 @@ namespace CompGateApi.Data.Models
 
         [Required, MaxLength(50)]
         public string Status { get; set; } = "Pending";
+
+        public string? Reason { get; set; }
+
     }
 }

@@ -153,12 +153,12 @@ namespace CompGateApi.Endpoints
             [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto dto,
             HttpContext ctx,
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
-            IUserRepository userRepo,
-            IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto> validator)
+            IUserRepository userRepo)
+            // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto> validator)
         {
-            var validation = await validator.ValidateAsync(dto);
-            if (!validation.IsValid)
-                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+            // var validation = await validator.ValidateAsync(dto);
+            // if (!validation.IsValid)
+            //     return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
 
             if (!TryGetAuthUserId(ctx, out var auth))
                 return Results.Unauthorized();
@@ -274,12 +274,12 @@ namespace CompGateApi.Endpoints
         public static async Task<IResult> UpdateStatus(
             int id,
             [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto dto,
-            ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
-            IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto> validator)
+            ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo)
+            // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto> validator)
         {
-            var res = await validator.ValidateAsync(dto);
-            if (!res.IsValid)
-                return Results.BadRequest(res.Errors.Select(e => e.ErrorMessage));
+            // var res = await validator.ValidateAsync(dto);
+            // if (!res.IsValid)
+            //     return Results.BadRequest(res.Errors.Select(e => e.ErrorMessage));
 
             var ent = await repo.GetByIdAsync(id);
             if (ent == null) return Results.NotFound();

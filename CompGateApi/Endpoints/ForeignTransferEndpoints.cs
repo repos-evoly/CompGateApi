@@ -111,6 +111,7 @@ namespace CompGateApi.Endpoints
                 PermanentAddress = r.PermanentAddress,
                 PurposeOfTransfer = r.PurposeOfTransfer,
                 Status = r.Status,
+                Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt
             }).ToList();
@@ -167,6 +168,7 @@ namespace CompGateApi.Endpoints
                 PermanentAddress = ent.PermanentAddress,
                 PurposeOfTransfer = ent.PurposeOfTransfer,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             });
@@ -291,6 +293,7 @@ namespace CompGateApi.Endpoints
                 PermanentAddress = r.PermanentAddress,
                 PurposeOfTransfer = r.PurposeOfTransfer,
                 Status = r.Status,
+                Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt
             }).ToList();
@@ -347,6 +350,7 @@ namespace CompGateApi.Endpoints
                 PermanentAddress = ent.PermanentAddress,
                 PurposeOfTransfer = ent.PurposeOfTransfer,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             });
@@ -388,6 +392,7 @@ namespace CompGateApi.Endpoints
                 PermanentAddress = ent.PermanentAddress,
                 PurposeOfTransfer = ent.PurposeOfTransfer,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };

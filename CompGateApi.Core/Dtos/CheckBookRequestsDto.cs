@@ -16,6 +16,8 @@ namespace CompGateApi.Core.Dtos
         public DateTime? Date { get; set; }
         public string? BookContaining { get; set; }
         public string Status { get; set; } = string.Empty;
+
+        public string? Reason { get; set; } // For admin updates
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
         public int? CompanyId { get; set; }

@@ -24,5 +24,7 @@ namespace CompGateApi.Data.Models
         // navigation
         public User User { get; set; } = null!;
         public Company Company { get; set; } = null!;
+
+
     }
 }

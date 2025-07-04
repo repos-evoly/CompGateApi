@@ -80,5 +80,7 @@ namespace CompGateApi.Data.Models
         // Pending / Approved / Rejected
         [Required, MaxLength(50)]
         public string Status { get; set; } = "Pending";
+        public string? Reason { get; set; }
+
     }
 }

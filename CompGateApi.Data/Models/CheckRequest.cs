@@ -54,6 +54,9 @@ namespace CompGateApi.Data.Models
         [MaxLength(50)]
         public string Status { get; set; } = "Pending";
 
+        public string? Reason { get; set; }
+
+
         // Which admin (local User.Id) approved/rejected
         public int? ApprovedByUserId { get; set; }
         public User? ApprovedByUser { get; set; }

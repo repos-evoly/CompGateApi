@@ -16,6 +16,9 @@ namespace CompGateApi.Core.Dtos
         public string? AccountNum { get; set; }
         public string? Beneficiary { get; set; }
         public string Status { get; set; } = string.Empty;
+
+        public string? Reason { get; set; }
+
         public List<CheckRequestLineItemDto> LineItems { get; set; } = new();
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }

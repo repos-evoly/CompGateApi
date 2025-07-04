@@ -27,6 +27,8 @@ namespace CompGateApi.Core.Dtos
         public string? PermanentAddress { get; set; }
         public string? PurposeOfTransfer { get; set; }
         public string Status { get; set; } = string.Empty;
+
+        public string? Reason { get; set; } = string.Empty; // 
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }

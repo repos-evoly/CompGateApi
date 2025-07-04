@@ -155,9 +155,9 @@ namespace CompGateApi.Endpoints
             IValidator<CertifiedBankStatementRequestCreateDto> validator,
             ILogger<CertifiedBankStatementRequestEndpoints> log)
         {
-            var v = await validator.ValidateAsync(dto);
-            if (!v.IsValid)
-                return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
+            // var v = await validator.ValidateAsync(dto);
+            // if (!v.IsValid)
+            //     return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
 
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -256,12 +256,12 @@ namespace CompGateApi.Endpoints
             int id,
             [FromBody] CertifiedBankStatementRequestStatusUpdateDto dto,
             ICertifiedBankStatementRequestRepository repo,
-            IValidator<CertifiedBankStatementRequestStatusUpdateDto> validator,
+            // IValidator<CertifiedBankStatementRequestStatusUpdateDto> validator,
             ILogger<CertifiedBankStatementRequestEndpoints> log)
         {
-            var v = await validator.ValidateAsync(dto);
-            if (!v.IsValid)
-                return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
+            // var v = await validator.ValidateAsync(dto);
+            // if (!v.IsValid)
+            //     return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
 
             var ent = await repo.GetByIdAsync(id);
             if (ent == null)

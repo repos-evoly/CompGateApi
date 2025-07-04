@@ -119,6 +119,7 @@ namespace CompGateApi.Endpoints
                     AccountNum = r.AccountNum,
                     Beneficiary = r.Beneficiary,
                     Status = r.Status,
+                    Reason = r.Reason,
                     LineItems = r.LineItems.Select(li => new CheckRequestLineItemDto
                     {
                         Id = li.Id,
@@ -176,6 +177,7 @@ namespace CompGateApi.Endpoints
                     AccountNum = ent.AccountNum,
                     Beneficiary = ent.Beneficiary,
                     Status = ent.Status,
+                    Reason = ent.Reason,
                     LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
                     {
                         Id = li.Id,
@@ -293,6 +295,7 @@ namespace CompGateApi.Endpoints
                 AccountNum = r.AccountNum,
                 Beneficiary = r.Beneficiary,
                 Status = r.Status,
+                Reason = r.Reason,
                 LineItems = r.LineItems.Select(li => new CheckRequestLineItemDto
                 {
                     Id = li.Id,
@@ -334,6 +337,7 @@ namespace CompGateApi.Endpoints
                 AccountNum = ent.AccountNum,
                 Beneficiary = ent.Beneficiary,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
                 {
                     Id = li.Id,
@@ -385,6 +389,7 @@ namespace CompGateApi.Endpoints
                 AccountNum = ent.AccountNum,
                 Beneficiary = ent.Beneficiary,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
                 {
                     Id = li.Id,

@@ -116,6 +116,7 @@ namespace CompGateApi.Endpoints
                 Claim = r.Claim,
                 OtherDoc = r.OtherDoc,
                 Status = r.Status,
+                Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt
             }).ToList();
@@ -167,6 +168,7 @@ namespace CompGateApi.Endpoints
                 Claim = ent.Claim,
                 OtherDoc = ent.OtherDoc,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
@@ -285,6 +287,7 @@ namespace CompGateApi.Endpoints
                 Claim = r.Claim,
                 OtherDoc = r.OtherDoc,
                 Status = r.Status,
+                Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt
             }).ToList();
@@ -338,6 +341,7 @@ namespace CompGateApi.Endpoints
                 Claim = ent.Claim,
                 OtherDoc = ent.OtherDoc,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
@@ -376,6 +380,7 @@ namespace CompGateApi.Endpoints
                 Claim = ent.Claim,
                 OtherDoc = ent.OtherDoc,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };

@@ -92,6 +92,9 @@ namespace CompGateApi.Data.Models
         public string? SpecialistName { get; set; }
 
         public string Status { get; set; } = "Pending";
+
+        public string? Reason { get; set; }
+
         public ICollection<CblRequestOfficial> Officials { get; set; } = new List<CblRequestOfficial>();
         public ICollection<CblRequestSignature> Signatures { get; set; } = new List<CblRequestSignature>();
     }

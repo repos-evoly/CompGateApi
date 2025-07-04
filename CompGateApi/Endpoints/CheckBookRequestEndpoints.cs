@@ -130,6 +130,7 @@ namespace CompGateApi.Endpoints
                     Date = r.Date,
                     BookContaining = r.BookContaining,
                     Status = r.Status,
+                    Reason = r.Reason,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt
                 }).ToList();
@@ -192,6 +193,7 @@ namespace CompGateApi.Endpoints
                     Date = ent.Date,
                     BookContaining = ent.BookContaining,
                     Status = ent.Status,
+                    Reason = ent.Reason,
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt
                 });
@@ -311,6 +313,7 @@ namespace CompGateApi.Endpoints
                 Date = r.Date,
                 BookContaining = r.BookContaining,
                 Status = r.Status,
+                Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
                 UpdatedAt = r.UpdatedAt
             }).ToList();
@@ -368,6 +371,7 @@ namespace CompGateApi.Endpoints
                 Date = ent.Date,
                 BookContaining = ent.BookContaining,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             });
@@ -397,6 +401,7 @@ namespace CompGateApi.Endpoints
                 Date = ent.Date,
                 BookContaining = ent.BookContaining,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };

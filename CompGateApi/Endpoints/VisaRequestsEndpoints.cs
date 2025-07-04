@@ -100,6 +100,7 @@ namespace CompGateApi.Endpoints
                 LocalAmount = v.LocalAmount,
                 Pldedge = v.Pldedge,
                 Status = v.Status,
+                Reason = v.Reason,
                 CreatedAt = v.CreatedAt,
                 UpdatedAt = v.UpdatedAt
             }).ToList();
@@ -147,6 +148,7 @@ namespace CompGateApi.Endpoints
                 LocalAmount = v.LocalAmount,
                 Pldedge = v.Pldedge,
                 Status = v.Status,
+                Reason = v.Reason,
                 CreatedAt = v.CreatedAt,
                 UpdatedAt = v.UpdatedAt
             };
@@ -246,6 +248,7 @@ namespace CompGateApi.Endpoints
                 LocalAmount = v.LocalAmount,
                 Pldedge = v.Pldedge,
                 Status = v.Status,
+                Reason = v.Reason,
                 CreatedAt = v.CreatedAt,
                 UpdatedAt = v.UpdatedAt
             }).ToList();
@@ -296,6 +299,7 @@ namespace CompGateApi.Endpoints
                 LocalAmount = ent.LocalAmount,
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
@@ -329,6 +333,7 @@ namespace CompGateApi.Endpoints
                 LocalAmount = ent.LocalAmount,
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
+                Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
