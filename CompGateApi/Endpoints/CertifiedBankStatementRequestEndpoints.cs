@@ -40,6 +40,12 @@ namespace CompGateApi.Endpoints
                    .Produces<CertifiedBankStatementRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateCompanyRequest)
+                    .Accepts<CertifiedBankStatementRequestCreateDto>("application/json")
+                    .Produces<CertifiedBankStatementRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/certifiedbankstatementrequests")
@@ -215,6 +221,88 @@ namespace CompGateApi.Endpoints
             };
             return Results.Created($"/api/certifiedbankstatementrequests/{ent.Id}", outDto);
         }
+
+        public static async Task<IResult> UpdateCompanyRequest(
+    int id,
+    [FromBody] CertifiedBankStatementRequestCreateDto dto,
+    HttpContext ctx,
+    ICertifiedBankStatementRequestRepository repo,
+    IUserRepository userRepo,
+    IValidator<CertifiedBankStatementRequestCreateDto> validator,
+    ILogger<CertifiedBankStatementRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateCompanyRequest payload: {@Dto}", dto);
+
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+            {
+                log.LogWarning("Validation failed: {Errors}", string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+            }
+
+            try
+            {
+                var authId = GetAuthUserId(ctx);
+                var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+                var me = await userRepo.GetUserByAuthId(authId, bearer);
+                if (me == null || !me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var ent = await repo.GetByIdAsync(id);
+                if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                    return Results.NotFound();
+
+                if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest("Cannot edit a printed form.");
+
+                // update fields
+                ent.AccountHolderName = dto.AccountHolderName;
+                ent.AuthorizedOnTheAccountName = dto.AuthorizedOnTheAccountName;
+                ent.AccountNumber = dto.AccountNumber;
+
+                ent.ServiceRequests.ReactivateIdfaali = dto.ServiceRequests?.ReactivateIdfaali ?? ent.ServiceRequests.ReactivateIdfaali;
+                ent.ServiceRequests.DeactivateIdfaali = dto.ServiceRequests?.DeactivateIdfaali ?? ent.ServiceRequests.DeactivateIdfaali;
+                ent.ServiceRequests.ResetDigitalBankPassword = dto.ServiceRequests?.ResetDigitalBankPassword ?? ent.ServiceRequests.ResetDigitalBankPassword;
+                ent.ServiceRequests.ResendMobileBankingPin = dto.ServiceRequests?.ResendMobileBankingPin ?? ent.ServiceRequests.ResendMobileBankingPin;
+                ent.ServiceRequests.ChangePhoneNumber = dto.ServiceRequests?.ChangePhoneNumber ?? ent.ServiceRequests.ChangePhoneNumber;
+
+                ent.StatementRequest.CurrentAccountStatementArabic = dto.StatementRequest?.CurrentAccountStatementArabic;
+                ent.StatementRequest.CurrentAccountStatementEnglish = dto.StatementRequest?.CurrentAccountStatementEnglish;
+                ent.StatementRequest.VisaAccountStatement = dto.StatementRequest?.VisaAccountStatement;
+                ent.StatementRequest.AccountStatement = dto.StatementRequest?.AccountStatement;
+                ent.StatementRequest.JournalMovement = dto.StatementRequest?.JournalMovement;
+                ent.StatementRequest.NonFinancialCommitment = dto.StatementRequest?.NonFinancialCommitment;
+                ent.StatementRequest.FromDate = dto.StatementRequest?.FromDate;
+                ent.StatementRequest.ToDate = dto.StatementRequest?.ToDate;
+
+                ent.OldAccountNumber = dto.OldAccountNumber;
+                ent.NewAccountNumber = dto.NewAccountNumber;
+
+                await repo.UpdateAsync(ent);
+                log.LogInformation("Updated CertifiedBankStatementRequest Id={Id}", id);
+
+                var outDto = new CertifiedBankStatementRequestDto
+                {
+                    Id = ent.Id,
+                    CompanyId = ent.CompanyId,
+                    AccountHolderName = ent.AccountHolderName,
+                    AuthorizedOnTheAccountName = ent.AuthorizedOnTheAccountName,
+                    AccountNumber = ent.AccountNumber,
+                    Status = ent.Status,
+                    Reason = ent.Reason,
+                    CreatedAt = ent.CreatedAt,
+                    UpdatedAt = ent.UpdatedAt
+                };
+
+                return Results.Ok(outDto);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                log.LogError(ex, "Auth error in UpdateCompanyRequest");
+                return Results.Unauthorized();
+            }
+        }
+
 
         // ── ADMIN: list all ─────────────────────────────────────────────
         public static async Task<IResult> AdminGetAll(

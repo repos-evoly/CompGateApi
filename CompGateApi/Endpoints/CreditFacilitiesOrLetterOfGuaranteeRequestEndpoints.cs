@@ -36,6 +36,14 @@ namespace CompGateApi.Endpoints
                    .Produces<CreditFacilitiesOrLetterOfGuaranteeRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateRequest)
+                .WithName("UpdateCreditFacilitiesRequest")
+                .Accepts<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto>("application/json")
+                .Produces<CreditFacilitiesOrLetterOfGuaranteeRequestDto>(200)
+                .Produces(400)
+                .Produces(404);
+
+
             var admin = app
                 .MapGroup("/api/admin/creditfacilities")
                 .WithTags("CreditFacilities")
@@ -154,7 +162,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
             IUserRepository userRepo)
-            // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto> validator)
+        // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto> validator)
         {
             // var validation = await validator.ValidateAsync(dto);
             // if (!validation.IsValid)
@@ -204,6 +212,69 @@ namespace CompGateApi.Endpoints
             };
             return Results.Created($"/api/creditfacilities/{ent.Id}", outDto);
         }
+
+        public static async Task<IResult> UpdateRequest(
+    int id,
+    [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto dto,
+    HttpContext ctx,
+    ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
+    IUserRepository userRepo,
+    ILogger<CreditFacilitiesOrLetterOfGuaranteeRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateRequest payload: {@Dto}", dto);
+
+            // auth
+            if (!TryGetAuthUserId(ctx, out var auth))
+                return Results.Unauthorized();
+
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? string.Empty;
+            var me = await userRepo.GetUserByAuthId(auth, bearer);
+            if (me == null || me.CompanyId == null)
+                return Results.Unauthorized();
+
+            // fetch entity
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Cannot edit a printed form.");
+
+            // update fields
+            ent.AccountNumber = dto.AccountNumber;
+            ent.Date = dto.Date;
+            ent.Amount = dto.Amount;
+            ent.Purpose = dto.Purpose;
+            ent.AdditionalInfo = dto.AdditionalInfo;
+            ent.Curr = dto.Curr;
+            ent.ReferenceNumber = dto.ReferenceNumber;
+            ent.Type = dto.Type;
+            // leave Status/Reason untouched
+
+            await repo.UpdateAsync(ent);
+            log.LogInformation("Updated CreditFacilities request Id={Id}", id);
+
+            var outDto = new CreditFacilitiesOrLetterOfGuaranteeRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                AccountNumber = ent.AccountNumber,
+                Date = ent.Date,
+                Amount = ent.Amount,
+                Purpose = ent.Purpose,
+                AdditionalInfo = ent.AdditionalInfo,
+                Curr = ent.Curr,
+                ReferenceNumber = ent.ReferenceNumber,
+                Type = ent.Type,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(outDto);
+        }
+
 
         public static async Task<IResult> GetAllAdmin(
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
@@ -275,7 +346,7 @@ namespace CompGateApi.Endpoints
             int id,
             [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto dto,
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo)
-            // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto> validator)
+        // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto> validator)
         {
             // var res = await validator.ValidateAsync(dto);
             // if (!res.IsValid)

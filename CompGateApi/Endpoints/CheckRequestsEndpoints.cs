@@ -44,6 +44,14 @@ namespace CompGateApi.Endpoints
                    .Produces(400)
                    .Produces(401);
 
+            company.MapPut("/{id:int}", UpdateCompanyRequest)
+                    .WithName("UpdateCheckRequest")
+                    .Accepts<CheckRequestCreateDto>("application/json")
+                    .Produces<CheckRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
+
             // ── ADMIN PORTAL ───────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/checkrequests")
@@ -270,6 +278,86 @@ namespace CompGateApi.Endpoints
                 return Results.Unauthorized();
             }
         }
+
+        public static async Task<IResult> UpdateCompanyRequest(
+    int id,
+    [FromBody] CheckRequestCreateDto dto,
+    HttpContext ctx,
+    ICheckRequestRepository repo,
+    IUserRepository userRepo,
+    IValidator<CheckRequestCreateDto> validator,
+    ILogger<CheckRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateCompanyRequest payload: {@Dto}", dto);
+
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+            {
+                log.LogWarning("Validation failed: {Errors}", string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+            }
+
+            try
+            {
+                var authId = GetAuthUserId(ctx);
+                var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+                var me = await userRepo.GetUserByAuthId(authId, bearer);
+                if (me == null || !me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var ent = await repo.GetByIdAsync(id);
+                if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                    return Results.NotFound();
+
+                if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest("Cannot edit a printed form.");
+
+                // update fields
+                ent.Branch = dto.Branch;
+                ent.BranchNum = dto.BranchNum;
+                ent.Date = dto.Date;
+                ent.CustomerName = dto.CustomerName;
+                ent.CardNum = dto.CardNum;
+                ent.AccountNum = dto.AccountNum;
+                ent.Beneficiary = dto.Beneficiary;
+
+                // replace line items
+                ent.LineItems = dto.LineItems
+                    .Select(li => new CheckRequestLineItem { Dirham = li.Dirham, Lyd = li.Lyd })
+                    .ToList();
+
+                await repo.UpdateAsync(ent);
+                log.LogInformation("Updated CheckRequest Id={Id}", id);
+
+                var outDto = new CheckRequestDto
+                {
+                    Id = ent.Id,
+                    UserId = ent.UserId,
+                    Branch = ent.Branch,
+                    BranchNum = ent.BranchNum,
+                    Date = ent.Date,
+                    CustomerName = ent.CustomerName,
+                    CardNum = ent.CardNum,
+                    AccountNum = ent.AccountNum,
+                    Beneficiary = ent.Beneficiary,
+                    Status = ent.Status,
+                    Reason = ent.Reason,
+                    LineItems = ent.LineItems
+                                        .Select(li => new CheckRequestLineItemDto { Id = li.Id, Dirham = li.Dirham, Lyd = li.Lyd })
+                                        .ToList(),
+                    CreatedAt = ent.CreatedAt,
+                    UpdatedAt = ent.UpdatedAt
+                };
+
+                return Results.Ok(outDto);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                log.LogError(ex, "Auth error in UpdateCompanyRequest");
+                return Results.Unauthorized();
+            }
+        }
+
 
         // ── ADMIN: list all ───────────────────────────────────────────
         public static async Task<IResult> AdminGetAll(

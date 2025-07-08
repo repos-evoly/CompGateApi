@@ -234,6 +234,7 @@ namespace CompGateApi.Endpoints
                     Id = ent.Id,
                     Name = ent.Name,
                     Number = ent.Number,
+                    IsActive = ent.IsActive,
                     PassportNumber = ent.PassportNumber,
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt

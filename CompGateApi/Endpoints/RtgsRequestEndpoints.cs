@@ -38,6 +38,14 @@ namespace CompGateApi.Endpoints
                    .Produces<RtgsRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateMyRequest)
+                    .WithName("UpdateRtgsRequest")
+                    .Accepts<RtgsRequestCreateDto>("application/json")
+                    .Produces<RtgsRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
+
             // ── ADMIN routes ─────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/rtgsrequests")
@@ -250,6 +258,83 @@ namespace CompGateApi.Endpoints
 
             return Results.Created($"/api/rtgsrequests/{ent.Id}", outDto);
         }
+
+        public static async Task<IResult> UpdateMyRequest(
+    int id,
+    [FromBody] RtgsRequestCreateDto dto,
+    HttpContext ctx,
+    IRtgsRequestRepository repo,
+    IUserRepository userRepo,
+    ILogger<RtgsRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+
+            // authenticate
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            // fetch existing
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Cannot edit a printed form.");
+
+            // update fields
+            ent.RefNum = dto.RefNum;
+            ent.Date = dto.Date;
+            ent.PaymentType = dto.PaymentType;
+            ent.AccountNo = dto.AccountNo;
+            ent.ApplicantName = dto.ApplicantName;
+            ent.Address = dto.Address;
+            ent.BeneficiaryName = dto.BeneficiaryName;
+            ent.BeneficiaryAccountNo = dto.BeneficiaryAccountNo;
+            ent.BeneficiaryBank = dto.BeneficiaryBank;
+            ent.BranchName = dto.BranchName;
+            ent.Amount = dto.Amount;
+            ent.RemittanceInfo = dto.RemittanceInfo;
+            ent.Invoice = dto.Invoice;
+            ent.Contract = dto.Contract;
+            ent.Claim = dto.Claim;
+            ent.OtherDoc = dto.OtherDoc;
+            // leave Status/Reason unchanged
+
+            await repo.UpdateAsync(ent);
+            log.LogInformation("Updated RtgsRequest Id={Id}", id);
+
+            var outDto = new RtgsRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                RefNum = ent.RefNum,
+                Date = ent.Date,
+                PaymentType = ent.PaymentType,
+                AccountNo = ent.AccountNo,
+                ApplicantName = ent.ApplicantName,
+                Address = ent.Address,
+                BeneficiaryName = ent.BeneficiaryName,
+                BeneficiaryAccountNo = ent.BeneficiaryAccountNo,
+                BeneficiaryBank = ent.BeneficiaryBank,
+                BranchName = ent.BranchName,
+                Amount = ent.Amount,
+                RemittanceInfo = ent.RemittanceInfo,
+                Invoice = ent.Invoice,
+                Contract = ent.Contract,
+                Claim = ent.Claim,
+                OtherDoc = ent.OtherDoc,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(outDto);
+        }
+
 
         // ── ADMIN: list all RTGS requests with search & paging ──────────────────────────────
         public static async Task<IResult> GetAllAdmin(

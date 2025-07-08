@@ -43,6 +43,13 @@ namespace CompGateApi.Endpoints
                    .Produces<CheckBookRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateMyRequest)
+                    .WithName("UpdateCheckBookRequest")
+                    .Accepts<CheckBookRequestCreateDto>("application/json")
+                    .Produces<CheckBookRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/checkbookrequests")
@@ -285,6 +292,78 @@ namespace CompGateApi.Endpoints
                 return Results.Unauthorized();
             }
         }
+
+        public static async Task<IResult> UpdateMyRequest(
+    int id,
+    [FromBody] CheckBookRequestCreateDto dto,
+    HttpContext ctx,
+    ICheckBookRequestRepository repo,
+    IUserRepository userRepo,
+    IValidator<CheckBookRequestCreateDto> validator,
+    ILogger<CheckBookRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+            {
+                log.LogWarning("Validation failed: {Errors}", string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+            }
+
+            try
+            {
+                var authId = GetAuthUserId(ctx);
+                var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+                var me = await userRepo.GetUserByAuthId(authId, bearer);
+                if (me == null || !me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var ent = await repo.GetByIdAsync(id);
+                if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                    return Results.NotFound();
+
+                if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest("Cannot edit a printed form.");
+
+                // update fields
+                ent.FullName = dto.FullName;
+                ent.Address = dto.Address;
+                ent.AccountNumber = dto.AccountNumber;
+                ent.PleaseSend = dto.PleaseSend;
+                ent.Branch = dto.Branch;
+                ent.Date = dto.Date;
+                ent.BookContaining = dto.BookContaining;
+
+                await repo.UpdateAsync(ent);
+                log.LogInformation("Updated CheckBookRequest Id={Id}", id);
+
+                var outDto = new CheckBookRequestDto
+                {
+                    Id = ent.Id,
+                    UserId = ent.UserId,
+                    FullName = ent.FullName,
+                    Address = ent.Address,
+                    AccountNumber = ent.AccountNumber,
+                    PleaseSend = ent.PleaseSend,
+                    Branch = ent.Branch,
+                    Date = ent.Date,
+                    BookContaining = ent.BookContaining,
+                    Status = ent.Status,
+                    Reason = ent.Reason,
+                    CreatedAt = ent.CreatedAt,
+                    UpdatedAt = ent.UpdatedAt
+                };
+
+                return Results.Ok(outDto);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                log.LogError(ex, "Auth error in UpdateMyRequest");
+                return Results.Unauthorized();
+            }
+        }
+
 
         // ── Admin: list all ────────────────────────────────────────────────
         public static async Task<IResult> GetAllAdmin(

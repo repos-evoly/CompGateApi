@@ -37,6 +37,14 @@ namespace CompGateApi.Endpoints
                      .Produces(400)
                      .Produces(401);
 
+            userGroup.MapPut("/{id:int}", UpdateMyRequest)
+                    .WithName("UpdateForeignTransfer")
+                    .Accepts<ForeignTransferCreateDto>("application/json")
+                    .Produces<ForeignTransferDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
+
             // Admin portal
             var admin = app.MapGroup("/api/admin/foreigntransfers")
                            .RequireAuthorization("RequireAdminUser")
@@ -256,6 +264,91 @@ namespace CompGateApi.Endpoints
 
             return Results.Created($"/api/foreigntransfers/{ent.Id}", outDto);
         }
+
+        public static async Task<IResult> UpdateMyRequest(
+    int id,
+    [FromBody] ForeignTransferCreateDto dto,
+    HttpContext ctx,
+    IForeignTransferRepository repo,
+    IUserRepository userRepo,
+    ILogger<ForeignTransferEndpoints> log)
+        {
+            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+
+            // auth
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            // fetch
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Cannot edit a printed form.");
+
+            // update fields
+            ent.ToBank = dto.ToBank;
+            ent.Branch = dto.Branch;
+            ent.ResidentSupplierName = dto.ResidentSupplierName;
+            ent.ResidentSupplierNationality = dto.ResidentSupplierNationality;
+            ent.NonResidentPassportNumber = dto.NonResidentPassportNumber;
+            ent.PlaceOfIssue = dto.PlaceOfIssue;
+            ent.DateOfIssue = dto.DateOfIssue;
+            ent.NonResidentNationality = dto.NonResidentNationality;
+            ent.NonResidentAddress = dto.NonResidentAddress;
+            ent.TransferAmount = dto.TransferAmount;
+            ent.ToCountry = dto.ToCountry;
+            ent.BeneficiaryName = dto.BeneficiaryName;
+            ent.BeneficiaryAddress = dto.BeneficiaryAddress;
+            ent.ExternalBankName = dto.ExternalBankName;
+            ent.ExternalBankAddress = dto.ExternalBankAddress;
+            ent.TransferToAccountNumber = dto.TransferToAccountNumber;
+            ent.TransferToAddress = dto.TransferToAddress;
+            ent.AccountHolderName = dto.AccountHolderName;
+            ent.PermanentAddress = dto.PermanentAddress;
+            ent.PurposeOfTransfer = dto.PurposeOfTransfer;
+            // leave Status and Reason as-is
+
+            await repo.UpdateAsync(ent);
+            log.LogInformation("Updated ForeignTransfer Id={Id}", id);
+
+            var outDto = new ForeignTransferDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                ToBank = ent.ToBank,
+                Branch = ent.Branch,
+                ResidentSupplierName = ent.ResidentSupplierName,
+                ResidentSupplierNationality = ent.ResidentSupplierNationality,
+                NonResidentPassportNumber = ent.NonResidentPassportNumber,
+                PlaceOfIssue = ent.PlaceOfIssue,
+                DateOfIssue = ent.DateOfIssue,
+                NonResidentNationality = ent.NonResidentNationality,
+                NonResidentAddress = ent.NonResidentAddress,
+                TransferAmount = ent.TransferAmount,
+                ToCountry = ent.ToCountry,
+                BeneficiaryName = ent.BeneficiaryName,
+                BeneficiaryAddress = ent.BeneficiaryAddress,
+                ExternalBankName = ent.ExternalBankName,
+                ExternalBankAddress = ent.ExternalBankAddress,
+                TransferToAccountNumber = ent.TransferToAccountNumber,
+                TransferToAddress = ent.TransferToAddress,
+                AccountHolderName = ent.AccountHolderName,
+                PermanentAddress = ent.PermanentAddress,
+                PurposeOfTransfer = ent.PurposeOfTransfer,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(outDto);
+        }
+
 
         public static async Task<IResult> GetAllAdmin(
             [FromServices] IForeignTransferRepository repo,

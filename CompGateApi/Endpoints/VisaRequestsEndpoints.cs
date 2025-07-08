@@ -33,6 +33,14 @@ namespace CompGateApi.Endpoints
                    .Produces<VisaRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateMyRequest)
+                .WithName("UpdateVisaRequest")
+                .Accepts<VisaRequestCreateDto>("application/json")
+                .Produces<VisaRequestDto>(200)
+                .Produces(400)
+                .Produces(404);
+
+
             var admin = app
                 .MapGroup("/api/admin/visarequests")
                 .WithTags("VisaRequests")
@@ -220,6 +228,78 @@ namespace CompGateApi.Endpoints
             };
             return Results.Created($"/api/visarequests/{ent.Id}", outDto);
         }
+
+        public static async Task<IResult> UpdateMyRequest(
+    int id,
+    [FromBody] VisaRequestCreateDto dto,
+    HttpContext ctx,
+    IVisaRequestRepository repo,
+    IUserRepository userRepo,
+    IValidator<VisaRequestCreateDto> validator,
+    ILogger<VisaRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Cannot edit a printed form.");
+
+            // update fields
+            ent.Branch = dto.Branch;
+            ent.Date = dto.Date;
+            ent.AccountHolderName = dto.AccountHolderName;
+            ent.AccountNumber = dto.AccountNumber;
+            ent.NationalId = dto.NationalId;
+            ent.PhoneNumberLinkedToNationalId = dto.PhoneNumberLinkedToNationalId;
+            ent.Cbl = dto.Cbl;
+            ent.CardMovementApproval = dto.CardMovementApproval;
+            ent.CardUsingAcknowledgment = dto.CardUsingAcknowledgment;
+            ent.ForeignAmount = dto.ForeignAmount;
+            ent.LocalAmount = dto.LocalAmount;
+            ent.Pldedge = dto.Pldedge;
+            // leave Status and Reason unchanged
+
+            await repo.UpdateAsync(ent);
+            log.LogInformation("Updated VisaRequest Id={Id}", id);
+
+            var outDto = new VisaRequestDto
+            {
+                Id = ent.Id,
+                UserId = ent.UserId,
+                Branch = ent.Branch,
+                Date = ent.Date,
+                AccountHolderName = ent.AccountHolderName,
+                AccountNumber = ent.AccountNumber,
+                NationalId = ent.NationalId,
+                PhoneNumberLinkedToNationalId = ent.PhoneNumberLinkedToNationalId,
+                Cbl = ent.Cbl,
+                CardMovementApproval = ent.CardMovementApproval,
+                CardUsingAcknowledgment = ent.CardUsingAcknowledgment,
+                ForeignAmount = ent.ForeignAmount,
+                LocalAmount = ent.LocalAmount,
+                Pldedge = ent.Pldedge,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
+            };
+
+            return Results.Ok(outDto);
+        }
+
 
         public static async Task<IResult> GetAllAdmin(
             [FromServices] IVisaRequestRepository repo,

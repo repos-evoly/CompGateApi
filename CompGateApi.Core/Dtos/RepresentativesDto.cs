@@ -9,7 +9,7 @@ namespace CompGateApi.Core.Dtos
         public string Name { get; set; } = string.Empty;
         public string Number { get; set; } = string.Empty;
         public string PassportNumber { get; set; } = string.Empty;
-        public bool IsActive { get; set; }                
+        public bool IsActive { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }
@@ -26,5 +26,6 @@ namespace CompGateApi.Core.Dtos
         public string Name { get; set; } = string.Empty;
         public string Number { get; set; } = string.Empty;
         public string PassportNumber { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = false; // Default to true
     }
 }

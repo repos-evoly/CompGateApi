@@ -38,6 +38,13 @@ namespace CompGateApi.Endpoints
                    .Produces<CblRequestDto>(201)
                    .Produces(400);
 
+            company.MapPut("/{id:int}", UpdateMyRequest)
+                  .Accepts<CblRequestCreateDto>("application/json")
+                  .Produces<CblRequestDto>(200)
+                  .Produces(400)
+                  .Produces(404);
+
+
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/cblrequests")
@@ -152,6 +159,129 @@ namespace CompGateApi.Endpoints
             catch (UnauthorizedAccessException ex)
             {
                 log.LogError(ex, "Auth error in GetMyRequests");
+                return Results.Unauthorized();
+            }
+        }
+
+
+        public static async Task<IResult> UpdateMyRequest(
+            int id,
+            [FromBody] CblRequestCreateDto dto,
+            HttpContext ctx,
+            ICblRequestRepository repo,
+            IUserRepository userRepo,
+            IValidator<CblRequestCreateDto> validator,
+            ILogger<CblRequestEndpoints> log)
+        {
+            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+            {
+                log.LogWarning("Validation failed: {Errors}", string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+            }
+
+            try
+            {
+                var authId = GetAuthUserId(ctx);
+                var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? string.Empty;
+                var me = await userRepo.GetUserByAuthId(authId, token);
+                if (me == null || !me.CompanyId.HasValue)
+                    return Results.Unauthorized();
+
+                var ent = await repo.GetByIdAsync(id);
+                if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                    return Results.NotFound();
+
+                if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest("Cannot edit a printed form.");
+
+                // update fields
+                ent.PartyName = dto.PartyName;
+                ent.Capital = dto.Capital;
+                ent.FoundingDate = dto.FoundingDate;
+                ent.LegalForm = dto.LegalForm;
+                ent.BranchOrAgency = dto.BranchOrAgency;
+                ent.CurrentAccount = dto.CurrentAccount;
+                ent.AccountOpening = dto.AccountOpening;
+                ent.CommercialLicense = dto.CommercialLicense;
+                ent.ValidatyLicense = dto.ValidatyLicense;
+                ent.CommercialRegistration = dto.CommercialRegistration;
+                ent.ValidatyRegister = dto.ValidatyRegister;
+                ent.StatisticalCode = dto.StatisticalCode;
+                ent.ValidatyCode = dto.ValidatyCode;
+                ent.ChamberNumber = dto.ChamberNumber;
+                ent.ValidatyChamber = dto.ValidatyChamber;
+                ent.TaxNumber = dto.TaxNumber;
+                ent.Office = dto.Office;
+                ent.LegalRepresentative = dto.LegalRepresentative;
+                ent.RepresentativeNumber = dto.RepresentativeNumber;
+                ent.BirthDate = dto.BirthDate;
+                ent.PassportNumber = dto.PassportNumber;
+                ent.PassportIssuance = dto.PassportIssuance;
+                ent.PassportExpiry = dto.PassportExpiry;
+                ent.Mobile = dto.Mobile;
+                ent.Address = dto.Address;
+                ent.PackingDate = dto.PackingDate;
+                ent.SpecialistName = dto.SpecialistName;
+
+                ent.Officials = dto.Officials
+                    .Select(o => new CblRequestOfficial { Name = o.Name, Position = o.Position })
+                    .ToList();
+                ent.Signatures = dto.Signatures
+                    .Select(s => new CblRequestSignature { Name = s.Name, Signature = s.Signature })
+                    .ToList();
+
+                await repo.UpdateAsync(ent);
+                log.LogInformation("Updated CblRequest Id={RequestId}", id);
+
+                var outDto = new CblRequestDto
+                {
+                    Id = ent.Id,
+                    UserId = ent.UserId,
+                    PartyName = ent.PartyName,
+                    Capital = ent.Capital,
+                    FoundingDate = ent.FoundingDate,
+                    LegalForm = ent.LegalForm,
+                    BranchOrAgency = ent.BranchOrAgency,
+                    CurrentAccount = ent.CurrentAccount,
+                    AccountOpening = ent.AccountOpening,
+                    CommercialLicense = ent.CommercialLicense,
+                    ValidatyLicense = ent.ValidatyLicense,
+                    CommercialRegistration = ent.CommercialRegistration,
+                    ValidatyRegister = ent.ValidatyRegister,
+                    StatisticalCode = ent.StatisticalCode,
+                    ValidatyCode = ent.ValidatyCode,
+                    ChamberNumber = ent.ChamberNumber,
+                    ValidatyChamber = ent.ValidatyChamber,
+                    TaxNumber = ent.TaxNumber,
+                    Office = ent.Office,
+                    LegalRepresentative = ent.LegalRepresentative,
+                    RepresentativeNumber = ent.RepresentativeNumber,
+                    BirthDate = ent.BirthDate,
+                    PassportNumber = ent.PassportNumber,
+                    PassportIssuance = ent.PassportIssuance,
+                    PassportExpiry = ent.PassportExpiry,
+                    Mobile = ent.Mobile,
+                    Address = ent.Address,
+                    PackingDate = ent.PackingDate,
+                    SpecialistName = ent.SpecialistName,
+                    Status = ent.Status,
+                    Officials = ent.Officials
+                        .Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position })
+                        .ToList(),
+                    Signatures = ent.Signatures
+                        .Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status })
+                        .ToList(),
+                    CreatedAt = ent.CreatedAt,
+                    UpdatedAt = ent.UpdatedAt
+                };
+
+                return Results.Ok(outDto);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                log.LogError(ex, "Auth error in UpdateMyRequest");
                 return Results.Unauthorized();
             }
         }
