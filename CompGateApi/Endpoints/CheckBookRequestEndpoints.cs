@@ -218,6 +218,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             ICheckBookRequestRepository repo,
             IUserRepository userRepo,
+            IRepresentativeRepository repRepo,
             IValidator<CheckBookRequestCreateDto> validator,
             ILogger<CheckBookRequestEndpoints> log)
         {
@@ -248,6 +249,9 @@ namespace CompGateApi.Endpoints
                 if (!me.CompanyId.HasValue)
                     return Results.Unauthorized();
 
+                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId);
+                if (rep == null || rep.CompanyId != me.CompanyId.Value)
+                    return Results.BadRequest("Invalid RepresentativeId");
 
 
                 // Build & save entity
@@ -255,6 +259,7 @@ namespace CompGateApi.Endpoints
                 {
                     UserId = me.UserId,
                     CompanyId = me.CompanyId.Value,
+                    RepresentativeId = dto.RepresentativeId,
                     FullName = dto.FullName,
                     Address = dto.Address,
                     AccountNumber = dto.AccountNumber,
@@ -273,6 +278,13 @@ namespace CompGateApi.Endpoints
                     Id = ent.Id,
                     UserId = ent.UserId,
                     CompanyId = me.CompanyId.Value,
+                    RepresentativeId = ent.RepresentativeId,
+                    Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number
+                    },
                     FullName = ent.FullName,
                     Address = ent.Address,
                     AccountNumber = ent.AccountNumber,
@@ -298,6 +310,7 @@ namespace CompGateApi.Endpoints
     [FromBody] CheckBookRequestCreateDto dto,
     HttpContext ctx,
     ICheckBookRequestRepository repo,
+    IRepresentativeRepository repRepo,
     IUserRepository userRepo,
     IValidator<CheckBookRequestCreateDto> validator,
     ILogger<CheckBookRequestEndpoints> log)
@@ -326,7 +339,12 @@ namespace CompGateApi.Endpoints
                 if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
                     return Results.BadRequest("Cannot edit a printed form.");
 
+                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId);
+                if (rep == null || rep.CompanyId != me.CompanyId.Value)
+                    return Results.BadRequest("Invalid RepresentativeId");
+
                 // update fields
+                ent.RepresentativeId = dto.RepresentativeId;
                 ent.FullName = dto.FullName;
                 ent.Address = dto.Address;
                 ent.AccountNumber = dto.AccountNumber;
@@ -342,6 +360,13 @@ namespace CompGateApi.Endpoints
                 {
                     Id = ent.Id,
                     UserId = ent.UserId,
+                    RepresentativeId = ent.RepresentativeId,
+                    Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number
+                    },
                     FullName = ent.FullName,
                     Address = ent.Address,
                     AccountNumber = ent.AccountNumber,

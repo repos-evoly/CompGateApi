@@ -10,26 +10,29 @@ namespace CompGateApi.Data.Models
         [Key]
         public int Id { get; set; }
 
-        [Required]
-        [MaxLength(100)]
+        [Required, MaxLength(100)]
         public string Name { get; set; } = null!;
 
-        [Required]
-        [MaxLength(50)]
-        public string Number { get; set; } = null!;          
+        [Required, MaxLength(50)]
+        public string Number { get; set; } = null!;
 
-        [Required]
-        [MaxLength(50)]
-        public string PassportNumber { get; set; } = null!;   
+        [Required, MaxLength(50)]
+        public string PassportNumber { get; set; } = null!;
 
-         public bool IsActive { get; set; } = true;
+        public bool IsActive { get; set; } = true;
+        public bool IsDeleted { get; set; } = false;
 
+        // NEW: store uploaded photo
+        [MaxLength(200)]
+        public string? PhotoFileName { get; set; }
+
+        [MaxLength(500)]
+        public string? PhotoUrl { get; set; }
 
         // foreign key to Company
         [ForeignKey(nameof(Company))]
         public int CompanyId { get; set; }
-
-        // navigation
         public Company Company { get; set; } = null!;
     }
+
 }

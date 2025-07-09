@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250709074327_RepresentativeAttachment")]
+    partial class RepresentativeAttachment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -459,9 +462,6 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("Reason")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("RepresentativeId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -476,8 +476,6 @@ namespace CompGateApi.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
-
-                    b.HasIndex("RepresentativeId");
 
                     b.HasIndex("UserId");
 
@@ -1801,12 +1799,6 @@ namespace CompGateApi.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CompGateApi.Data.Models.Representative", "Representative")
-                        .WithMany()
-                        .HasForeignKey("RepresentativeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("CompGateApi.Data.Models.User", "User")
                         .WithMany("CheckBookRequests")
                         .HasForeignKey("UserId")
@@ -1814,8 +1806,6 @@ namespace CompGateApi.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Company");
-
-                    b.Navigation("Representative");
 
                     b.Navigation("User");
                 });

@@ -467,6 +467,12 @@ namespace CompGateApi.Data.Context
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                     b.HasOne(x => x.Representative)
+                     .WithMany()
+                     .HasForeignKey(x => x.RepresentativeId)
+                     .OnDelete(DeleteBehavior.Restrict);
+            
+
                             b.HasOne(x => x.Company)
                     .WithMany(c => c.CheckBookRequests)
                     .HasForeignKey(x => x.CompanyId)
