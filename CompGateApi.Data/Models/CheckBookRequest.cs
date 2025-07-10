@@ -19,11 +19,10 @@ namespace CompGateApi.Data.Models
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
 
-        [Required]
-        public int RepresentativeId { get; set; }
+        public int? RepresentativeId { get; set; }
 
         [ForeignKey(nameof(RepresentativeId))]
-        public Representative Representative { get; set; } = null!;
+        public Representative? Representative { get; set; } = null!;
 
 
         [MaxLength(150)]

@@ -533,7 +533,6 @@ namespace CompGateApi.Core.Repositories
 
         public async Task<List<Permission>> GetPermissionsByGlobalAsync(bool isGlobal)
         {
-            // find all roles with that flag, then all their permissions:
             var roleIds = await _context.Roles
                 .Where(r => r.IsGlobal == isGlobal)
                 .Select(r => r.Id)
@@ -542,10 +541,14 @@ namespace CompGateApi.Core.Repositories
             return await _context.RolePermissions
                 .Where(rp => roleIds.Contains(rp.RoleId))
                 .Include(rp => rp.Permission)
+                // only permissions whose own IsGlobal matches
+                .Where(rp => rp.Permission.IsGlobal == isGlobal)
                 .Select(rp => rp.Permission)
                 .Distinct()
                 .ToListAsync();
         }
+
+
         public async Task<List<BasicUserDto>> GetManagementUsersAsync(string currentUserRole)
         {
             // Define the management role names (all management-related roles).

@@ -9,7 +9,7 @@ namespace CompGateApi.Core.Dtos
         public int Id { get; set; }
         public int UserId { get; set; }
 
-        public int RepresentativeId { get; set; }              // ← NEW
+        public int? RepresentativeId { get; set; }              // ← NEW
         public RepresentativeDto Representative { get; set; }   // ← OPTIONAL: embed rep info
         public string? FullName { get; set; }
         public string? Address { get; set; }
@@ -30,7 +30,7 @@ namespace CompGateApi.Core.Dtos
     public class CheckBookRequestCreateDto
     {
 
-        public int RepresentativeId { get; set; }  // ← NEW
+        public int? RepresentativeId { get; set; }  // ← NEW
         public string? FullName { get; set; }
         public string? Address { get; set; }
         public string? AccountNumber { get; set; }

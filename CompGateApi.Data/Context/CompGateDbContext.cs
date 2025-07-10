@@ -393,6 +393,10 @@ namespace CompGateApi.Data.Context
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                            b.HasOne(x => x.Representative)
+                     .WithMany()                        // no navigation collection on Representative
+                     .HasForeignKey(x => x.RepresentativeId)
+                     .OnDelete(DeleteBehavior.Restrict);
                             b.HasOne(x => x.Company)
                     .WithMany(c => c.CheckRequests)
                     .HasForeignKey(x => x.CompanyId)
@@ -467,11 +471,11 @@ namespace CompGateApi.Data.Context
                     .HasForeignKey(x => x.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                     b.HasOne(x => x.Representative)
-                     .WithMany()
-                     .HasForeignKey(x => x.RepresentativeId)
-                     .OnDelete(DeleteBehavior.Restrict);
-            
+                            b.HasOne(x => x.Representative)
+                            .WithMany()
+                            .HasForeignKey(x => x.RepresentativeId)
+                            .OnDelete(DeleteBehavior.Restrict);
+
 
                             b.HasOne(x => x.Company)
                     .WithMany(c => c.CheckBookRequests)
@@ -494,6 +498,11 @@ namespace CompGateApi.Data.Context
                     .WithMany(c => c.CblRequests)
                     .HasForeignKey(x => x.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(x => x.Attachment)
+                     .WithMany()
+                     .HasForeignKey(x => x.AttachmentId)
+                     .OnDelete(DeleteBehavior.Restrict);
 
                             b.Property(x => x.Capital)
                     .HasPrecision(18, 4);

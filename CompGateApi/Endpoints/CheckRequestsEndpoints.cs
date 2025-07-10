@@ -239,6 +239,7 @@ namespace CompGateApi.Endpoints
                     AccountNum = dto.AccountNum,
                     Beneficiary = dto.Beneficiary,
                     Status = "Pending",
+                    RepresentativeId = dto.RepresentativeId,
                     LineItems = dto.LineItems.Select(li => new CheckRequestLineItem
                     {
                         Dirham = li.Dirham,
@@ -261,6 +262,7 @@ namespace CompGateApi.Endpoints
                     AccountNum = ent.AccountNum,
                     Beneficiary = ent.Beneficiary,
                     Status = ent.Status,
+                    RepresentativeId = ent.RepresentativeId ?? 0,
                     LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
                     {
                         Id = li.Id,
@@ -320,6 +322,7 @@ namespace CompGateApi.Endpoints
                 ent.CardNum = dto.CardNum;
                 ent.AccountNum = dto.AccountNum;
                 ent.Beneficiary = dto.Beneficiary;
+                ent.RepresentativeId = dto.RepresentativeId;
 
                 // replace line items
                 ent.LineItems = dto.LineItems
@@ -342,6 +345,7 @@ namespace CompGateApi.Endpoints
                     Beneficiary = ent.Beneficiary,
                     Status = ent.Status,
                     Reason = ent.Reason,
+                    RepresentativeId = ent.RepresentativeId ?? 0,
                     LineItems = ent.LineItems
                                         .Select(li => new CheckRequestLineItemDto { Id = li.Id, Dirham = li.Dirham, Lyd = li.Lyd })
                                         .ToList(),

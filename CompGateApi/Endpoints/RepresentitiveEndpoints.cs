@@ -184,14 +184,13 @@ namespace CompGateApi.Endpoints
                 }
 
                 // save file
-                var dir = Path.Combine("wwwroot", "representatives", me.CompanyId.Value.ToString());
+                var dir = Path.Combine("Attachments", me.CompanyId.Value.ToString());
                 Directory.CreateDirectory(dir);
-                var ext = Path.GetExtension(photo.FileName);
-                var fn = $"{Guid.NewGuid()}{ext}";
-                var fp = Path.Combine(dir, fn);
-                await using var fs = File.Create(fp);
-                await photo.CopyToAsync(fs);
 
+                var fn = $"{Guid.NewGuid()}{Path.GetExtension(photo.FileName)}";
+                var full = Path.Combine(dir, fn);
+                await using (var fs = File.Create(full))
+                    await photo.CopyToAsync(fs);
                 var ent = new Representative
                 {
                     Name = name,
@@ -201,7 +200,7 @@ namespace CompGateApi.Endpoints
                     IsActive = true,
                     IsDeleted = false,
                     PhotoFileName = fn,
-                    PhotoUrl = $"/representatives/{me.CompanyId}/{fn}"
+                    PhotoUrl = $"/Attachments/{me.CompanyId}/{fn}"
                 };
 
                 await repo.CreateAsync(ent);
@@ -260,20 +259,21 @@ namespace CompGateApi.Endpoints
                 if (form.Files.Any())
                 {
                     // delete old
-                    var old = Path.Combine("wwwroot", ent.PhotoUrl.TrimStart('/'));
+                    var old = Path.Combine("Attachments", me.CompanyId.Value.ToString(), ent.PhotoFileName!);
                     if (File.Exists(old)) File.Delete(old);
 
                     var photo = form.Files[0];
-                    var ext = Path.GetExtension(photo.FileName);
-                    var fn = $"{Guid.NewGuid()}{ext}";
-                    var dir = Path.Combine("wwwroot", "representatives", me.CompanyId.Value.ToString());
+                    // ←— **WRITE INTO Attachments/{companyId}**
+                    var dir = Path.Combine("Attachments", me.CompanyId.Value.ToString());
                     Directory.CreateDirectory(dir);
-                    var fp = Path.Combine(dir, fn);
-                    await using var fs = File.Create(fp);
-                    await photo.CopyToAsync(fs);
+
+                    var fn = $"{Guid.NewGuid()}{Path.GetExtension(photo.FileName)}";
+                    var full = Path.Combine(dir, fn);
+                    await using (var fs = File.Create(full))
+                        await photo.CopyToAsync(fs);
 
                     ent.PhotoFileName = fn;
-                    ent.PhotoUrl = $"/representatives/{me.CompanyId}/{fn}";
+                    ent.PhotoUrl = $"/Attachments/{me.CompanyId}/{fn}";
                 }
 
                 await repo.UpdateAsync(ent);

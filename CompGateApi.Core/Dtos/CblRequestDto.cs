@@ -37,6 +37,9 @@ namespace CompGateApi.Core.Dtos
         public string? SpecialistName { get; set; }
         public string Status { get; set; } = string.Empty;
 
+        public Guid? AttachmentId { get; set; }
+        public AttachmentDto? Attachment { get; set; }
+
         public List<CblRequestOfficialDto> Officials { get; set; } = new();
         public List<CblRequestSignatureDto> Signatures { get; set; } = new();
 
@@ -97,7 +100,7 @@ namespace CompGateApi.Core.Dtos
     {
         public string Status { get; set; } = string.Empty;
 
-        
+
     }
 
 

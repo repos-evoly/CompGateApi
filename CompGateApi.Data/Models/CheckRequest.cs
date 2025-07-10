@@ -20,6 +20,12 @@ namespace CompGateApi.Data.Models
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
 
+       
+        public int? RepresentativeId { get; set; }
+
+        [ForeignKey(nameof(RepresentativeId))]
+        public Representative? Representative { get; set; } = null!;
+
 
         [MaxLength(100)]
         public string? Branch { get; set; }

@@ -8,6 +8,8 @@ namespace CompGateApi.Core.Dtos
     {
         public int Id { get; set; }
         public int UserId { get; set; }
+
+        public int? RepresentativeId { get; set; }
         public string? Branch { get; set; }
         public string? BranchNum { get; set; }
         public DateTime? Date { get; set; }
@@ -34,6 +36,8 @@ namespace CompGateApi.Core.Dtos
     public class CheckRequestCreateDto
     {
         public string? Branch { get; set; }
+
+        public int? RepresentativeId { get; set; }
         public string? BranchNum { get; set; }
         public DateTime? Date { get; set; }
         public string? CustomerName { get; set; }

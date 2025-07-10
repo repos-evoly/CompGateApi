@@ -356,18 +356,11 @@ namespace CompGateApi.Endpoints
             return Results.NoContent();
         }
         public static async Task<IResult> LookupKyc(
-            string code,
-            [FromServices] ICompanyRepository repo)
+     string code,
+     [FromServices] ICompanyRepository repo,
+     [FromServices] IHttpClientFactory httpFactory,
+     [FromServices] ILogger<CompanyEndpoints> log)
         {
-
-            // 0️⃣ Prevent lookup for codes already in our DB
-            var existing = await repo.GetByCodeAsync(code);
-            // if (existing != null)
-            // {
-            //     // you can choose BadRequest(400) or Conflict(409)
-            //     return Results.BadRequest(new { error = "Company code already registered." });
-            // }
-
             if (code.Length != 6)
                 return Results.BadRequest("Company code must be exactly 6 characters.");
 
@@ -375,8 +368,53 @@ namespace CompGateApi.Endpoints
             if (kyc == null || string.IsNullOrWhiteSpace(kyc.companyId))
                 return Results.Ok(new { hasKyc = false });
 
-            return Results.Ok(new { hasKyc = true, data = kyc });
+            // lookup branchName exactly as before
+            string? branchName = null;
+            try
+            {
+                var client = httpFactory.CreateClient("KycApi");
+                var resp = await client.GetAsync("kycapi/api/core/getActiveBranches");
+                if (resp.IsSuccessStatusCode)
+                {
+                    var branches = await resp.Content
+                        .ReadFromJsonAsync<ActiveBranchesResponseDto>();
+                    branchName = branches?
+                        .Details?
+                        .Branches?
+                        .FirstOrDefault(b => b.BranchNumber == kyc.branchId)?
+                        .BranchName;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Branch lookup failed");
+            }
+
+            // embed branchName inside the `data` payload
+            var dataWithBranch = new
+            {
+                kyc.companyId,
+                kyc.branchId,
+                kyc.legalCompanyName,
+                kyc.legalCompanyNameLT,
+                kyc.mobile,
+                kyc.nationality,
+                kyc.nationalityEN,
+                kyc.nationalityCode,
+                kyc.street,
+                kyc.district,
+                kyc.buildingNumber,
+                kyc.city,
+                branchName   
+            };
+
+            return Results.Ok(new
+            {
+                hasKyc = true,
+                data = dataWithBranch
+            });
         }
+
 
         public static async Task<IResult> RegisterCompany(
             [FromBody] CompanyRegistrationDto dto,

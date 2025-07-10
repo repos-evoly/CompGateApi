@@ -104,13 +104,14 @@ namespace CompGateApi.Data.Repositories
         }
 
         public async Task<IList<VisaRequest>> GetAllByCompanyAsync(
-           int userId,
-           string? searchTerm,
-           string? searchBy,
-           int page,
-           int limit)
+      int companyId,               // renamed parameter
+      string? searchTerm,
+      string? searchBy,
+      int page,
+      int limit)
         {
-            var q = _context.VisaRequests.Where(v => v.UserId == userId);
+            var q = _context.VisaRequests
+                .Where(v => v.CompanyId == companyId);  // ← filter on CompanyId
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -143,11 +144,12 @@ namespace CompGateApi.Data.Repositories
         }
 
         public async Task<int> GetCountByCompanyAsync(
-            int userId,
-            string? searchTerm,
-            string? searchBy)
+    int companyId,               // renamed parameter
+    string? searchTerm,
+    string? searchBy)
         {
-            var q = _context.VisaRequests.Where(v => v.UserId == userId);
+            var q = _context.VisaRequests
+                .Where(v => v.CompanyId == companyId);  // ← filter on CompanyId
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -173,6 +175,5 @@ namespace CompGateApi.Data.Repositories
 
             return await q.CountAsync();
         }
-
     }
 }

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CompGateApi.Data.Models
 {
-   
+
     [Table("Users")]
     [Index(nameof(Email), IsUnique = true, Name = "Unique_Email")]
     [Index(nameof(CompanyId), IsUnique = false)]
@@ -55,6 +55,7 @@ namespace CompGateApi.Data.Models
 
         public int? ServicePackageId { get; set; }
         public ServicePackage? ServicePackage { get; set; }
+        public bool IsActive { get; set; } = true;
 
         // ── Navigation collections ──────────────────────────────────
 

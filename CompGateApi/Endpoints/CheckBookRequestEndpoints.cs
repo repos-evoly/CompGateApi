@@ -249,7 +249,7 @@ namespace CompGateApi.Endpoints
                 if (!me.CompanyId.HasValue)
                     return Results.Unauthorized();
 
-                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId);
+                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId ?? 0);
                 if (rep == null || rep.CompanyId != me.CompanyId.Value)
                     return Results.BadRequest("Invalid RepresentativeId");
 
@@ -339,7 +339,7 @@ namespace CompGateApi.Endpoints
                 if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
                     return Results.BadRequest("Cannot edit a printed form.");
 
-                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId);
+                var rep = await repRepo.GetByIdAsync(dto.RepresentativeId ?? 0);
                 if (rep == null || rep.CompanyId != me.CompanyId.Value)
                     return Results.BadRequest("Invalid RepresentativeId");
 
@@ -360,7 +360,7 @@ namespace CompGateApi.Endpoints
                 {
                     Id = ent.Id,
                     UserId = ent.UserId,
-                    RepresentativeId = ent.RepresentativeId,
+                    RepresentativeId = ent.RepresentativeId ,
                     Representative = new RepresentativeDto
                     {
                         Id = rep.Id,

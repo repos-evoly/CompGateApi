@@ -95,8 +95,13 @@ namespace CompGateApi.Data.Models
 
         public string? Reason { get; set; }
 
+        public Guid? AttachmentId { get; set; }
+        public Attachment? Attachment { get; set; }
+
         public ICollection<CblRequestOfficial> Officials { get; set; } = new List<CblRequestOfficial>();
         public ICollection<CblRequestSignature> Signatures { get; set; } = new List<CblRequestSignature>();
+
+
     }
 
     [Table("CblRequestOfficials")]
