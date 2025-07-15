@@ -440,6 +440,7 @@ namespace CompGateApi.Core.Repositories
                 IsCompanyAdmin = user.IsCompanyAdmin,
                 CompanyStatus = user.Company?.RegistrationStatus ?? RegistrationStatus.Error,
                 CompanyStatusMessage = user.Company?.RegistrationStatusMessage,
+                IsActive = user.IsActive,
             };
         }
         private async Task<AuthUserDto?> FetchAuthUserDetails(int authUserId, string authToken)

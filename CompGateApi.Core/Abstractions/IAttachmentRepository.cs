@@ -15,4 +15,10 @@ public interface IAttachmentRepository
          string description,
          string createdBy
      ); Task<AttachmentDto> Delete(Guid id);
+
+  Task LinkToVisaRequestAsync(Guid attachmentId, int visaRequestId);
+
+  Task LinkToCblRequestAsync(Guid attachmentId, int cblRequestId);
+
+
 }

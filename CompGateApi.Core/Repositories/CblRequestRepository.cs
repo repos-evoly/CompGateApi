@@ -111,6 +111,7 @@ namespace CompGateApi.Data.Repositories
         public async Task<CblRequest?> GetByIdAsync(int id)
             => await _ctx.CblRequests
                 .Include(r => r.Officials)
+                .Include(r => r.Attachments)
                 .Include(r => r.Signatures)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(r => r.Id == id);

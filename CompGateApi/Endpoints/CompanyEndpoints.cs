@@ -183,7 +183,7 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> GetAdminDashboardStats(
-     [FromServices] CompGateApiDbContext db)
+         [FromServices] CompGateApiDbContext db)
         {
             // 1️⃣ Total transfer volume and count
             var totalTransfers = await db.TransferRequests.CountAsync();
@@ -298,6 +298,10 @@ namespace CompGateApi.Endpoints
                 kycMobile = company.KycMobile,
                 kycNationality = company.KycNationality,
                 kycCity = company.KycCity,
+                commissionOnReceiver = company.CommissionOnReceiver,
+                servicePackageId = company.ServicePackageId,
+                servicePackageName = company.ServicePackage?.Name,
+
 
                 // ■ attachments (map to your AttachmentDto)
                 attachments = rawAttachments
@@ -334,9 +338,9 @@ namespace CompGateApi.Endpoints
 
 
         public static async Task<IResult> PublicEditUser(
-        int userId,
-        [FromBody] PublicEditUserDto dto,
-        [FromServices] CompGateApiDbContext db
+            int userId,
+            [FromBody] PublicEditUserDto dto,
+            [FromServices] CompGateApiDbContext db
     )
         {
             // 1) load the user from the EF‐Core DbContext
@@ -405,7 +409,7 @@ namespace CompGateApi.Endpoints
                 kyc.district,
                 kyc.buildingNumber,
                 kyc.city,
-                branchName   
+                branchName
             };
 
             return Results.Ok(new
@@ -536,6 +540,7 @@ namespace CompGateApi.Endpoints
                 Phone = dto.Phone,
                 RoleId = dto.RoleId,
                 IsCompanyAdmin = false,
+                IsActive = false,
                 // ServicePackageId = me.ServicePackageId
             };
             await userRepo.AddUser(user);
@@ -606,8 +611,8 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> GetCompanyByCode(
-    string code,
-    [FromServices] ICompanyRepository repo)
+            string code,
+            [FromServices] ICompanyRepository repo)
         {
             var c = await repo.GetByCodeAsync(code);
             if (c == null)
@@ -630,6 +635,7 @@ namespace CompGateApi.Endpoints
                 KycCity = c.KycCity,
                 ServicePackageId = c.ServicePackageId,
                 ServicePackageName = c.ServicePackage.Name,
+                CommissionOnReceiver = c.CommissionOnReceiver,
                 Attachments = c.Attachments
                                          .Select(a => new AttachmentDto
                                          {
@@ -652,12 +658,12 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> GetCompanyUserById(
-       string code,
-       int userId,
-       HttpContext ctx,
-       [FromServices] IUserRepository userRepo,
-       [FromServices] ICompanyRepository companyRepo,
-       [FromServices] ILogger<CompanyEndpoints> log)
+            string code,
+            int userId,
+            HttpContext ctx,
+            [FromServices] IUserRepository userRepo,
+            [FromServices] ICompanyRepository companyRepo,
+            [FromServices] ILogger<CompanyEndpoints> log)
         {
             log.LogInformation("→ GetCompanyUserById {Code}/{UserId}", code, userId);
 
@@ -778,11 +784,11 @@ namespace CompGateApi.Endpoints
 
 
         public static async Task<IResult> UpdateCompany(
-    string code,
-    [FromBody] CompanyUpdateDto dto,
-    [FromServices] ICompanyRepository companyRepo,
-    [FromServices] CompGateApiDbContext db,
-    [FromServices] ILogger<CompanyEndpoints> log)
+            string code,
+            [FromBody] CompanyUpdateDto dto,
+            [FromServices] ICompanyRepository companyRepo,
+            [FromServices] CompGateApiDbContext db,
+            [FromServices] ILogger<CompanyEndpoints> log)
         {
             log.LogInformation("→ UpdateCompany {Code}", code);
 
@@ -795,6 +801,7 @@ namespace CompGateApi.Endpoints
 
 
             company.ServicePackageId = dto.ServicePackageId;
+            company.CommissionOnReceiver = dto.CommissionOnReceiver;
 
             await db.SaveChangesAsync();
 

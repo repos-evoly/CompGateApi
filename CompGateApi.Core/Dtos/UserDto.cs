@@ -86,6 +86,7 @@ namespace CompGateApi.Core.Dtos
         public RegistrationStatus CompanyStatus { get; set; }
         public string? CompanyStatusMessage { get; set; }
         //  public int CompanyServicePackageId { get; set; }
+        public bool IsActive { get; set; } = false;
     }
 
     public class BasicUserDto

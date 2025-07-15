@@ -95,11 +95,32 @@ namespace CompGateApi.Data.Repositories
         public async Task<VisaRequest?> GetByIdAsync(int id)
             => await _context.VisaRequests
                 .AsNoTracking()
+                .Include(v => v.Attachments)
                 .FirstOrDefaultAsync(v => v.Id == id);
 
         public async Task UpdateAsync(VisaRequest entity)
         {
-            _context.VisaRequests.Update(entity);
+            var existing = await _context.VisaRequests
+                .FirstOrDefaultAsync(v => v.Id == entity.Id);
+
+            if (existing == null)
+                throw new KeyNotFoundException($"VisaRequest {entity.Id} not found.");
+
+            // copy only scalar fields (not attachments)
+            existing.Branch = entity.Branch;
+            existing.Date = entity.Date;
+            existing.AccountHolderName = entity.AccountHolderName;
+            existing.AccountNumber = entity.AccountNumber;
+            existing.NationalId = entity.NationalId;
+            existing.PhoneNumberLinkedToNationalId = entity.PhoneNumberLinkedToNationalId;
+            existing.Cbl = entity.Cbl;
+            existing.CardMovementApproval = entity.CardMovementApproval;
+            existing.CardUsingAcknowledgment = entity.CardUsingAcknowledgment;
+            existing.ForeignAmount = entity.ForeignAmount;
+            existing.LocalAmount = entity.LocalAmount;
+            existing.Pldedge = entity.Pldedge;
+            // leave Status & Reason unchanged
+
             await _context.SaveChangesAsync();
         }
 

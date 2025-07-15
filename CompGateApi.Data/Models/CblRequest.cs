@@ -98,6 +98,8 @@ namespace CompGateApi.Data.Models
         public Guid? AttachmentId { get; set; }
         public Attachment? Attachment { get; set; }
 
+        public IList<Attachment> Attachments { get; set; } = new List<Attachment>();
+
         public ICollection<CblRequestOfficial> Officials { get; set; } = new List<CblRequestOfficial>();
         public ICollection<CblRequestSignature> Signatures { get; set; } = new List<CblRequestSignature>();
 

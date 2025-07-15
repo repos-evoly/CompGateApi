@@ -22,6 +22,9 @@ namespace CompGateApi.Core.Dtos
         public string Status { get; set; } = string.Empty;
 
         public string? Reason { get; set; } = string.Empty; // Optional reason for status change
+
+        public Guid? AttachmentId { get; set; }
+        public List<AttachmentDto>? Attachments { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }
@@ -40,6 +43,8 @@ namespace CompGateApi.Core.Dtos
         public decimal? ForeignAmount { get; set; }
         public decimal? LocalAmount { get; set; }
         public string? Pldedge { get; set; }
+        public Guid? AttachmentId { get; set; }
+        public List<AttachmentDto>? Attachments { get; set; }
     }
 
     public class VisaRequestStatusUpdateDto

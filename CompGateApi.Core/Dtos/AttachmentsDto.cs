@@ -23,6 +23,9 @@ namespace CompGateApi.Core.Dtos
     public Guid Id { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public int? CblRequestId { get; set; }
+    public int? VisaRequestId { get; set; }
   }
 
   public class AttachmentUploadDto

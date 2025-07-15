@@ -262,11 +262,18 @@ namespace CompGateApi.Endpoints
                 string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
                 string commStr = ((long)(commission * scale)).ToString("D15");
 
-                string senderTotal = dto.CommissionOnRecipient
-                    ? dto.Amount.ToString("0.000")
-                    : (dto.Amount + commission).ToString("0.000");
+                // ── load company setting ───────────────────────────
+                var company = await db.Companies.FindAsync(companyId);
+                if (company == null)
+                    return Results.BadRequest("Company not found");
+                bool commissionOnRecipient = company.CommissionOnReceiver;
 
-                string receiverTotal = dto.CommissionOnRecipient
+                // ── totals based on company setting ─────────────────
+                string senderTotal = commissionOnRecipient
+                            ? dto.Amount.ToString("0.000")
+                            : (dto.Amount + commission).ToString("0.000");
+
+                string receiverTotal = commissionOnRecipient
                     ? (dto.Amount - commission).ToString("0.000")
                     : dto.Amount.ToString("0.000");
 
@@ -289,7 +296,7 @@ namespace CompGateApi.Endpoints
                     {
                         ["@TRFCCY"] = currencyCode,
                         ["@SRCACC"] = dto.FromAccount,
-                        ["@SRCACC2"] = dto.CommissionOnRecipient ? dto.ToAccount : dto.FromAccount,
+                        ["@SRCACC2"] = commissionOnRecipient ? dto.ToAccount : dto.FromAccount,
                         ["@DSTACC"] = dto.ToAccount,
                         ["@DSTACC2"] = commissionAccount,
                         ["@TRFAMT"] = amountStr,
@@ -329,7 +336,7 @@ namespace CompGateApi.Endpoints
                     Status = "Completed",
                     EconomicSectorId = dto.EconomicSectorId,
                     CommissionAmount = commission,
-                    CommissionOnRecipient = dto.CommissionOnRecipient,
+                    CommissionOnRecipient = commissionOnRecipient,
                     Rate = rate,
                     TransferMode = transferMode
                 };

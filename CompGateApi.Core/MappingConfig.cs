@@ -39,8 +39,6 @@ namespace CompGateApi
                            opt => opt.MapFrom(src => src.CurrencyId))
                 .ForMember(dest => dest.Description,
                            opt => opt.MapFrom(src => src.Description))
-                .ForMember(dest => dest.CommissionOnRecipient,
-                           opt => opt.MapFrom(src => src.CommissionOnRecipient))
                     .ForAllMembers(opt => opt.Ignore());
             CreateMap<Currency, CurrencyDto>();
             CreateMap<CurrencyCreateDto, Currency>();

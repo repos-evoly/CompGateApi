@@ -14,7 +14,7 @@ namespace CompGateApi.Core.Startup
         {
           c.RoutePrefix = string.Empty;
           string swaggerJsonBasePath = string.IsNullOrWhiteSpace(c.RoutePrefix) ? "." : "..";
-          c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/v1/swagger.json", "Blocking API");
+          c.SwaggerEndpoint($"{swaggerJsonBasePath}/swagger/v1/swagger.json", "CompGateWay API");
         });
       }
       return app;

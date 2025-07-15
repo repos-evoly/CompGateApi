@@ -45,8 +45,6 @@ namespace CompGateApi.Core.Dtos
 
         [Required]
         public int CurrencyId { get; set; }
-        public bool CommissionOnRecipient { get; set; }
-
         public int EconomicSectorId { get; set; }
 
 

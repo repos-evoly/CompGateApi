@@ -55,5 +55,8 @@ namespace CompGateApi.Data.Models
 
         public string? Reason { get; set; }
 
+        public Guid? AttachmentId { get; set; }
+        public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+
     }
 }

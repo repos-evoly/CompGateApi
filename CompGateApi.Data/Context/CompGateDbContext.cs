@@ -165,9 +165,19 @@ namespace CompGateApi.Data.Context
                             b.HasKey(a => a.Id);
 
                             b.HasOne(a => a.Company)
-                    .WithMany(c => c.Attachments)
-                    .HasForeignKey(a => a.CompanyId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                            .WithMany(c => c.Attachments)
+                            .HasForeignKey(a => a.CompanyId)
+                            .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(a => a.CblRequest)              // navigation on Attachment
+                           .WithMany(r => r.Attachments)           // nav on CblRequest
+                           .HasForeignKey(a => a.CblRequestId)     // FK property
+                           .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(a => a.VisaRequest)              // navigation on Attachment
+                            .WithMany(r => r.Attachments)           // nav on CblRequest
+                            .HasForeignKey(a => a.VisaRequestId)     // FK property
+                            .OnDelete(DeleteBehavior.Restrict);
                      });
 
                      // ── AUDIT LOG ─────────────────────────────────────────────────────────
@@ -356,6 +366,11 @@ namespace CompGateApi.Data.Context
                     .HasForeignKey(x => x.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                            b.HasMany(v => v.Attachments)
+                     .WithOne(a => a.VisaRequest)
+                     .HasForeignKey(a => a.VisaRequestId)
+                     .OnDelete(DeleteBehavior.Restrict);
+
                             b.Property(x => x.ForeignAmount)
                     .HasPrecision(18, 4);
                             b.Property(x => x.LocalAmount)
@@ -499,9 +514,9 @@ namespace CompGateApi.Data.Context
                     .HasForeignKey(x => x.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                            b.HasOne(x => x.Attachment)
-                     .WithMany()
-                     .HasForeignKey(x => x.AttachmentId)
+                            b.HasMany(r => r.Attachments)
+                     .WithOne(a => a.CblRequest)
+                     .HasForeignKey(a => a.CblRequestId)
                      .OnDelete(DeleteBehavior.Restrict);
 
                             b.Property(x => x.Capital)

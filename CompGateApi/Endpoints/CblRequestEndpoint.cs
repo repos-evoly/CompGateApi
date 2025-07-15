@@ -40,10 +40,10 @@ namespace CompGateApi.Endpoints
                     .Produces(400);
 
             company.MapPut("/{id:int}", UpdateMyRequest)
-                  .Accepts<CblRequestCreateDto>("application/json")
-                  .Produces<CblRequestDto>(200)
-                  .Produces(400)
-                  .Produces(404);
+                    .Accepts<IFormFile>("multipart/form-data")
+                    .Produces<CblRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
 
 
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
@@ -166,125 +166,166 @@ namespace CompGateApi.Endpoints
 
 
         public static async Task<IResult> UpdateMyRequest(
-            int id,
-            [FromBody] CblRequestCreateDto dto,
-            HttpContext ctx,
-            ICblRequestRepository repo,
-            IUserRepository userRepo,
-            IValidator<CblRequestCreateDto> validator,
-            ILogger<CblRequestEndpoints> log)
+       int id,
+       HttpRequest req,
+       HttpContext ctx,
+       ICblRequestRepository repo,
+       IAttachmentRepository attRepo,
+       IUserRepository userRepo,
+       IValidator<CblRequestCreateDto> validator,
+       ILogger<CblRequestEndpoints> log)
         {
-            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
-            var validation = await validator.ValidateAsync(dto);
-            if (!validation.IsValid)
-            {
-                log.LogWarning("Validation failed: {Errors}", string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
-                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
-            }
+            log.LogInformation("UpdateMyRequest Id={Id} (multipart/form-data)", id);
 
+            // --- 1) Authenticate + get "me" ---
+            var raw = ctx.User.FindFirst("nameid")?.Value;
+            if (!int.TryParse(raw, out var authId))
+                return Results.Unauthorized();
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            // --- 2) Must be multipart/form-data ---
+            if (!req.HasFormContentType)
+                return Results.BadRequest("Must be multipart/form-data.");
+            var form = await req.ReadFormAsync();
+
+            // --- 3) Extract JSON DTO ---
+            var dtoJson = form["Dto"].FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(dtoJson))
+                return Results.BadRequest("Missing 'Dto' field.");
+            CblRequestCreateDto dto;
             try
             {
-                var authId = GetAuthUserId(ctx);
-                var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? string.Empty;
-                var me = await userRepo.GetUserByAuthId(authId, token);
-                if (me == null || !me.CompanyId.HasValue)
-                    return Results.Unauthorized();
-
-                var ent = await repo.GetByIdAsync(id);
-                if (ent == null || ent.CompanyId != me.CompanyId.Value)
-                    return Results.NotFound();
-
-                if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
-                    return Results.BadRequest("Cannot edit a printed form.");
-
-                // update fields
-                ent.PartyName = dto.PartyName;
-                ent.Capital = dto.Capital;
-                ent.FoundingDate = dto.FoundingDate;
-                ent.LegalForm = dto.LegalForm;
-                ent.BranchOrAgency = dto.BranchOrAgency;
-                ent.CurrentAccount = dto.CurrentAccount;
-                ent.AccountOpening = dto.AccountOpening;
-                ent.CommercialLicense = dto.CommercialLicense;
-                ent.ValidatyLicense = dto.ValidatyLicense;
-                ent.CommercialRegistration = dto.CommercialRegistration;
-                ent.ValidatyRegister = dto.ValidatyRegister;
-                ent.StatisticalCode = dto.StatisticalCode;
-                ent.ValidatyCode = dto.ValidatyCode;
-                ent.ChamberNumber = dto.ChamberNumber;
-                ent.ValidatyChamber = dto.ValidatyChamber;
-                ent.TaxNumber = dto.TaxNumber;
-                ent.Office = dto.Office;
-                ent.LegalRepresentative = dto.LegalRepresentative;
-                ent.RepresentativeNumber = dto.RepresentativeNumber;
-                ent.BirthDate = dto.BirthDate;
-                ent.PassportNumber = dto.PassportNumber;
-                ent.PassportIssuance = dto.PassportIssuance;
-                ent.PassportExpiry = dto.PassportExpiry;
-                ent.Mobile = dto.Mobile;
-                ent.Address = dto.Address;
-                ent.PackingDate = dto.PackingDate;
-                ent.SpecialistName = dto.SpecialistName;
-
-                ent.Officials = dto.Officials
-                    .Select(o => new CblRequestOfficial { Name = o.Name, Position = o.Position })
-                    .ToList();
-                ent.Signatures = dto.Signatures
-                    .Select(s => new CblRequestSignature { Name = s.Name, Signature = s.Signature })
-                    .ToList();
-
-                await repo.UpdateAsync(ent);
-                log.LogInformation("Updated CblRequest Id={RequestId}", id);
-
-                var outDto = new CblRequestDto
-                {
-                    Id = ent.Id,
-                    UserId = ent.UserId,
-                    PartyName = ent.PartyName,
-                    Capital = ent.Capital,
-                    FoundingDate = ent.FoundingDate,
-                    LegalForm = ent.LegalForm,
-                    BranchOrAgency = ent.BranchOrAgency,
-                    CurrentAccount = ent.CurrentAccount,
-                    AccountOpening = ent.AccountOpening,
-                    CommercialLicense = ent.CommercialLicense,
-                    ValidatyLicense = ent.ValidatyLicense,
-                    CommercialRegistration = ent.CommercialRegistration,
-                    ValidatyRegister = ent.ValidatyRegister,
-                    StatisticalCode = ent.StatisticalCode,
-                    ValidatyCode = ent.ValidatyCode,
-                    ChamberNumber = ent.ChamberNumber,
-                    ValidatyChamber = ent.ValidatyChamber,
-                    TaxNumber = ent.TaxNumber,
-                    Office = ent.Office,
-                    LegalRepresentative = ent.LegalRepresentative,
-                    RepresentativeNumber = ent.RepresentativeNumber,
-                    BirthDate = ent.BirthDate,
-                    PassportNumber = ent.PassportNumber,
-                    PassportIssuance = ent.PassportIssuance,
-                    PassportExpiry = ent.PassportExpiry,
-                    Mobile = ent.Mobile,
-                    Address = ent.Address,
-                    PackingDate = ent.PackingDate,
-                    SpecialistName = ent.SpecialistName,
-                    Status = ent.Status,
-                    Officials = ent.Officials
-                        .Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position })
-                        .ToList(),
-                    Signatures = ent.Signatures
-                        .Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status })
-                        .ToList(),
-                    CreatedAt = ent.CreatedAt,
-                    UpdatedAt = ent.UpdatedAt
-                };
-
-                return Results.Ok(outDto);
+                dto = JsonSerializer.Deserialize<CblRequestCreateDto>(
+                    dtoJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                )!;
             }
-            catch (UnauthorizedAccessException ex)
+            catch (JsonException)
             {
-                log.LogError(ex, "Auth error in UpdateMyRequest");
-                return Results.Unauthorized();
+                return Results.BadRequest("Invalid JSON in 'Dto' field.");
             }
+
+            // --- 4) Validate DTO ---
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+
+            // --- 5) Load existing entity (with attachments) ---
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+            if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest("Cannot edit a printed form.");
+
+            // --- 6) Update all scalar, officials & signatures ---
+            ent.PartyName = dto.PartyName;
+            ent.Capital = dto.Capital;
+            ent.FoundingDate = dto.FoundingDate;
+            ent.LegalForm = dto.LegalForm;
+            ent.BranchOrAgency = dto.BranchOrAgency;
+            ent.CurrentAccount = dto.CurrentAccount;
+            ent.AccountOpening = dto.AccountOpening;
+            ent.CommercialLicense = dto.CommercialLicense;
+            ent.ValidatyLicense = dto.ValidatyLicense;
+            ent.CommercialRegistration = dto.CommercialRegistration;
+            ent.ValidatyRegister = dto.ValidatyRegister;
+            ent.StatisticalCode = dto.StatisticalCode;
+            ent.ValidatyCode = dto.ValidatyCode;
+            ent.ChamberNumber = dto.ChamberNumber;
+            ent.ValidatyChamber = dto.ValidatyChamber;
+            ent.TaxNumber = dto.TaxNumber;
+            ent.Office = dto.Office;
+            ent.LegalRepresentative = dto.LegalRepresentative;
+            ent.RepresentativeNumber = dto.RepresentativeNumber;
+            ent.BirthDate = dto.BirthDate;
+            ent.PassportNumber = dto.PassportNumber;
+            ent.PassportIssuance = dto.PassportIssuance;
+            ent.PassportExpiry = dto.PassportExpiry;
+            ent.Mobile = dto.Mobile;
+            ent.Address = dto.Address;
+            ent.PackingDate = dto.PackingDate;
+            ent.SpecialistName = dto.SpecialistName;
+
+            ent.Officials = dto.Officials.Select(o => new CblRequestOfficial { Name = o.Name, Position = o.Position }).ToList();
+            ent.Signatures = dto.Signatures.Select(s => new CblRequestSignature { Name = s.Name, Signature = s.Signature }).ToList();
+
+            await repo.UpdateAsync(ent);
+            log.LogInformation("Updated CblRequest Id={RequestId}", id);
+
+            // --- 7) Upload & link any new files only ---
+            if (form.Files.Count > 0)
+            {
+                foreach (var file in form.Files)
+                {
+                    var attDto = await attRepo.Upload(
+                        file,
+                        me.CompanyId.Value,
+                        subject: $"CblRequest {ent.Id}",
+                        description: "",
+                        createdBy: me.UserId.ToString()
+                    );
+                    await attRepo.LinkToCblRequestAsync(attDto.Id, ent.Id);
+                }
+            }
+
+            // --- 8) Reload entity so Attachments now includes old+new ---
+            var updated = await repo.GetByIdAsync(id);
+
+            // --- 9) Build response DTO ---
+            var outDto = new CblRequestDto
+            {
+                Id = updated.Id,
+                UserId = updated.UserId,
+                PartyName = updated.PartyName,
+                Capital = updated.Capital,
+                FoundingDate = updated.FoundingDate,
+                LegalForm = updated.LegalForm,
+                BranchOrAgency = updated.BranchOrAgency,
+                CurrentAccount = updated.CurrentAccount,
+                AccountOpening = updated.AccountOpening,
+                CommercialLicense = updated.CommercialLicense,
+                ValidatyLicense = updated.ValidatyLicense,
+                CommercialRegistration = updated.CommercialRegistration,
+                ValidatyRegister = updated.ValidatyRegister,
+                StatisticalCode = updated.StatisticalCode,
+                ValidatyCode = updated.ValidatyCode,
+                ChamberNumber = updated.ChamberNumber,
+                ValidatyChamber = updated.ValidatyChamber,
+                TaxNumber = updated.TaxNumber,
+                Office = updated.Office,
+                LegalRepresentative = updated.LegalRepresentative,
+                RepresentativeNumber = updated.RepresentativeNumber,
+                BirthDate = updated.BirthDate,
+                PassportNumber = updated.PassportNumber,
+                PassportIssuance = updated.PassportIssuance,
+                PassportExpiry = updated.PassportExpiry,
+                Mobile = updated.Mobile,
+                Address = updated.Address,
+                PackingDate = updated.PackingDate,
+                SpecialistName = updated.SpecialistName,
+                Status = updated.Status,
+                Officials = updated.Officials.Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position }).ToList(),
+                Signatures = updated.Signatures.Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status }).ToList(),
+                Attachments = updated.Attachments.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    AttFileName = a.AttFileName,
+                    AttOriginalFileName = a.AttOriginalFileName,
+                    AttMime = a.AttMime,
+                    AttSize = a.AttSize,
+                    AttUrl = a.AttUrl,
+                    Description = a.Description,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                }).ToList(),
+                CreatedAt = updated.CreatedAt,
+                UpdatedAt = updated.UpdatedAt
+            };
+
+            return Results.Ok(outDto);
         }
 
         public static async Task<IResult> GetMyRequestById(
@@ -363,22 +404,19 @@ namespace CompGateApi.Endpoints
                                               .ToList(),
 
                     // ── ATTACHMENT FIELDS ───────────────────────────
-                    AttachmentId = ent.AttachmentId,
-                    Attachment = ent.Attachment == null
-                                              ? null
-                                              : new AttachmentDto
-                                              {
-                                                  Id = ent.Attachment.Id,
-                                                  AttFileName = ent.Attachment.AttFileName,
-                                                  AttOriginalFileName = ent.Attachment.AttOriginalFileName,
-                                                  AttMime = ent.Attachment.AttMime,
-                                                  AttSize = ent.Attachment.AttSize,
-                                                  AttUrl = ent.Attachment.AttUrl,
-                                                  Description = ent.Attachment.Description,
-                                                  CreatedBy = ent.Attachment.CreatedBy,
-                                                  CreatedAt = ent.Attachment.CreatedAt,
-                                                  UpdatedAt = ent.Attachment.UpdatedAt
-                                              },
+                    Attachments = ent.Attachments.Select(a => new AttachmentDto
+                    {
+                        Id = a.Id,
+                        AttFileName = a.AttFileName,
+                        AttOriginalFileName = a.AttOriginalFileName,
+                        AttMime = a.AttMime,
+                        AttSize = a.AttSize,
+                        AttUrl = a.AttUrl,
+                        Description = a.Description,
+                        CreatedAt = a.CreatedAt,
+                        UpdatedAt = a.UpdatedAt
+                    }).ToList(),
+
 
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt
@@ -405,7 +443,7 @@ namespace CompGateApi.Endpoints
         {
             log.LogInformation("CreateMyRequest (multipart/form-data)");
 
-            // 1) Auth
+            // --- 1) Authenticate + get "me" ---
             var raw = ctx.User.FindFirst("nameid")?.Value;
             if (!int.TryParse(raw, out var authId))
                 return Results.Unauthorized();
@@ -414,34 +452,34 @@ namespace CompGateApi.Endpoints
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
-            // 2) Must be form-data
+            // --- 2) Must be multipart/form-data ---
             if (!req.HasFormContentType)
                 return Results.BadRequest("Must be multipart/form-data.");
-
             var form = await req.ReadFormAsync();
 
-            // 3) Pull out the JSON-serialized DTO
+            // --- 3) Extract JSON DTO ---
             var dtoJson = form["Dto"].FirstOrDefault();
-            if (string.IsNullOrEmpty(dtoJson))
+            if (string.IsNullOrWhiteSpace(dtoJson))
                 return Results.BadRequest("Missing 'Dto' field.");
-
             CblRequestCreateDto dto;
             try
             {
-                dto = JsonSerializer.Deserialize<CblRequestCreateDto>(dtoJson,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+                dto = JsonSerializer.Deserialize<CblRequestCreateDto>(
+                    dtoJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                )!;
             }
             catch (JsonException)
             {
                 return Results.BadRequest("Invalid JSON in 'Dto' field.");
             }
 
-            // 4) Validate DTO
+            // --- 4) Validate DTO ---
             var validation = await validator.ValidateAsync(dto);
             if (!validation.IsValid)
                 return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
 
-            // 5) Persist the CBL request
+            // --- 5) Persist the CBL request ---
             var ent = new CblRequest
             {
                 UserId = me.UserId,
@@ -474,21 +512,16 @@ namespace CompGateApi.Endpoints
                 PackingDate = dto.PackingDate,
                 SpecialistName = dto.SpecialistName,
                 Status = "Pending",
-                Officials = dto.Officials
-                                   .Select(o => new CblRequestOfficial { Name = o.Name, Position = o.Position })
-                                   .ToList(),
-                Signatures = dto.Signatures
-                                   .Select(s => new CblRequestSignature { Name = s.Name, Signature = s.Signature })
-                                   .ToList()
+                Officials = dto.Officials.Select(o => new CblRequestOfficial { Name = o.Name, Position = o.Position }).ToList(),
+                Signatures = dto.Signatures.Select(s => new CblRequestSignature { Name = s.Name, Signature = s.Signature }).ToList()
             };
-
             await repo.CreateAsync(ent);
             log.LogInformation("Persisted CblRequest Id={RequestId}", ent.Id);
 
-            // 6) If there's a file, save it and link it
-            if (form.Files.Count > 0)
+            // --- 6) Upload & link **all** files ---
+            var attachments = new List<AttachmentDto>();
+            foreach (var file in form.Files)
             {
-                var file = form.Files[0];
                 var attDto = await attRepo.Upload(
                     file,
                     me.CompanyId.Value,
@@ -496,26 +529,11 @@ namespace CompGateApi.Endpoints
                     description: "",
                     createdBy: me.UserId.ToString()
                 );
-
-                ent.AttachmentId = attDto.Id;
-                await repo.UpdateAsync(ent);
-
-                // hydrate the navigation so we can return it immediately
-                ent.Attachment = new Data.Models.Attachment
-                {
-                    Id = attDto.Id,
-                    AttFileName = attDto.AttFileName,
-                    AttOriginalFileName = attDto.AttOriginalFileName,
-                    AttMime = attDto.AttMime,
-                    AttSize = attDto.AttSize,
-                    AttUrl = attDto.AttUrl,
-                    Description = attDto.Description,
-                    CreatedAt = attDto.CreatedAt,
-                    UpdatedAt = attDto.UpdatedAt
-                };
+                await attRepo.LinkToCblRequestAsync(attDto.Id, ent.Id);
+                attachments.Add(attDto);
             }
 
-            // 7) Build and return your response DTO
+            // --- 7) Build response DTO ---
             var outDto = new CblRequestDto
             {
                 Id = ent.Id,
@@ -548,27 +566,9 @@ namespace CompGateApi.Endpoints
                 PackingDate = ent.PackingDate,
                 SpecialistName = ent.SpecialistName,
                 Status = ent.Status,
-                Officials = ent.Officials
-                                   .Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position })
-                                   .ToList(),
-                Signatures = ent.Signatures
-                                   .Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status })
-                                   .ToList(),
-                AttachmentId = ent.AttachmentId,
-                Attachment = ent.Attachment == null
-                    ? null
-                    : new AttachmentDto
-                    {
-                        Id = ent.Attachment.Id,
-                        AttFileName = ent.Attachment.AttFileName,
-                        AttOriginalFileName = ent.Attachment.AttOriginalFileName,
-                        AttMime = ent.Attachment.AttMime,
-                        AttSize = ent.Attachment.AttSize,
-                        AttUrl = ent.Attachment.AttUrl,
-                        Description = ent.Attachment.Description,
-                        CreatedAt = ent.Attachment.CreatedAt,
-                        UpdatedAt = ent.Attachment.UpdatedAt
-                    },
+                Officials = ent.Officials.Select(o => new CblRequestOfficialDto { Id = o.Id, Name = o.Name, Position = o.Position }).ToList(),
+                Signatures = ent.Signatures.Select(s => new CblRequestSignatureDto { Id = s.Id, Name = s.Name, Signature = s.Signature, Status = s.Status }).ToList(),
+                Attachments = attachments,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
@@ -738,22 +738,19 @@ namespace CompGateApi.Endpoints
                                           .ToList(),
 
                 // ── ATTACHMENT FIELDS ───────────────────────────
-                AttachmentId = ent.AttachmentId,
-                Attachment = ent.Attachment == null
-                                          ? null
-                                          : new AttachmentDto
-                                          {
-                                              Id = ent.Attachment.Id,
-                                              AttFileName = ent.Attachment.AttFileName,
-                                              AttOriginalFileName = ent.Attachment.AttOriginalFileName,
-                                              AttMime = ent.Attachment.AttMime,
-                                              AttSize = ent.Attachment.AttSize,
-                                              AttUrl = ent.Attachment.AttUrl,
-                                              Description = ent.Attachment.Description,
-                                              CreatedBy = ent.Attachment.CreatedBy,
-                                              CreatedAt = ent.Attachment.CreatedAt,
-                                              UpdatedAt = ent.Attachment.UpdatedAt
-                                          },
+                Attachments = ent.Attachments.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    AttFileName = a.AttFileName,
+                    AttOriginalFileName = a.AttOriginalFileName,
+                    AttMime = a.AttMime,
+                    AttSize = a.AttSize,
+                    AttUrl = a.AttUrl,
+                    Description = a.Description,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                }).ToList(),
+
 
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt

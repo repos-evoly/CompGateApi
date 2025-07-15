@@ -39,6 +39,7 @@ namespace CompGateApi.Core.Dtos
 
         public Guid? AttachmentId { get; set; }
         public AttachmentDto? Attachment { get; set; }
+        public List<AttachmentDto> Attachments { get; set; } = new();
 
         public List<CblRequestOfficialDto> Officials { get; set; } = new();
         public List<CblRequestSignatureDto> Signatures { get; set; } = new();

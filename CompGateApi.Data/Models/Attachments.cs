@@ -11,8 +11,8 @@ namespace CompGateApi.Data.Models
     public Guid Id { get; set; }
     [MaxLength(30)]
     public string AttSubject { get; set; } = string.Empty;
-    
-   [MaxLength(100)]
+
+    [MaxLength(100)]
     public string AttFileName { get; set; } = string.Empty;
     [MaxLength(100)]
     public string AttOriginalFileName { get; set; } = string.Empty;
@@ -29,5 +29,14 @@ namespace CompGateApi.Data.Models
 
     [ForeignKey(nameof(CompanyId))]
     public Company Company { get; set; } = null!;
+
+    public int? CblRequestId { get; set; }
+    [ForeignKey(nameof(CblRequestId))]
+    public CblRequest? CblRequest { get; set; }
+
+    // ← NEW: link back to exactly one Visa request (or null)
+    public int? VisaRequestId { get; set; }
+    [ForeignKey(nameof(VisaRequestId))]
+    public VisaRequest? VisaRequest { get; set; }
   }
 }

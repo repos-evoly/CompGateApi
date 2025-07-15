@@ -43,6 +43,9 @@ namespace CompGateApi.Data.Models
         [MaxLength(100)]
         public string? KycCity { get; set; }
 
+        public bool CommissionOnReceiver { get; set; } = false;
+
+
         // ── Users in this company ─────────────────────────────────────────────
         public ICollection<User> Users { get; set; } = new List<User>();
 

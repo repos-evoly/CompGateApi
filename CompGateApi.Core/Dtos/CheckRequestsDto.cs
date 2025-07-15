@@ -10,6 +10,8 @@ namespace CompGateApi.Core.Dtos
         public int UserId { get; set; }
 
         public int? RepresentativeId { get; set; }
+
+        public RepresentativeDto? Representative { get; set; }
         public string? Branch { get; set; }
         public string? BranchNum { get; set; }
         public DateTime? Date { get; set; }

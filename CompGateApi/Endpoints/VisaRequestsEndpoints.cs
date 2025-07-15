@@ -1,5 +1,6 @@
 // ── CompGateApi.Endpoints/VisaRequestEndpoints.cs ──────────────────────
 using System.Security.Claims;
+using System.Text.Json;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
@@ -29,16 +30,15 @@ namespace CompGateApi.Endpoints
                    .Produces(404);
 
             company.MapPost("/", CreateMyRequest)
-                   .Accepts<VisaRequestCreateDto>("application/json")
+                   .Accepts<IFormFile>("multipart/form-data")
                    .Produces<VisaRequestDto>(201)
                    .Produces(400);
 
             company.MapPut("/{id:int}", UpdateMyRequest)
-                .WithName("UpdateVisaRequest")
-                .Accepts<VisaRequestCreateDto>("application/json")
-                .Produces<VisaRequestDto>(200)
-                .Produces(400)
-                .Produces(404);
+                   .Accepts<IFormFile>("multipart/form-data")
+                   .Produces<VisaRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
 
 
             var admin = app
@@ -62,7 +62,6 @@ namespace CompGateApi.Endpoints
 
         private static int GetAuthUserId(HttpContext ctx)
         {
-            // token uses "nameid" claim
             var raw = ctx.User.FindFirst("nameid")?.Value;
             if (int.TryParse(raw, out var id)) return id;
             throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
@@ -81,15 +80,11 @@ namespace CompGateApi.Endpoints
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var me = await userRepo.GetUserByAuthId(authId, bearer);
-            if (me == null)
-                return Results.Unauthorized();
-
-            if (!me.CompanyId.HasValue)
+            if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
             var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
             var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
-
 
             var dtos = list.Select(v => new VisaRequestDto
             {
@@ -135,55 +130,95 @@ namespace CompGateApi.Endpoints
             if (me == null)
                 return Results.Unauthorized();
 
-            var v = await repo.GetByIdAsync(id);
-            if (v == null || !me.CompanyId.HasValue || v.CompanyId != me.CompanyId.Value)
+            var ent = await repo.GetByIdAsync(id); // includes Attachments
+            if (ent == null || !me.CompanyId.HasValue || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
 
             var dto = new VisaRequestDto
             {
-                Id = v.Id,
-                UserId = v.UserId,
-                Branch = v.Branch,
-                Date = v.Date,
-                AccountHolderName = v.AccountHolderName,
-                AccountNumber = v.AccountNumber,
-                NationalId = v.NationalId,
-                PhoneNumberLinkedToNationalId = v.PhoneNumberLinkedToNationalId,
-                Cbl = v.Cbl,
-                CardMovementApproval = v.CardMovementApproval,
-                CardUsingAcknowledgment = v.CardUsingAcknowledgment,
-                ForeignAmount = v.ForeignAmount,
-                LocalAmount = v.LocalAmount,
-                Pldedge = v.Pldedge,
-                Status = v.Status,
-                Reason = v.Reason,
-                CreatedAt = v.CreatedAt,
-                UpdatedAt = v.UpdatedAt
+                Id = ent.Id,
+                UserId = ent.UserId,
+                Branch = ent.Branch,
+                Date = ent.Date,
+                AccountHolderName = ent.AccountHolderName,
+                AccountNumber = ent.AccountNumber,
+                NationalId = ent.NationalId,
+                PhoneNumberLinkedToNationalId = ent.PhoneNumberLinkedToNationalId,
+                Cbl = ent.Cbl,
+                CardMovementApproval = ent.CardMovementApproval,
+                CardUsingAcknowledgment = ent.CardUsingAcknowledgment,
+                ForeignAmount = ent.ForeignAmount,
+                LocalAmount = ent.LocalAmount,
+                Pldedge = ent.Pldedge,
+                Status = ent.Status,
+                Reason = ent.Reason,
+                // ← map all attachments
+                Attachments = ent.Attachments.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    AttFileName = a.AttFileName,
+                    AttOriginalFileName = a.AttOriginalFileName,
+                    AttMime = a.AttMime,
+                    AttSize = a.AttSize,
+                    AttUrl = a.AttUrl,
+                    Description = a.Description,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                }).ToList(),
+                CreatedAt = ent.CreatedAt,
+                UpdatedAt = ent.UpdatedAt
             };
+
             return Results.Ok(dto);
         }
 
         public static async Task<IResult> CreateMyRequest(
-            [FromBody] VisaRequestCreateDto dto,
-            HttpContext ctx,
-            [FromServices] IVisaRequestRepository repo,
-            [FromServices] IUserRepository userRepo,
-            [FromServices] IValidator<VisaRequestCreateDto> validator,
-            [FromServices] ILogger<VisaRequestEndpoints> log)
+           HttpRequest req,
+           HttpContext ctx,
+           IVisaRequestRepository repo,
+           IAttachmentRepository attRepo,
+           IUserRepository userRepo,
+           IValidator<VisaRequestCreateDto> validator,
+           ILogger<VisaRequestEndpoints> log)
         {
+            log.LogInformation("CreateMyRequest (multipart/form-data)");
+
+            // — Authenticate —
+            var raw = ctx.User.FindFirst("nameid")?.Value;
+            if (!int.TryParse(raw, out var authId))
+                return Results.Unauthorized();
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            // — Parse form —
+            if (!req.HasFormContentType)
+                return Results.BadRequest("Must be multipart/form-data.");
+            var form = await req.ReadFormAsync();
+            var dtoJson = form["Dto"].FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(dtoJson))
+                return Results.BadRequest("Missing 'Dto' field.");
+
+            VisaRequestCreateDto dto;
+            try
+            {
+                dto = JsonSerializer.Deserialize<VisaRequestCreateDto>(
+                    dtoJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                )!;
+            }
+            catch (JsonException)
+            {
+                return Results.BadRequest("Invalid JSON in 'Dto' field.");
+            }
+
+            // — Validate —
             var validation = await validator.ValidateAsync(dto);
             if (!validation.IsValid)
                 return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
 
-            var authId = GetAuthUserId(ctx);
-            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-            var me = await userRepo.GetUserByAuthId(authId, bearer);
-            if (me == null)
-                return Results.Unauthorized();
-
-            if (!me.CompanyId.HasValue)
-                return Results.Unauthorized();
-
+            // — Save parent request —
             var ent = new VisaRequest
             {
                 UserId = me.UserId,
@@ -202,10 +237,26 @@ namespace CompGateApi.Endpoints
                 Pldedge = dto.Pldedge,
                 Status = "Pending"
             };
-
             await repo.CreateAsync(ent);
-            log.LogInformation("Created VisaRequest Id={Id}", ent.Id);
+            log.LogInformation("Persisted VisaRequest Id={RequestId}", ent.Id);
 
+            // — Link any uploaded files —
+            var attachments = new List<AttachmentDto>();
+            foreach (var file in form.Files)
+            {
+                var attDto = await attRepo.Upload(
+                    file,
+                    me.CompanyId.Value,
+                    subject: $"VisaRequest {ent.Id}",
+                    description: "",
+                    createdBy: me.UserId.ToString()
+                );
+
+                await attRepo.LinkToVisaRequestAsync(attDto.Id, ent.Id);
+                attachments.Add(attDto);
+            }
+
+            // — Build response DTO —
             var outDto = new VisaRequestDto
             {
                 Id = ent.Id,
@@ -223,39 +274,63 @@ namespace CompGateApi.Endpoints
                 LocalAmount = ent.LocalAmount,
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
+                Reason = ent.Reason,
+                Attachments = attachments,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
+
             return Results.Created($"/api/visarequests/{ent.Id}", outDto);
         }
 
+
         public static async Task<IResult> UpdateMyRequest(
-    int id,
-    [FromBody] VisaRequestCreateDto dto,
-    HttpContext ctx,
-    IVisaRequestRepository repo,
-    IUserRepository userRepo,
-    IValidator<VisaRequestCreateDto> validator,
-    ILogger<VisaRequestEndpoints> log)
+            int id,
+            HttpRequest req,
+            HttpContext ctx,
+            IVisaRequestRepository repo,
+            IAttachmentRepository attRepo,
+            IUserRepository userRepo,
+            IValidator<VisaRequestCreateDto> validator,
+            ILogger<VisaRequestEndpoints> log)
         {
-            log.LogInformation("UpdateMyRequest payload: {@Dto}", dto);
+            log.LogInformation("UpdateMyRequest Id={Id} (multipart/form-data)", id);
 
-            var validation = await validator.ValidateAsync(dto);
-            if (!validation.IsValid)
-                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
-
-            var authId = GetAuthUserId(ctx);
+            var raw = ctx.User.FindFirst("nameid")?.Value;
+            if (!int.TryParse(raw, out var authId))
+                return Results.Unauthorized();
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var me = await userRepo.GetUserByAuthId(authId, bearer);
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
-            var ent = await repo.GetByIdAsync(id);
+            if (!req.HasFormContentType)
+                return Results.BadRequest("Must be multipart/form-data.");
+            var form = await req.ReadFormAsync();
+
+            var dtoJson = form["Dto"].FirstOrDefault();
+            if (string.IsNullOrEmpty(dtoJson))
+                return Results.BadRequest("Missing 'Dto' field.");
+            VisaRequestCreateDto dto;
+            try
+            {
+                dto = JsonSerializer.Deserialize<VisaRequestCreateDto>(dtoJson,
+                      new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            }
+            catch
+            {
+                return Results.BadRequest("Invalid JSON in 'Dto' field.");
+            }
+
+            var validation = await validator.ValidateAsync(dto);
+            if (!validation.IsValid)
+                return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
+
+            var ent = await repo.GetByIdAsync(id); // includes Attachments
             if (ent == null || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
-
             if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
-                return Results.BadRequest("Cannot edit a printed form.");
+                return Results.BadRequest("Cannot edit a printed request.");
 
             // update fields
             ent.Branch = dto.Branch;
@@ -270,10 +345,27 @@ namespace CompGateApi.Endpoints
             ent.ForeignAmount = dto.ForeignAmount;
             ent.LocalAmount = dto.LocalAmount;
             ent.Pldedge = dto.Pldedge;
-            // leave Status and Reason unchanged
+            // leave Status & Reason unchanged
 
             await repo.UpdateAsync(ent);
-            log.LogInformation("Updated VisaRequest Id={Id}", id);
+
+            if (form.Files.Count > 0)
+            {
+                foreach (var file in form.Files)
+                {
+                    // 1️⃣ upload it
+                    var attDto = await attRepo.Upload(
+                        file,
+                        me.CompanyId.Value,
+                        subject: $"VisaRequest {ent.Id}",
+                        description: "",
+                        createdBy: me.UserId.ToString()
+                    );
+
+                    // 2️⃣ link it to this VisaRequest
+                    await attRepo.LinkToVisaRequestAsync(attDto.Id, ent.Id);
+                }
+            }
 
             var outDto = new VisaRequestDto
             {
@@ -293,13 +385,24 @@ namespace CompGateApi.Endpoints
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
                 Reason = ent.Reason,
+                Attachments = ent.Attachments.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    AttFileName = a.AttFileName,
+                    AttOriginalFileName = a.AttOriginalFileName,
+                    AttMime = a.AttMime,
+                    AttSize = a.AttSize,
+                    AttUrl = a.AttUrl,
+                    Description = a.Description,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                }).ToList(),
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
 
             return Results.Ok(outDto);
         }
-
 
         public static async Task<IResult> GetAllAdmin(
             [FromServices] IVisaRequestRepository repo,
@@ -385,12 +488,13 @@ namespace CompGateApi.Endpoints
             };
             return Results.Ok(outDto);
         }
+
         public static async Task<IResult> GetByIdAdmin(
-    int id,
-    [FromServices] IVisaRequestRepository repo,
-    [FromServices] ILogger<VisaRequestEndpoints> log)
+            int id,
+            [FromServices] IVisaRequestRepository repo,
+            [FromServices] ILogger<VisaRequestEndpoints> log)
         {
-            log.LogInformation("Admin: GetByIdAdmin({Id})", id);
+            log.LogInformation("Admin:GetById VisaRequest {Id}", id);
 
             var ent = await repo.GetByIdAsync(id);
             if (ent == null)
@@ -414,14 +518,23 @@ namespace CompGateApi.Endpoints
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
                 Reason = ent.Reason,
+                Attachments = ent.Attachments.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    AttFileName = a.AttFileName,
+                    AttOriginalFileName = a.AttOriginalFileName,
+                    AttMime = a.AttMime,
+                    AttSize = a.AttSize,
+                    AttUrl = a.AttUrl,
+                    Description = a.Description,
+                    CreatedAt = a.CreatedAt,
+                    UpdatedAt = a.UpdatedAt
+                }).ToList(),
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
             };
 
             return Results.Ok(dto);
         }
-
     }
-
-
 }

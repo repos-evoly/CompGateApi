@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250711081702_VisaRequestAttachments")]
+    partial class VisaRequestAttachments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,9 +58,6 @@ namespace CompGateApi.Data.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("CblRequestId")
-                        .HasColumnType("int");
-
                     b.Property<int>("CompanyId")
                         .HasMaxLength(8)
                         .HasColumnType("int");
@@ -81,8 +81,6 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CblRequestId");
 
                     b.HasIndex("CompanyId");
 
@@ -182,9 +180,6 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<Guid?>("AttachmentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("AttachmentId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("BirthDate")
@@ -299,7 +294,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AttachmentId1");
+                    b.HasIndex("AttachmentId");
 
                     b.HasIndex("CompanyId");
 
@@ -1651,27 +1646,17 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.Attachment", b =>
                 {
-                    b.HasOne("CompGateApi.Data.Models.CblRequest", "CblRequest")
-                        .WithMany("Attachments")
-                        .HasForeignKey("CblRequestId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("CompGateApi.Data.Models.Company", "Company")
                         .WithMany("Attachments")
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CompGateApi.Data.Models.VisaRequest", "VisaRequest")
+                    b.HasOne("CompGateApi.Data.Models.VisaRequest", null)
                         .WithMany("Attachments")
-                        .HasForeignKey("VisaRequestId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("CblRequest");
+                        .HasForeignKey("VisaRequestId");
 
                     b.Navigation("Company");
-
-                    b.Navigation("VisaRequest");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.AuditLog", b =>
@@ -1712,7 +1697,8 @@ namespace CompGateApi.Data.Migrations
                 {
                     b.HasOne("CompGateApi.Data.Models.Attachment", "Attachment")
                         .WithMany()
-                        .HasForeignKey("AttachmentId1");
+                        .HasForeignKey("AttachmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CompGateApi.Data.Models.Company", "Company")
                         .WithMany("CblRequests")
@@ -2153,8 +2139,6 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
-                    b.Navigation("Attachments");
-
                     b.Navigation("Officials");
 
                     b.Navigation("Signatures");

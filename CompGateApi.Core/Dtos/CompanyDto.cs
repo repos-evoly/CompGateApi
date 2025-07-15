@@ -126,6 +126,7 @@ namespace CompGateApi.Core.Dtos
     {
 
         public int ServicePackageId { get; set; }
+        public bool CommissionOnReceiver { get; set; }
     }
 }
 
@@ -146,6 +147,9 @@ namespace CompGateApi.Core.Dtos
         public string? KycMobile { get; set; }
         public string? KycNationality { get; set; }
         public string? KycCity { get; set; }
+
+        public bool CommissionOnReceiver { get; set; }
+
 
         public int ServicePackageId { get; set; }
         public string? ServicePackageName { get; set; }

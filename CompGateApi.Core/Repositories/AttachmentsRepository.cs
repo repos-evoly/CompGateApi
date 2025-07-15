@@ -85,5 +85,25 @@ namespace CompGateApi.Data.Repositories
 
             return _mapper.Map<AttachmentDto>(att);
         }
+
+        public async Task LinkToVisaRequestAsync(Guid attachmentId, int visaRequestId)
+        {
+            var att = await _db.Attachments.FindAsync(attachmentId);
+            if (att == null)
+                throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+            att.VisaRequestId = visaRequestId;
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task LinkToCblRequestAsync(Guid attachmentId, int cblRequestId)
+        {
+            var att = await _db.Attachments.FindAsync(attachmentId);
+            if (att == null)
+                throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+            att.CblRequestId = cblRequestId;
+            await _db.SaveChangesAsync();
+        }
     }
 }
