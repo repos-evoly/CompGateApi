@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using CompGateApi.Data.Migrations;
 using CompGateApi.Data.Models;
 
 namespace CompGateApi.Core.Dtos
@@ -23,6 +24,7 @@ namespace CompGateApi.Core.Dtos
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public int RoleId { get; set; }
+        public bool IsActive { get; set; } = false;
     }
 
     public class PublicEditUserDto

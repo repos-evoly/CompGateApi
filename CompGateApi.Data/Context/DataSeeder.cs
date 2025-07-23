@@ -70,49 +70,48 @@ namespace CompGateApi.Data.Seeding
 
             var permissions = new[]
             {
-        // company-scoped (IsGlobal = false)
-        new Permission { Name = "CompanyCanDashboard",                        Description = "Company: view dashboard",                          IsGlobal = false },
-        new Permission { Name = "CompanyCanStatementOfAccount",              Description = "Company: statement of accounts",                     IsGlobal = false },
-        new Permission { Name = "CompanyCanEmployees",                       Description = "Company: manage employees",                          IsGlobal = false },
-        new Permission { Name = "CompanyCanTransfer",                        Description = "Company: initiate transfers",                        IsGlobal = false },
-        new Permission { Name = "CompanyCanTransferInternal",                Description = "Company: internal transfers",                         IsGlobal = false },
-        new Permission { Name = "CompanyCanTransferExternal",                Description = "Company: external transfers",                         IsGlobal = false },
-        new Permission { Name = "CompanyCanRequests",                        Description = "Company: submit requests",                            IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestCheckBook",                Description = "Company: request check book",                         IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestCertifiedCheck",           Description = "Company: request certified check",                    IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestGuaranteeLetter",          Description = "Company: request guarantee letter",                   IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestCreditFacility",           Description = "Company: request credit facility",                    IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestVisa",                     Description = "Company: request visa",                                IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestCertifiedBankStatement",   Description = "Company: request certified bank statement",           IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestRTGS",                     Description = "Company: request RTGS",                                IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestForeignTransfers",         Description = "Company: request foreign transfers",                  IsGlobal = false },
-        new Permission { Name = "CompanyCanRequestCBL",                      Description = "Company: request CBL",                                 IsGlobal = false },
-        new Permission { Name = "CompanyCanCurrencies",                      Description = "Company: manage currencies",                           IsGlobal = false },
-        new Permission { Name = "CompanyCanServicePackages",                 Description = "Company: manage service packages",                     IsGlobal = false },
-        new Permission { Name = "CompanyCanCompanies",                       Description = "Company: manage companies",                            IsGlobal = false },
-        new Permission { Name = "CompanyCanSettings",                        Description = "Company: manage settings",                            IsGlobal = false },
+        new Permission { NameAr = "CompanyCanDashboard",                        Description = "Company: view dashboard",                          IsGlobal = false },
+        new Permission { NameAr = "CompanyCanStatementOfAccount",              Description = "Company: statement of accounts",                     IsGlobal = false },
+        new Permission { NameAr = "CompanyCanEmployees",                       Description = "Company: manage employees",                          IsGlobal = false },
+        new Permission { NameAr = "CompanyCanTransfer",                        Description = "Company: initiate transfers",                        IsGlobal = false },
+        new Permission { NameAr = "CompanyCanTransferInternal",                Description = "Company: internal transfers",                         IsGlobal = false },
+        new Permission { NameAr = "CompanyCanTransferExternal",                Description = "Company: external transfers",                         IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequests",                        Description = "Company: submit requests",                            IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestCheckBook",                Description = "Company: request check book",                         IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestCertifiedCheck",           Description = "Company: request certified check",                    IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestGuaranteeLetter",          Description = "Company: request guarantee letter",                   IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestCreditFacility",           Description = "Company: request credit facility",                    IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestVisa",                     Description = "Company: request visa",                                IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestCertifiedBankStatement",   Description = "Company: request certified bank statement",           IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestRTGS",                     Description = "Company: request RTGS",                                IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestForeignTransfers",         Description = "Company: request foreign transfers",                  IsGlobal = false },
+        new Permission { NameAr = "CompanyCanRequestCBL",                      Description = "Company: request CBL",                                 IsGlobal = false },
+        new Permission { NameAr = "CompanyCanCurrencies",                      Description = "Company: manage currencies",                           IsGlobal = false },
+        new Permission { NameAr = "CompanyCanServicePackages",                 Description = "Company: manage service packages",                     IsGlobal = false },
+        new Permission { NameAr = "CompanyCanCompanies",                       Description = "Company: manage companies",                            IsGlobal = false },
+        new Permission { NameAr = "CompanyCanSettings",                        Description = "Company: manage settings",                            IsGlobal = false },
 
         // employee-scoped (IsGlobal = true)
-        new Permission { Name = "EmployeeCanDashboard",                      Description = "Employee: view dashboard",                            IsGlobal = true  },
-        new Permission { Name = "EmployeeCanStatementOfAccount",            Description = "Employee: view statement of accounts",                IsGlobal = true  },
-        new Permission { Name = "EmployeeCanEmployees",                     Description = "Employee: manage employees",                          IsGlobal = true  },
-        new Permission { Name = "EmployeeCanTransfer",                      Description = "Employee: initiate transfers",                        IsGlobal = true  },
-        new Permission { Name = "EmployeeCanTransferInternal",              Description = "Employee: internal transfers",                         IsGlobal = true  },
-        new Permission { Name = "EmployeeCanTransferExternal",              Description = "Employee: external transfers",                         IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequests",                      Description = "Employee: submit requests",                            IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestCheckBook",              Description = "Employee: request check book",                         IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestCertifiedCheck",         Description = "Employee: request certified check",                    IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestGuaranteeLetter",        Description = "Employee: request guarantee letter",                   IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestCreditFacility",         Description = "Employee: request credit facility",                    IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestVisa",                   Description = "Employee: request visa",                                IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestCertifiedBankStatement", Description = "Employee: request certified bank statement",           IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestRTGS",                   Description = "Employee: request RTGS",                                IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestForeignTransfers",       Description = "Employee: request foreign transfers",                  IsGlobal = true  },
-        new Permission { Name = "EmployeeCanRequestCBL",                    Description = "Employee: request CBL",                                 IsGlobal = true  },
-        new Permission { Name = "EmployeeCanCurrencies",                    Description = "Employee: manage currencies",                           IsGlobal = true  },
-        new Permission { Name = "EmployeeCanServicePackages",               Description = "Employee: manage service packages",                     IsGlobal = true  },
-        new Permission { Name = "EmployeeCanCompanies",                     Description = "Employee: manage companies",                            IsGlobal = true  },
-        new Permission { Name = "EmployeeCanSettings",                      Description = "Employee: manage settings",                            IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanDashboard",                      Description = "Employee: view dashboard",                            IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanStatementOfAccount",            Description = "Employee: view statement of accounts",                IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanEmployees",                     Description = "Employee: manage employees",                          IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanTransfer",                      Description = "Employee: initiate transfers",                        IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanTransferInternal",              Description = "Employee: internal transfers",                         IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanTransferExternal",              Description = "Employee: external transfers",                         IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequests",                      Description = "Employee: submit requests",                            IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestCheckBook",              Description = "Employee: request check book",                         IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestCertifiedCheck",         Description = "Employee: request certified check",                    IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestGuaranteeLetter",        Description = "Employee: request guarantee letter",                   IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestCreditFacility",         Description = "Employee: request credit facility",                    IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestVisa",                   Description = "Employee: request visa",                                IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestCertifiedBankStatement", Description = "Employee: request certified bank statement",           IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestRTGS",                   Description = "Employee: request RTGS",                                IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestForeignTransfers",       Description = "Employee: request foreign transfers",                  IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanRequestCBL",                    Description = "Employee: request CBL",                                 IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanCurrencies",                    Description = "Employee: manage currencies",                           IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanServicePackages",               Description = "Employee: manage service packages",                     IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanCompanies",                     Description = "Employee: manage companies",                            IsGlobal = true  },
+        new Permission { NameAr = "EmployeeCanSettings",                      Description = "Employee: manage settings",                            IsGlobal = true  },
     };
 
             _context.Permissions.AddRange(permissions);
@@ -127,7 +126,7 @@ namespace CompGateApi.Data.Seeding
             var roleIds = _context.Roles
                 .ToDictionary(r => r.NameLT, r => r.Id, StringComparer.OrdinalIgnoreCase);
             var permIds = _context.Permissions
-                .ToDictionary(p => p.Name, p => p.Id, StringComparer.OrdinalIgnoreCase);
+                .ToDictionary(p => p.NameAr, p => p.Id, StringComparer.OrdinalIgnoreCase);
 
             void AddPerms(string role, params string[] perms)
             {

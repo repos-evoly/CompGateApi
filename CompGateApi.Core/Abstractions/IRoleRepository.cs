@@ -22,8 +22,8 @@ namespace CompGateApi.Core.Abstractions
 
         Task<bool> AssignPermissionsToRoleAsync(int roleId, IEnumerable<int> permissionIds);
 
-        Task<PermissionDto> CreatePermissionAsync(string name, string description, bool isGlobal);
-        Task<bool> UpdatePermissionAsync(int id, string name, string description, bool isGlobal);
+        Task<PermissionDto> CreatePermissionAsync(string nameAr, string nameEn, string description, bool isGlobal);
+        Task<bool> UpdatePermissionAsync(int id, string nameAr, string nameEn, string description, bool isGlobal);
         Task<bool> DeletePermissionAsync(int id);
     }
 }

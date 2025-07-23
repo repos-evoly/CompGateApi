@@ -11,8 +11,9 @@ namespace CompGateApi.Data.Models
         public int Id { get; set; }
 
         [MaxLength(100)]
-        public string Name { get; set; } = string.Empty;
+        public string NameAr { get; set; } = string.Empty;
 
+        public string NameEn { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
 
         public ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();

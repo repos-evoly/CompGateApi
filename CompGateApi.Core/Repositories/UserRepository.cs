@@ -96,7 +96,7 @@ namespace CompGateApi.Core.Repositories
             var permissionStatusList = allPermissions.Select(p => new PermissionStatusDto
             {
                 PermissionId = p.Id,
-                PermissionName = p.Name,
+                PermissionName = p.NameAr,
                 HasPermission = userPermissionIds.Contains(p.Id) ? 1 : 0
             }).ToList();
 
@@ -194,6 +194,7 @@ namespace CompGateApi.Core.Repositories
                     LastName = user.LastName,
                     Email = user.Email,
                     Phone = user.Phone,
+                    IsActive = user.IsActive,  // ← set it here
                     Role = new RoleDto
                     {
                         Id = user.Role.Id,
@@ -312,7 +313,7 @@ namespace CompGateApi.Core.Repositories
             // Retrieve the names of permissions the user has
             var userPermissionNames = await _context.Permissions
                 .Where(p => userPermissionIds.Contains(p.Id))
-                .Select(p => p.Name)
+                .Select(p => p.NameAr)
                 .ToListAsync();
 
             return new UserDetailsDto
@@ -327,6 +328,7 @@ namespace CompGateApi.Core.Repositories
                 CompanyId = user.CompanyId,
                 CompanyCode = user.Company?.Code,
                 IsCompanyAdmin = user.IsCompanyAdmin,
+                IsActive = user.IsActive,
                 Role = new RoleDto
                 {
                     Id = user.Role.Id,
@@ -362,7 +364,7 @@ namespace CompGateApi.Core.Repositories
                 .ToListAsync();
             var userPermissionNames = await _context.Permissions
                 .Where(p => userPermissionIds.Contains(p.Id))
-                .Select(p => p.Name)
+                .Select(p => p.NameAr)
                 .ToListAsync();
 
             // d) bank accounts — only if CompanyId is set
@@ -492,6 +494,7 @@ namespace CompGateApi.Core.Repositories
             user.Email = editUserDto.Email;
             user.Phone = editUserDto.Phone;
             user.RoleId = editUserDto.RoleId;
+            user.IsActive = editUserDto.IsActive;
 
 
             await _context.SaveChangesAsync();

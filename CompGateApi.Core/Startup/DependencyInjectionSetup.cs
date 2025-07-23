@@ -154,7 +154,23 @@ namespace CompGateApi.Core.Startup
                                        .CreateLogger("JwtBearer");
                   logger.LogError(ctx.Exception, "JWT authentication failed");
                   return Task.CompletedTask;
-                }
+                },
+          OnTokenValidated = ctx =>
+         {
+           var logger = ctx.HttpContext.RequestServices
+                                .GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("JwtBearer");
+
+           // pull out all of the "role" claims
+           var roles = ctx.Principal?
+               .FindAll(ctx.Options.TokenValidationParameters.RoleClaimType ?? "role")
+               .Select(c => c.Value)
+               .ToArray()
+             ?? Array.Empty<string>();
+
+           logger.LogInformation("Token validated. Roles = {Roles}", string.Join(", ", roles));
+           return Task.CompletedTask;
+         }
 
 
         };

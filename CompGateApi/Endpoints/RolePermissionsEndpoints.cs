@@ -50,8 +50,8 @@ namespace CompGateApi.Endpoints
 
             // ── ASSIGN PERMISSIONS TO ROLE ───────────────────────────────
             users.MapGet("/roles/{roleId:int}/permissions", GetPermissionsByRole)
-                 .WithName("GetPermissionsByRole")
-                 .Produces<List<PermissionDto>>(200);
+                .WithName("GetPermissionsByRole")
+                .Produces<RolePermissionsOverviewDto>(200);
 
             users.MapPut("/roles/{roleId:int}/permissions", AssignPermissionsToRole)
                  .WithName("AssignPermissionsToRole")
@@ -69,10 +69,10 @@ namespace CompGateApi.Endpoints
                  .Produces<List<PermissionDto>>(200);
 
             users.MapPost("/permissions", CreatePermission)
-    .WithName("CreatePermission")
-    .Accepts<PermissionCreateDto>("application/json")
-    .Produces<PermissionDto>(201)
-    .Produces(400);
+                .WithName("CreatePermission")
+                .Accepts<PermissionCreateDto>("application/json")
+                .Produces<PermissionDto>(201)
+                .Produces(400);
 
             users.MapPut("/permissions/{permissionId:int}", UpdatePermission)
                  .WithName("UpdatePermission")
@@ -143,7 +143,7 @@ namespace CompGateApi.Endpoints
             var ok = await repo.DeleteRoleAsync(roleId);
             return ok ? Results.NoContent() : Results.NotFound();
         }
-
+ 
         static async Task<IResult> GetPermissions(
             [FromServices] IRoleRepository repo,
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
@@ -155,12 +155,32 @@ namespace CompGateApi.Endpoints
 
         static async Task<IResult> GetPermissionsByRole(
             int roleId,
+            [FromQuery] bool? isGlobal,
             [FromServices] IRoleRepository repo,
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
         {
-            log.LogInformation("Fetching permissions for role {RoleId}", roleId);
-            var perms = await repo.GetPermissionsByRoleAsync(roleId);
-            return Results.Ok(perms);
+            log.LogInformation("Fetching permissions for role {RoleId} (isGlobal={IsGlobal})",
+                               roleId, isGlobal);
+
+            // 1) load all permissions (apply global filter if present)
+            var all = await repo.GetAllPermissionsAsync();
+            if (isGlobal.HasValue)
+                all = all.Where(p => p.IsGlobal == isGlobal.Value).ToList();
+
+            // 2) load assigned ones
+            var assigned = await repo.GetPermissionsByRoleAsync(roleId);
+            if (isGlobal.HasValue)
+                assigned = assigned.Where(p => p.IsGlobal == isGlobal.Value).ToList();
+
+            // 3) compute “available” = in all but not in assigned
+            var available = all
+              .Where(p => assigned.All(a => a.Id != p.Id))
+              .ToList();
+
+            return Results.Ok(new RolePermissionsOverviewDto(
+                Assigned: assigned,
+                Available: available
+            ));
         }
 
         static async Task<IResult> GetPermissionsByGlobal(
@@ -188,12 +208,12 @@ namespace CompGateApi.Endpoints
 
 
         static async Task<IResult> CreatePermission(
-        [FromBody] PermissionCreateDto dto,
-        [FromServices] IRoleRepository repo,
-        [FromServices] ILogger<RolesPermissionsEndpoints> log)
+            [FromBody] PermissionCreateDto dto,
+            [FromServices] IRoleRepository repo,
+            [FromServices] ILogger<RolesPermissionsEndpoints> log)
         {
-            log.LogInformation("Creating permission {Name}", dto.Name);
-            var created = await repo.CreatePermissionAsync(dto.Name, dto.Description, dto.IsGlobal);
+            log.LogInformation("Creating permission {Name}", dto.NameAr);
+            var created = await repo.CreatePermissionAsync(dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal);
             return Results.Created($"/api/users/permissions/{created.Id}", created);
         }
 
@@ -204,9 +224,9 @@ namespace CompGateApi.Endpoints
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
         {
             log.LogInformation("Updating permission {PermissionId}", permissionId);
-            var ok = await repo.UpdatePermissionAsync(dto.Id, dto.Name, dto.Description, dto.IsGlobal);
+            var ok = await repo.UpdatePermissionAsync(dto.Id, dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal);
             if (!ok) return Results.NotFound();
-            var updated = new PermissionDto { Id = dto.Id, Name = dto.Name, Description = dto.Description, IsGlobal = dto.IsGlobal };
+            var updated = new PermissionDto { Id = dto.Id, NameAr = dto.NameAr, NameEn = dto.NameEn, Description = dto.Description, IsGlobal = dto.IsGlobal };
             return Results.Ok(updated);
         }
 
@@ -227,8 +247,13 @@ namespace CompGateApi.Endpoints
         public record AssignRolePermissionsDto(IEnumerable<int> PermissionIds);
 
         // at bottom of RolesPermissionsEndpoints.cs
-        public record PermissionCreateDto(string Name, string Description, bool IsGlobal);
-        public record PermissionUpdateDto(int Id, string Name, string Description, bool IsGlobal);
+        public record PermissionCreateDto(string NameAr, string NameEn, string Description, bool IsGlobal);
+        public record PermissionUpdateDto(int Id, string NameAr, string NameEn, string Description, bool IsGlobal);
+
+        public record RolePermissionsOverviewDto(
+            IEnumerable<PermissionDto> Assigned,
+            IEnumerable<PermissionDto> Available
+        );
 
     }
 }

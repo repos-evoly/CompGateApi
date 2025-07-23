@@ -22,7 +22,7 @@ namespace CompGateApi.Core.Repositories
         {
             return await _context.UserRolePermissions
                 .Where(urp => urp.UserId == userId)
-                .Select(urp => urp.Permission.Name)
+                .Select(urp => urp.Permission.NameAr)
                 .ToListAsync();
         }
 
@@ -111,7 +111,8 @@ namespace CompGateApi.Core.Repositories
                 .Select(p => new PermissionDto
                 {
                     Id = p.Id,
-                    Name = p.Name,
+                    NameAr = p.NameAr,
+                    NameEn = p.NameEn,
                     Description = p.Description,
                     IsGlobal = p.IsGlobal
                 })
@@ -126,7 +127,8 @@ namespace CompGateApi.Core.Repositories
                 .Select(rp => new PermissionDto
                 {
                     Id = rp.Permission.Id,
-                    Name = rp.Permission.Name,
+                    NameAr = rp.Permission.NameAr,
+                    NameEn = rp.Permission.NameEn,
                     Description = rp.Permission.Description,
                     IsGlobal = rp.Permission.IsGlobal
                 })
@@ -147,7 +149,8 @@ namespace CompGateApi.Core.Repositories
                 .Select(rp => new PermissionDto
                 {
                     Id = rp.Permission.Id,
-                    Name = rp.Permission.Name,
+                    NameAr = rp.Permission.NameAr,
+                    NameEn = rp.Permission.NameEn,
                     Description = rp.Permission.Description,
                     IsGlobal = rp.Permission.IsGlobal
                 })
@@ -173,11 +176,12 @@ namespace CompGateApi.Core.Repositories
             return true;
         }
 
-        public async Task<PermissionDto> CreatePermissionAsync(string name, string description, bool isGlobal)
+        public async Task<PermissionDto> CreatePermissionAsync(string nameAr, string nameEn, string description, bool isGlobal)
         {
             var perm = new Permission
             {
-                Name = name,
+                NameAr = nameAr,
+                NameEn = nameEn,
                 Description = description,
                 IsGlobal = isGlobal
             };
@@ -186,17 +190,19 @@ namespace CompGateApi.Core.Repositories
             return new PermissionDto
             {
                 Id = perm.Id,
-                Name = perm.Name,
+                NameAr = perm.NameAr,
+                NameEn = perm.NameEn,
                 Description = perm.Description,
                 IsGlobal = perm.IsGlobal
             };
         }
 
-        public async Task<bool> UpdatePermissionAsync(int id, string name, string description, bool isGlobal)
+        public async Task<bool> UpdatePermissionAsync(int id, string nameAr, string nameEn, string description, bool isGlobal)
         {
             var perm = await _context.Permissions.FindAsync(id);
             if (perm == null) return false;
-            perm.Name = name;
+            perm.NameAr = nameAr;
+            perm.NameEn = nameEn;
             perm.Description = description;
             perm.IsGlobal = isGlobal;
             await _context.SaveChangesAsync();

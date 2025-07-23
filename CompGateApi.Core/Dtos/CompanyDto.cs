@@ -115,6 +115,8 @@ namespace CompGateApi.Core.Dtos
         public string Email { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
 
+        public bool IsActive { get; set; }
+
         /// <summary>The RoleId you assigned (e.g. 6 = Accountant)</summary>
         public int RoleId { get; set; }
 

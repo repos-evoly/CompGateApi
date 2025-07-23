@@ -519,7 +519,7 @@ namespace CompGateApi.Endpoints
                 fullNameAR = dto.LastName,
                 email = dto.Email,
                 password = dto.Password,
-                roleId = dto.RoleId
+                roleId = dto.RoleId < 8 ? dto.RoleId : 8, // Adjust this logic as needed
             };
             var resp = await client.PostAsJsonAsync("api/auth/register", authPayload);
             if (!resp.IsSuccessStatusCode)
@@ -560,6 +560,7 @@ namespace CompGateApi.Endpoints
                 Email = user.Email,
                 Phone = user.Phone,
                 RoleId = user.RoleId,
+                IsActive = user.IsActive,
                 Permissions = perms
             };
 
@@ -579,7 +580,9 @@ namespace CompGateApi.Endpoints
 
             var company = await companyRepo.GetByCodeAsync(code);
             if (company == null) return Results.NotFound($"Company '{code}' not found.");
-            if (me == null || !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase) || !me.IsCompanyAdmin)
+            if (me == null || !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase)
+            //  || !me.IsCompanyAdmin)
+            )
                 return Results.Unauthorized();
 
             var all = await userRepo.GetUsersAsync(
@@ -603,6 +606,7 @@ namespace CompGateApi.Endpoints
                     Email = u.Email,
                     Phone = u.Phone,
                     RoleId = u.RoleId,
+                    IsActive = u.IsActive,
                     Permissions = u.Permissions
                 })
                 .ToList();
@@ -690,7 +694,9 @@ namespace CompGateApi.Endpoints
                 log.LogWarning("  Company '{Code}' not found", code);
                 return Results.NotFound($"Company '{code}' not found.");
             }
-            if (!me.IsCompanyAdmin || !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase))
+            if (
+                // !me.IsCompanyAdmin ||
+                !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase))
             {
                 log.LogWarning("  User {Auth} not admin for {Code}", callerAuth, code);
                 return Results.Unauthorized();
@@ -715,7 +721,8 @@ namespace CompGateApi.Endpoints
                 Email = target.Email,
                 Phone = target.Phone,
                 RoleId = target.RoleId,
-                Permissions = target.Permissions
+                Permissions = target.Permissions,
+                IsActive = target.IsActive
             };
             log.LogInformation("← GetCompanyUserById found {UserId}", userId);
             return Results.Ok(outDto);
@@ -755,7 +762,9 @@ namespace CompGateApi.Endpoints
                 log.LogWarning("  Company '{Code}' not found", code);
                 return Results.NotFound($"Company '{code}' not found.");
             }
-            if (!me.IsCompanyAdmin || !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase))
+            if (
+                  // !me.IsCompanyAdmin ||
+                  !string.Equals(me.CompanyCode, code, StringComparison.OrdinalIgnoreCase))
             {
                 log.LogWarning("  User {Auth} not admin for {Code}", callerAuth, code);
                 return Results.Unauthorized();
@@ -808,8 +817,5 @@ namespace CompGateApi.Endpoints
             log.LogInformation("← UpdateCompany {Code} updated successfully", code);
             return Results.Ok(dto);
         }
-
-
-
     }
 }
