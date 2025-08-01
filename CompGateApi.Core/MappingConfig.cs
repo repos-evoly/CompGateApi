@@ -19,7 +19,7 @@ namespace CompGateApi
                                   opt => opt.MapFrom(src => src.CommissionAmount))
                        .ForMember(dest => dest.CommissionOnRecipient,
                                   opt => opt.MapFrom(src => src.CommissionOnRecipient))
-                        .ForMember(dest => dest.EconomicSectorName, opt => opt.MapFrom(src => src.EconomicSector.Name));
+                        .ForMember(dest => dest.EconomicSectorName, opt => opt.MapFrom(src => src.EconomicSector != null ? src.EconomicSector.Name : null));
 
             // everything else (Id, UserId, FromAccount, ToAccount, Amount, Status, Description, RequestedAt, ServicePackageId)
             // will be auto-mapped by convention

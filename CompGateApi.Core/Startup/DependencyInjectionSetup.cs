@@ -121,8 +121,8 @@ namespace CompGateApi.Core.Startup
         options.SaveToken = true;
 
         // use System.IdentityModel handler only
-        options.SecurityTokenValidators.Clear();
-        options.SecurityTokenValidators.Add(new JwtSecurityTokenHandler());
+        options.TokenHandlers.Clear();
+        options.TokenHandlers.Add(new JwtSecurityTokenHandler());
 
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -342,6 +342,10 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<IRepresentativeRepository, RepresentativeRepository>();
       // FormStatus
       services.AddScoped<IFormStatusRepository, FormStatusRepository>();
+      // Beneficiaries
+      services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
+      //EmployeeSalary
+      services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
 
       return services;
     }

@@ -256,6 +256,12 @@ namespace CompGateApi.Data.Seeding
             var cats = new[]
             {
         new TransactionCategory { Name = "Internal" },
+        new TransactionCategory
+        {
+            Name = "Group Transfer",
+            HasLimits = true // or false, depending on your logic`
+        },
+
         new TransactionCategory { Name = "External" },
         new TransactionCategory { Name = "International" },
         new TransactionCategory { Name = "RTGS" },

@@ -108,7 +108,7 @@ namespace CompGateApi.Core.Dtos
         public int AuthUserId { get; set; }
 
         /// <summary>The 6-digit CompanyId from the route</summary>
-        public string CompanyCode { get; set; }
+        public required string CompanyCode { get; set; }
 
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;

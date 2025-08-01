@@ -128,8 +128,8 @@ namespace CompGateApi.Endpoints
       for (int i = 0; i < files.Count; i++)
       {
         var file = files[i];
-        var subject = subjects[i];
-        var description = descriptions[i];
+        var subject = subjects[i] ?? string.Empty;
+        var description = descriptions[i] ?? string.Empty;
 
         var dto = await repo.Upload(
             file,

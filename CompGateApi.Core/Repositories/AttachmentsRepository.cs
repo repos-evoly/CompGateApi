@@ -75,7 +75,8 @@ namespace CompGateApi.Data.Repositories
         public async Task<AttachmentDto> Delete(Guid id)
         {
             var att = await _db.Attachments.FindAsync(id);
-            if (att == null) return null;
+            if (att == null)
+                throw new InvalidOperationException($"Attachment with id {id} not found.");
 
             if (File.Exists(att.AttUrl))
                 File.Delete(att.AttUrl);

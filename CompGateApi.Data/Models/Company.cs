@@ -87,6 +87,10 @@ namespace CompGateApi.Data.Models
 
         public ICollection<Representative> Representatives { get; set; } = new List<Representative>();
 
+        public ICollection<Employee> Employees { get; set; } = new List<Employee>();
+        public ICollection<SalaryCycle> SalaryPosts { get; set; } = new List<SalaryCycle>();
+
+
     }
 
     public enum RegistrationStatus

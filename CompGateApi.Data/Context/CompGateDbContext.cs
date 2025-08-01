@@ -43,18 +43,16 @@ namespace CompGateApi.Data.Context
               public DbSet<CheckRequestLineItem> CheckRequestLineItems => Set<CheckRequestLineItem>();
               public DbSet<CblRequest> CblRequests => Set<CblRequest>();
               public DbSet<RtgsRequest> RtgsRequests => Set<RtgsRequest>();
-
               public DbSet<CreditFacilitiesOrLetterOfGuaranteeRequest> CreditFacilitiesOrLetterOfGuaranteeRequests => Set<CreditFacilitiesOrLetterOfGuaranteeRequest>();
-
               public DbSet<CertifiedBankStatementRequest> CertifiedBankStatementRequests => Set<CertifiedBankStatementRequest>();
               public DbSet<Attachment> Attachments => Set<Attachment>();
-
               public DbSet<EconomicSector> EconomicSectors => Set<EconomicSector>();
-
               public DbSet<Representative> Representatives => Set<Representative>();
-
               public DbSet<FormStatus> FormStatuses => Set<FormStatus>();
-
+              public DbSet<Beneficiary> Beneficiaries => Set<Beneficiary>();
+              public DbSet<Employee> Employees => Set<Employee>();
+              public DbSet<SalaryCycle> SalaryCycles => Set<SalaryCycle>();
+              public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
 
 
 
@@ -284,6 +282,12 @@ namespace CompGateApi.Data.Context
                             b.Property(d => d.B2CMinPercentage)
                             .HasPrecision(18, 4).IsRequired();
 
+                            b.Property(d => d.B2BCommissionPct)
+                            .HasPrecision(18, 4);
+
+                            b.Property(d => d.B2CCommissionPct)
+                            .HasPrecision(18, 4);
+
                             b.HasOne(d => d.ServicePackage)
                             .WithMany(p => p.Details)
                             .HasForeignKey(d => d.ServicePackageId)
@@ -343,6 +347,8 @@ namespace CompGateApi.Data.Context
                     .OnDelete(DeleteBehavior.Restrict);
 
                             b.Property(tr => tr.Amount).HasPrecision(18, 4);
+                            b.Property(tr => tr.CommissionAmount).HasPrecision(18, 4);
+
 
                             b.HasOne(tr => tr.EconomicSector)
                                      .WithMany(es => es.Transfers)
@@ -556,6 +562,62 @@ namespace CompGateApi.Data.Context
                     .WithMany(c => c.RtgsRequests)
                     .HasForeignKey(x => x.CompanyId)
                     .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     // ── EMPLOYEE ──────────────────────────────────────────────
+                     builder.Entity<Employee>(b =>
+                     {
+                            b.ToTable("Employees");
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Name).HasMaxLength(100).IsRequired();
+                            b.Property(e => e.Email).HasMaxLength(100).IsRequired();
+                            b.Property(e => e.Phone).HasMaxLength(20);
+                            b.Property(e => e.Salary).HasPrecision(18, 2);
+                            b.Property(e => e.AccountNumber).HasMaxLength(34).IsRequired();
+                            b.Property(e => e.AccountType).HasMaxLength(20).IsRequired();
+                            b.Property(e => e.SendSalary);
+                            b.Property(e => e.CanPost);
+
+                            b.HasOne(e => e.Company)
+                            .WithMany(c => c.Employees)
+                            .HasForeignKey(e => e.CompanyId)
+                            .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     // ── SALARY CYCLE ──────────────────────────────────────────
+                     builder.Entity<SalaryCycle>(b =>
+                     {
+                            b.ToTable("SalaryCycles");
+                            b.HasKey(s => s.Id);
+                            b.Property(s => s.SalaryMonth);
+                            b.Property(s => s.TotalAmount).HasPrecision(18, 2);
+                            b.Property(s => s.CreatedAt);
+                            b.Property(s => s.PostedAt);
+
+                            b.HasOne(s => s.Company)
+                     .WithMany(c => c.SalaryPosts)
+                     .HasForeignKey(s => s.CompanyId)
+                     .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     // ── SALARY ENTRY ──────────────────────────────────────────
+                     builder.Entity<SalaryEntry>(b =>
+                     {
+                            b.ToTable("SalaryEntries");
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Amount).HasPrecision(18, 2);
+                            b.Property(e => e.IsTransferred);
+                            b.Property(e => e.CreatedAt);
+
+                            b.HasOne(e => e.SalaryCycle)
+                            .WithMany(c => c.Entries)
+                            .HasForeignKey(e => e.SalaryCycleId)
+                            .OnDelete(DeleteBehavior.Restrict); // <- FIX HERE
+
+                            b.HasOne(e => e.Employee)
+                            .WithMany(emp => emp.SalaryEntries)
+                            .HasForeignKey(e => e.EmployeeId)
+                            .OnDelete(DeleteBehavior.Cascade); // keep this
                      });
               }
 

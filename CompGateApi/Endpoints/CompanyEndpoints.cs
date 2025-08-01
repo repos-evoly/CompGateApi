@@ -360,10 +360,10 @@ namespace CompGateApi.Endpoints
             return Results.NoContent();
         }
         public static async Task<IResult> LookupKyc(
-     string code,
-     [FromServices] ICompanyRepository repo,
-     [FromServices] IHttpClientFactory httpFactory,
-     [FromServices] ILogger<CompanyEndpoints> log)
+    string code,
+    [FromServices] ICompanyRepository repo,
+    [FromServices] IHttpClientFactory httpFactory,
+    [FromServices] ILogger<CompanyEndpoints> log)
         {
             if (code.Length != 6)
                 return Results.BadRequest("Company code must be exactly 6 characters.");
@@ -372,21 +372,17 @@ namespace CompGateApi.Endpoints
             if (kyc == null || string.IsNullOrWhiteSpace(kyc.companyId))
                 return Results.Ok(new { hasKyc = false });
 
-            // lookup branchName exactly as before
             string? branchName = null;
+
             try
             {
                 var client = httpFactory.CreateClient("KycApi");
-                var resp = await client.GetAsync("kycapi/api/core/getActiveBranches");
-                if (resp.IsSuccessStatusCode)
+                var external = await client.GetFromJsonAsync<ExternalActiveBranchesResponseDto>("kycapi/api/core/getActiveBranches");
+
+                if (external != null)
                 {
-                    var branches = await resp.Content
-                        .ReadFromJsonAsync<ActiveBranchesResponseDto>();
-                    branchName = branches?
-                        .Details?
-                        .Branches?
-                        .FirstOrDefault(b => b.BranchNumber == kyc.branchId)?
-                        .BranchName;
+                    branchName = external.Details.Branches
+                        .FirstOrDefault(b => b.CABBN == kyc.branchId)?.CABRN;
                 }
             }
             catch (Exception ex)
@@ -394,7 +390,6 @@ namespace CompGateApi.Endpoints
                 log.LogWarning(ex, "Branch lookup failed");
             }
 
-            // embed branchName inside the `data` payload
             var dataWithBranch = new
             {
                 kyc.companyId,

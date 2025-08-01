@@ -19,5 +19,6 @@ namespace CompGateApi.Data.Models
         public ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
         public ICollection<UserRolePermission> UserRolePermissions { get; set; } = new List<UserRolePermission>();
         public bool IsGlobal { get; set; }
+        public string? Type { get; set; }
     }
 }

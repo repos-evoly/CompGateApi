@@ -88,7 +88,8 @@ namespace CompGateApi.Endpoints
             if (!TryGetAuthUserId(ctx, out var authId))
                 return Results.Unauthorized();
 
-            var me = await userRepo.GetUserByAuthId(authId, ctx.Request.Headers["Authorization"]);
+            var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, token);
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 

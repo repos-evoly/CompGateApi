@@ -143,7 +143,7 @@ namespace CompGateApi.Endpoints
             var ok = await repo.DeleteRoleAsync(roleId);
             return ok ? Results.NoContent() : Results.NotFound();
         }
- 
+
         static async Task<IResult> GetPermissions(
             [FromServices] IRoleRepository repo,
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
@@ -213,7 +213,7 @@ namespace CompGateApi.Endpoints
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
         {
             log.LogInformation("Creating permission {Name}", dto.NameAr);
-            var created = await repo.CreatePermissionAsync(dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal);
+            var created = await repo.CreatePermissionAsync(dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal, dto.Type);
             return Results.Created($"/api/users/permissions/{created.Id}", created);
         }
 
@@ -224,9 +224,9 @@ namespace CompGateApi.Endpoints
             [FromServices] ILogger<RolesPermissionsEndpoints> log)
         {
             log.LogInformation("Updating permission {PermissionId}", permissionId);
-            var ok = await repo.UpdatePermissionAsync(dto.Id, dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal);
+            var ok = await repo.UpdatePermissionAsync(dto.Id, dto.NameAr, dto.NameEn, dto.Description, dto.IsGlobal, dto.Type);
             if (!ok) return Results.NotFound();
-            var updated = new PermissionDto { Id = dto.Id, NameAr = dto.NameAr, NameEn = dto.NameEn, Description = dto.Description, IsGlobal = dto.IsGlobal };
+            var updated = new PermissionDto { Id = dto.Id, NameAr = dto.NameAr, NameEn = dto.NameEn, Description = dto.Description, IsGlobal = dto.IsGlobal, Type = dto.Type };
             return Results.Ok(updated);
         }
 
@@ -247,8 +247,8 @@ namespace CompGateApi.Endpoints
         public record AssignRolePermissionsDto(IEnumerable<int> PermissionIds);
 
         // at bottom of RolesPermissionsEndpoints.cs
-        public record PermissionCreateDto(string NameAr, string NameEn, string Description, bool IsGlobal);
-        public record PermissionUpdateDto(int Id, string NameAr, string NameEn, string Description, bool IsGlobal);
+        public record PermissionCreateDto(string NameAr, string NameEn, string Description, bool IsGlobal, string? Type);
+        public record PermissionUpdateDto(int Id, string NameAr, string NameEn, string Description, bool IsGlobal, string? Type);
 
         public record RolePermissionsOverviewDto(
             IEnumerable<PermissionDto> Assigned,

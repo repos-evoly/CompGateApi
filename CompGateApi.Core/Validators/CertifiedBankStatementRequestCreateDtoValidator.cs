@@ -19,7 +19,7 @@ public class CertifiedBankStatementRequestCreateDtoValidator
         When(x => x.StatementRequest != null, () =>
         {
             RuleFor(x => x.StatementRequest!.FromDate)
-                .LessThanOrEqualTo(x => x.StatementRequest.ToDate)
+                .LessThanOrEqualTo(x => x.StatementRequest != null ? x.StatementRequest.ToDate : null)
                 .When(x => x.StatementRequest!.FromDate.HasValue && x.StatementRequest.ToDate.HasValue);
         });
     }

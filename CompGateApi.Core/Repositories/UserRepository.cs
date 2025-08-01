@@ -197,11 +197,11 @@ namespace CompGateApi.Core.Repositories
                     IsActive = user.IsActive,  // ← set it here
                     Role = new RoleDto
                     {
-                        Id = user.Role.Id,
-                        NameLT = user.Role.NameLT,
-                        NameAR = user.Role.NameAR,
-                        Description = user.Role.Description,
-                        IsGlobal = user.Role.IsGlobal
+                        Id = user.Role?.Id ?? 0,
+                        NameLT = user.Role?.NameLT ?? "",
+                        NameAR = user.Role?.NameAR ?? "",
+                        Description = user.Role?.Description ?? string.Empty,
+                        IsGlobal = user.Role?.IsGlobal ?? false
                     },
                     RoleId = user.Role?.Id ?? 0,
                     ServicePackageId = user.Company?.ServicePackageId ?? 0,

@@ -5,6 +5,8 @@ using CompGateApi.Core.Dtos;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace CompGateApi.Endpoints
 {
@@ -25,11 +27,35 @@ namespace CompGateApi.Endpoints
             [FromServices] IHttpClientFactory httpFactory)
         {
             var client = httpFactory.CreateClient("KycApi");
-            // assuming KycApi.BaseAddress = http://10.3.3.11/kycapi/api/core/
-            var resp = await client.GetFromJsonAsync<ActiveBranchesResponseDto>("getActiveBranches");
-            return resp is null
-                ? Results.StatusCode(StatusCodes.Status502BadGateway)
-                : Results.Ok(resp);
+
+            var external = await client.GetFromJsonAsync<ExternalActiveBranchesResponseDto>("kycapi/api/core/getActiveBranches");
+
+            if (external is null)
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+
+            var mapped = new ActiveBranchesResponseDto
+            {
+                Header = new HeaderDto
+                {
+                    System = external.Header.System,
+                    ReferenceId = external.Header.ReferenceId,
+                    SentTime = external.Header.SentTime,
+                    ReturnCode = external.Header.ReturnCode,
+                    ReturnMessageCode = external.Header.ReturnMessageCode,
+                    ReturnMessage = external.Header.ReturnMessage
+                },
+                Details = new BranchesDetailsDto
+                {
+                    Branches = external.Details.Branches.Select(b => new BranchDto
+                    {
+                        BranchNumber = b.CABBN,
+                        BranchName = b.CABRN,
+                        BranchMnemonic = b.CABRNM
+                    }).ToList()
+                }
+            };
+
+            return Results.Ok(mapped);
         }
     }
 }

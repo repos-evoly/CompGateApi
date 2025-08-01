@@ -74,7 +74,7 @@ namespace CompGateApi.Core.Dtos
         public string Phone { get; set; } = string.Empty;
 
         // instead of role object, you already return Role & RoleId:
-        public RoleDto Role { get; set; }
+        public RoleDto? Role { get; set; }
         public int RoleId { get; set; }
 
         public bool IsTwoFactorEnabled { get; set; }

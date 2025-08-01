@@ -91,6 +91,7 @@ namespace CompGateApi.Endpoints
                 context.Response.Cookies.Append(kvp.Key, kvp.Value, options);
             }
 
+            await Task.CompletedTask;
             return Results.Ok("Cookies set successfully.");
         }
 
@@ -331,6 +332,9 @@ namespace CompGateApi.Endpoints
                 return Results.BadRequest("Invalid user.");
 
             // Use the role from the fetched user details.
+            if (currentUser.Role == null)
+                return Results.BadRequest("User role information is missing.");
+
             string currentUserRole = currentUser.Role.NameLT;
             var managementUsers = await userRepository.GetManagementUsersAsync(currentUserRole);
             logger.LogInformation("Retrieved {Count} management users.", managementUsers.Count);

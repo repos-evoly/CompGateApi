@@ -18,6 +18,7 @@ namespace CompGateApi.Core.Dtos
         public string NameAr { get; set; } = string.Empty;
         public string NameEn { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? Type { get; set; }
         public bool IsGlobal { get; set; }
     }
 

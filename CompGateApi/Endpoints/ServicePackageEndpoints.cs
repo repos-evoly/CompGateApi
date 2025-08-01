@@ -179,7 +179,7 @@ namespace CompGateApi.Endpoints
             var pkg = new ServicePackage
             {
                 Name = dto.Name,
-                Description = dto.Description,
+                Description = dto.Description ?? string.Empty,
                 DailyLimit = dto.DailyLimit,
                 MonthlyLimit = dto.MonthlyLimit
             };
@@ -216,7 +216,7 @@ namespace CompGateApi.Endpoints
             if (pkg == null) return Results.NotFound();
 
             pkg.Name = dto.Name;
-            pkg.Description = dto.Description;
+            pkg.Description = dto.Description ?? "";
             pkg.DailyLimit = dto.DailyLimit;
             pkg.MonthlyLimit = dto.MonthlyLimit;
 

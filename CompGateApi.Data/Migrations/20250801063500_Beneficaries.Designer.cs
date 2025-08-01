@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250801063500_Beneficaries")]
+    partial class Beneficaries
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -246,6 +249,12 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
+                    b.Property<Guid?>("AttachmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AttachmentId1")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("BirthDate")
                         .HasColumnType("datetime2");
 
@@ -357,6 +366,8 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AttachmentId1");
 
                     b.HasIndex("CompanyId");
 
@@ -1315,8 +1326,7 @@ namespace CompGateApi.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal?>("B2BCommissionPct")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("B2BFixedFee")
                         .IsRequired()
@@ -1334,8 +1344,7 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal?>("B2CCommissionPct")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("B2CFixedFee")
                         .IsRequired()
@@ -1448,8 +1457,7 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("CommissionAmount")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)");
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("CommissionOnRecipient")
                         .HasColumnType("bit");
@@ -1719,132 +1727,6 @@ namespace CompGateApi.Data.Migrations
                     b.ToTable("VisaRequests", (string)null);
                 });
 
-            modelBuilder.Entity("Employee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AccountNumber")
-                        .IsRequired()
-                        .HasMaxLength(34)
-                        .HasColumnType("nvarchar(34)");
-
-                    b.Property<string>("AccountType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<bool>("CanPost")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Phone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<decimal>("Salary")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<bool>("SendSalary")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId");
-
-                    b.ToTable("Employees", (string)null);
-                });
-
-            modelBuilder.Entity("SalaryCycle", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CompanyId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("PostedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("PostedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("SalaryMonth")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompanyId");
-
-                    b.ToTable("SalaryCycles", (string)null);
-                });
-
-            modelBuilder.Entity("SalaryEntry", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("EmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsTransferred")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("SalaryCycleId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.HasIndex("SalaryCycleId");
-
-                    b.ToTable("SalaryEntries", (string)null);
-                });
-
             modelBuilder.Entity("CompGateApi.Data.Models.Attachment", b =>
                 {
                     b.HasOne("CompGateApi.Data.Models.CblRequest", "CblRequest")
@@ -1917,6 +1799,10 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
+                    b.HasOne("CompGateApi.Data.Models.Attachment", "Attachment")
+                        .WithMany()
+                        .HasForeignKey("AttachmentId1");
+
                     b.HasOne("CompGateApi.Data.Models.Company", "Company")
                         .WithMany("CblRequests")
                         .HasForeignKey("CompanyId")
@@ -1928,6 +1814,8 @@ namespace CompGateApi.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Attachment");
 
                     b.Navigation("Company");
 
@@ -2352,47 +2240,6 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Employee", b =>
-                {
-                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
-                        .WithMany("Employees")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Company");
-                });
-
-            modelBuilder.Entity("SalaryCycle", b =>
-                {
-                    b.HasOne("CompGateApi.Data.Models.Company", "Company")
-                        .WithMany("SalaryPosts")
-                        .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Company");
-                });
-
-            modelBuilder.Entity("SalaryEntry", b =>
-                {
-                    b.HasOne("Employee", "Employee")
-                        .WithMany("SalaryEntries")
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SalaryCycle", "SalaryCycle")
-                        .WithMany("Entries")
-                        .HasForeignKey("SalaryCycleId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("SalaryCycle");
-                });
-
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
                     b.Navigation("Attachments");
@@ -2423,15 +2270,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.Navigation("CreditFacilitiesRequests");
 
-                    b.Navigation("Employees");
-
                     b.Navigation("ForeignTransfers");
 
                     b.Navigation("Representatives");
 
                     b.Navigation("RtgsRequests");
-
-                    b.Navigation("SalaryPosts");
 
                     b.Navigation("TransferRequests");
 
@@ -2503,16 +2346,6 @@ namespace CompGateApi.Data.Migrations
             modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>
                 {
                     b.Navigation("Attachments");
-                });
-
-            modelBuilder.Entity("Employee", b =>
-                {
-                    b.Navigation("SalaryEntries");
-                });
-
-            modelBuilder.Entity("SalaryCycle", b =>
-                {
-                    b.Navigation("Entries");
                 });
 #pragma warning restore 612, 618
         }

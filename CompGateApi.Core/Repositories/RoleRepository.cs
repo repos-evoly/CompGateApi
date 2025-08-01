@@ -130,7 +130,8 @@ namespace CompGateApi.Core.Repositories
                     NameAr = rp.Permission.NameAr,
                     NameEn = rp.Permission.NameEn,
                     Description = rp.Permission.Description,
-                    IsGlobal = rp.Permission.IsGlobal
+                    IsGlobal = rp.Permission.IsGlobal,
+                    Type = rp.Permission.Type
                 })
                 .Distinct()
                 .ToListAsync();
@@ -152,7 +153,8 @@ namespace CompGateApi.Core.Repositories
                     NameAr = rp.Permission.NameAr,
                     NameEn = rp.Permission.NameEn,
                     Description = rp.Permission.Description,
-                    IsGlobal = rp.Permission.IsGlobal
+                    IsGlobal = rp.Permission.IsGlobal,
+                    Type = rp.Permission.Type
                 })
                 .Distinct()
                 .ToListAsync();
@@ -176,7 +178,7 @@ namespace CompGateApi.Core.Repositories
             return true;
         }
 
-        public async Task<PermissionDto> CreatePermissionAsync(string nameAr, string nameEn, string description, bool isGlobal)
+        public async Task<PermissionDto> CreatePermissionAsync(string nameAr, string nameEn, string description, bool isGlobal, string? type)
         {
             var perm = new Permission
             {
@@ -193,11 +195,12 @@ namespace CompGateApi.Core.Repositories
                 NameAr = perm.NameAr,
                 NameEn = perm.NameEn,
                 Description = perm.Description,
-                IsGlobal = perm.IsGlobal
+                IsGlobal = perm.IsGlobal,
+                Type = type
             };
         }
 
-        public async Task<bool> UpdatePermissionAsync(int id, string nameAr, string nameEn, string description, bool isGlobal)
+        public async Task<bool> UpdatePermissionAsync(int id, string nameAr, string nameEn, string description, bool isGlobal, string? type)
         {
             var perm = await _context.Permissions.FindAsync(id);
             if (perm == null) return false;
@@ -205,6 +208,7 @@ namespace CompGateApi.Core.Repositories
             perm.NameEn = nameEn;
             perm.Description = description;
             perm.IsGlobal = isGlobal;
+            perm.Type = type;
             await _context.SaveChangesAsync();
             return true;
         }

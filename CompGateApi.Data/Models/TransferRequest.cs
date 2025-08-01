@@ -64,5 +64,8 @@ namespace CompGateApi.Data.Models
 
         [MaxLength(3)]
         public string TransferMode { get; set; } = "B2B";
+
+        public string? GroupId { get; set; }
+
     }
 }

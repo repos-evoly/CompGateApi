@@ -273,6 +273,11 @@ namespace CompGateApi.Endpoints
 
             // --- 8) Reload entity so Attachments now includes old+new ---
             var updated = await repo.GetByIdAsync(id);
+            if (updated == null)
+            {
+                log.LogWarning("Updated entity not found after update: Id={Id}", id);
+                return Results.NotFound("Updated entity not found.");
+            }
 
             // --- 9) Build response DTO ---
             var outDto = new CblRequestDto
