@@ -68,6 +68,22 @@ namespace CompGateApi
               .ForMember(dest => dest.CommissionAccountUSD, opt => opt.MapFrom(src => src.CommissionAccountUSD))
 
               .ReverseMap();
+
+            CreateMap<SalaryEntry, SalaryEntryDto>()
+                .ForMember(d => d.Name, c => c.MapFrom(s => s.Employee.Name))
+                .ForMember(d => d.Email, c => c.MapFrom(s => s.Employee.Email))
+                .ForMember(d => d.Phone, c => c.MapFrom(s => s.Employee.Phone))
+                .ForMember(d => d.Salary, c => c.MapFrom(s => s.Employee.Salary))
+                .ForMember(d => d.Date, c => c.MapFrom(s => s.Employee.Date))
+                .ForMember(d => d.AccountNumber, c => c.MapFrom(s => s.Employee.AccountNumber))
+                .ForMember(d => d.AccountType, c => c.MapFrom(s => s.Employee.AccountType))
+                .ForMember(d => d.SendSalary, c => c.MapFrom(s => s.Employee.SendSalary))
+                .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost));
+
+            // map SalaryCycle -> SalaryCycleDto
+            CreateMap<SalaryCycle, SalaryCycleDto>()
+            .ForMember(d => d.Entries,
+                    c => c.MapFrom(src => src.Entries));
         }
     }
 

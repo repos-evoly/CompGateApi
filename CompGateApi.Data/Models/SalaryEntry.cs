@@ -1,8 +1,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
-public class SalaryEntry
+public class SalaryEntry:Auditable
 {
     public int Id { get; set; }
-
     public int SalaryCycleId { get; set; }
     public SalaryCycle SalaryCycle { get; set; } = null!;
 
@@ -12,7 +11,12 @@ public class SalaryEntry
     [Column(TypeName = "decimal(18,2)")]
     public decimal Amount { get; set; }
 
-    public bool IsTransferred { get; set; } = false;
+    /* NEW ↓ – per-entry commission, net amounts, timestamps */
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal CommissionAmount { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsTransferred { get; set; }
+    public DateTime? TransferredAt { get; set; }
+    public int? PostedByUserId { get; set; }
+
 }

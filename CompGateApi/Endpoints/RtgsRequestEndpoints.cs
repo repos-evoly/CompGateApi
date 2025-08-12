@@ -403,6 +403,7 @@ namespace CompGateApi.Endpoints
             if (ent == null) return Results.NotFound();
 
             ent.Status = dto.Status;
+            ent.Reason = dto.Reason;
             await repo.UpdateAsync(ent);
 
             var outDto = new RtgsRequestDto

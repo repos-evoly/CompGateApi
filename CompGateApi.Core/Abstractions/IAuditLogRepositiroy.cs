@@ -5,6 +5,6 @@ namespace CompGateApi.Core.Abstractions
 {
     public interface IAuditLogRepository
     {
-        Task CreateAsync(AuditLog log);
+        Task AddAsync(AuditLog log);
     }
 }

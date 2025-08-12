@@ -72,8 +72,7 @@ namespace CompGateApi.Data.Models
 
         // Link to your AuditLog entries if you wish
         // (optional navigational: 1..* AuditLogs related to this request)
-        public ICollection<AuditLog> AuditLogs { get; set; }
-            = new List<AuditLog>();
+        
     }
 
     [Table("CheckRequestLineItems")]

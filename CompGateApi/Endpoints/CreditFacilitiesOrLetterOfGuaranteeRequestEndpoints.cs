@@ -357,6 +357,7 @@ namespace CompGateApi.Endpoints
 
             ent.Status = dto.Status;
             ent.Reason = dto.Reason;
+
             ent.UpdatedAt = DateTimeOffset.UtcNow;
             await repo.UpdateAsync(ent);
 

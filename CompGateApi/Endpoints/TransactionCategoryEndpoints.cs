@@ -92,6 +92,8 @@ namespace CompGateApi.Endpoints
                     B2CFixedFee = d.B2CFixedFee,
                     B2BMinPercentage = d.B2BMinPercentage,
                     B2CMinPercentage = d.B2CMinPercentage,
+                    B2BMaxAmount = d.B2BMaxAmount,
+                    B2CMaxAmount = d.B2CMaxAmount,
 
                     B2BCommissionPct = d.B2BCommissionPct,
 
@@ -104,10 +106,10 @@ namespace CompGateApi.Endpoints
 
         // POST /api/transactioncategories
         public static async Task<IResult> Create(
-    [FromBody] TransactionCategoryCreateDto dto,
-    [FromServices] ITransactionCategoryRepository repo,
-    [FromServices] CompGateApiDbContext db,   // add DbContext
-    [FromServices] ILogger<TransactionCategoryEndpoints> log)
+            [FromBody] TransactionCategoryCreateDto dto,
+            [FromServices] ITransactionCategoryRepository repo,
+            [FromServices] CompGateApiDbContext db,   // add DbContext
+            [FromServices] ILogger<TransactionCategoryEndpoints> log)
         {
             // 1) Create the category
             var cat = new TransactionCategory { Name = dto.Name };
@@ -133,6 +135,8 @@ namespace CompGateApi.Endpoints
                     B2CFixedFee = dto.B2CFixedFee ?? 0m,
                     B2BMinPercentage = dto.B2BMinPercentage ?? 0m,
                     B2CMinPercentage = dto.B2CMinPercentage ?? 0m,
+                    B2BMaxAmount = dto.B2BMaxAmount ?? 0m,
+                    B2CMaxAmount = dto.B2CMaxAmount ?? 0m,
 
                     B2BCommissionPct = dto.B2BCommissionPct ?? 0m,
 
@@ -149,9 +153,9 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> GetById(
-    [FromRoute] int id,
-    [FromServices] ITransactionCategoryRepository repo,
-    [FromServices] ILogger<TransactionCategoryEndpoints> log)
+            [FromRoute] int id,
+            [FromServices] ITransactionCategoryRepository repo,
+            [FromServices] ILogger<TransactionCategoryEndpoints> log)
         {
             log.LogInformation("Fetching transaction category {Id}", id);
             var cat = await repo.GetByIdAsync(id);

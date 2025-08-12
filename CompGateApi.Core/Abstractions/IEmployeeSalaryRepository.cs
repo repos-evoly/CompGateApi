@@ -9,8 +9,17 @@ public interface IEmployeeSalaryRepository
     Task<EmployeeDto?> UpdateEmployeeAsync(int companyId, int id, EmployeeCreateDto dto);
     Task<bool> DeleteEmployeeAsync(int companyId, int id);
     Task<bool> BatchUpdateAsync(int companyId, List<EmployeeDto> updates);
+    Task<EmployeeDto?> GetEmployeeAsync(int companyId, int employeeId);
+
+    Task<SalaryCycleDto?> GetSalaryCycleAsync(int companyId, int cycleId);
+
+    Task<SalaryEntryDto?> GetSalaryEntryAsync(int companyId, int cycleId, int entryId);
 
     Task<PagedResult<SalaryCycleDto>> GetSalaryCyclesAsync(int companyId, int page, int limit);
     Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto);
-    Task<SalaryCycleDto?> PostSalaryCycleAsync(int companyId, int cycleId, int? postedByUserId);
+    // IEmployeeSalaryRepository.cs
+    Task<SalaryCycleDto> PostSalaryCycleAsync(int companyId, int cycleId, int postedBy);
+
+    Task<SalaryCycleDto?> SaveSalaryCycleAsync(int companyId, int cycleId, SalaryCycleSaveDto dto);
+
 }

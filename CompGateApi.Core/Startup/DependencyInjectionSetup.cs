@@ -281,8 +281,6 @@ namespace CompGateApi.Core.Startup
           new MediaTypeWithQualityHeaderValue("application/json"));
       });
 
-
-
       // Core
       services.AddScoped<IUserRepository, UserRepository>();
       services.AddScoped<IRoleRepository, RoleRepository>();

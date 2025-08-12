@@ -19,8 +19,23 @@ namespace CompGateApi.Core.Abstractions
         // single fetch
         Task<TransferRequest?> GetByIdAsync(int id);
 
-        // create & update
-        Task CreateAsync(TransferRequest tr);
+        Task<(bool Success,
+              string? Error,
+              TransferRequest? Entity,
+              string SenderTotal,
+              string ReceiverTotal,
+              decimal Commission,
+              decimal GlobalLimit,
+              decimal DailyLimit,
+              decimal MonthlyLimit,
+              decimal UsedToday,
+              decimal UsedThisMonth)>
+        CreateAsync(int userId,
+                    int companyId,
+                    int servicePackageId,
+                    TransferRequestCreateDto dto,
+                    string bearer,
+                    CancellationToken ct = default);
         Task UpdateAsync(TransferRequest tr);
 
         // external lookups

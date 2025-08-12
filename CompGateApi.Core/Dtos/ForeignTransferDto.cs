@@ -60,5 +60,6 @@ namespace CompGateApi.Core.Dtos
     public class ForeignTransferStatusUpdateDto
     {
         public string Status { get; set; } = string.Empty;
+        public string? Reason { get; set; } // Optional reason for status change
     }
 }

@@ -97,6 +97,8 @@ namespace CompGateApi.Endpoints
                         B2CFixedFee = d.B2CFixedFee,
                         B2BMinPercentage = d.B2BMinPercentage,
                         B2CMinPercentage = d.B2CMinPercentage,
+                        B2BMaxAmount = d.B2BMaxAmount,
+                        B2CMaxAmount = d.B2CMaxAmount,
 
                         B2BCommissionPct = d.B2BCommissionPct,
 
@@ -156,6 +158,8 @@ namespace CompGateApi.Endpoints
                     B2CFixedFee = d.B2CFixedFee,
                     B2BMinPercentage = d.B2BMinPercentage,
                     B2CMinPercentage = d.B2CMinPercentage,
+                    B2BMaxAmount = d.B2BMaxAmount,
+                    B2CMaxAmount = d.B2CMaxAmount,
 
                     B2BCommissionPct = d.B2BCommissionPct,
 
@@ -280,6 +284,8 @@ namespace CompGateApi.Endpoints
                 B2CFixedFee = d.B2CFixedFee,
                 B2BMinPercentage = d.B2BMinPercentage,
                 B2CMinPercentage = d.B2CMinPercentage,
+                B2BMaxAmount = d.B2BMaxAmount,
+                B2CMaxAmount = d.B2CMaxAmount,
 
                 B2BCommissionPct = d.B2BCommissionPct,
 
@@ -312,6 +318,8 @@ namespace CompGateApi.Endpoints
             d.B2CFixedFee = dto.B2CFixedFee;
             d.B2BMinPercentage = dto.B2BMinPercentage;
             d.B2CMinPercentage = dto.B2CMinPercentage;
+            d.B2BMaxAmount = dto.B2BMaxAmount;
+            d.B2CMaxAmount = dto.B2CMaxAmount;
 
             d.B2BCommissionPct = dto.B2BCommissionPct;
 
@@ -331,6 +339,8 @@ namespace CompGateApi.Endpoints
                 B2CFixedFee = d.B2CFixedFee,
                 B2BMinPercentage = d.B2BMinPercentage,
                 B2CMinPercentage = d.B2CMinPercentage,
+                B2BMaxAmount = d.B2BMaxAmount,
+                B2CMaxAmount = d.B2CMaxAmount,
                 B2BCommissionPct = d.B2BCommissionPct,
                 B2CCommissionPct = d.B2CCommissionPct
             };

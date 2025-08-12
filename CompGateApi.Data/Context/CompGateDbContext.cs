@@ -179,11 +179,7 @@ namespace CompGateApi.Data.Context
                      });
 
                      // ── AUDIT LOG ─────────────────────────────────────────────────────────
-                     builder.Entity<AuditLog>()
-                            .HasOne(al => al.User)
-                            .WithMany(u => u.AuditLogs)
-                            .HasForeignKey(al => al.UserId)
-                            .OnDelete(DeleteBehavior.Restrict);
+                  
 
                      // ── ROLES & PERMISSIONS ───────────────────────────────────────────────
                      builder.Entity<RolePermission>()
@@ -280,6 +276,11 @@ namespace CompGateApi.Data.Context
                             b.Property(d => d.B2BMinPercentage)
                             .HasPrecision(18, 4).IsRequired();
                             b.Property(d => d.B2CMinPercentage)
+                            .HasPrecision(18, 4).IsRequired();
+
+                            b.Property(d => d.B2BMaxAmount)
+                            .HasPrecision(18, 4).IsRequired();
+                            b.Property(d => d.B2CMaxAmount)
                             .HasPrecision(18, 4).IsRequired();
 
                             b.Property(d => d.B2BCommissionPct)

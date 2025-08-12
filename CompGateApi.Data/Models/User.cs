@@ -59,7 +59,7 @@ namespace CompGateApi.Data.Models
 
         // ── Navigation collections ──────────────────────────────────
 
-        public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+       
         public ICollection<BankAccount> BankAccounts { get; set; } = new List<BankAccount>();
         public ICollection<UserRolePermission> UserRolePermissions { get; set; } = new List<UserRolePermission>();
 

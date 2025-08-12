@@ -251,25 +251,51 @@ namespace CompGateApi.Data.Seeding
 
         private void SeedTransactionCategories()
         {
-            if (_context.TransactionCategories.Any()) return;
-
-            var cats = new[]
+            // key = Name, value = HasLimits
+            var wanted = new Dictionary<string, bool>(StringComparer.Ordinal)
             {
-        new TransactionCategory { Name = "Internal" },
-        new TransactionCategory
-        {
-            Name = "Group Transfer",
-            HasLimits = true // or false, depending on your logic`
-        },
+                ["Transfers"] = true,
+                ["InternalTransfer"] = true,
+                ["Requests"] = false,
+                ["Checkbook"] = false,
+                ["CheckRequest"] = false,
+                ["LetterOfGuarantee"] = false,
+                ["CreditFacility"] = false,
+                ["VisaRequest"] = false,
+                ["CertifiedBankStatement"] = false,
+                ["Rtgs"] = false,
+                ["ForeignTransfer"] = false,
+                ["CBL"] = false,
 
-        new TransactionCategory { Name = "External" },
-        new TransactionCategory { Name = "International" },
-        new TransactionCategory { Name = "RTGS" },
-        new TransactionCategory { Name = "CBL" },
-        new TransactionCategory { Name = "CheckBook" }
-    };
+                // ➜ new categories
+                ["Group Transfer"] = true,   // use limits like internal
+                ["Salary Payment"] = true    // payroll category
+            };
 
-            _context.TransactionCategories.AddRange(cats);
+            var existing = _context.TransactionCategories.ToList();
+
+            // 1️⃣  Update HasLimits on rows that already exist but have wrong flag
+            foreach (var cat in existing)
+            {
+                if (wanted.TryGetValue(cat.Name, out bool shouldHaveLimits) &&
+                    cat.HasLimits != shouldHaveLimits)
+                {
+                    cat.HasLimits = shouldHaveLimits;
+                }
+                // remove from dictionary so we know it's handled
+                wanted.Remove(cat.Name);
+            }
+
+            // 2️⃣  Insert any remaining (missing) categories
+            foreach (var kv in wanted)
+            {
+                _context.TransactionCategories.Add(new TransactionCategory
+                {
+                    Name = kv.Key,
+                    HasLimits = kv.Value
+                });
+            }
+
             _context.SaveChanges();
         }
 
@@ -330,6 +356,8 @@ namespace CompGateApi.Data.Seeding
                         B2CFixedFee = b2cFee,
                         B2BMinPercentage = b2bMinPct,
                         B2CMinPercentage = b2cMinPct,
+                        B2BMaxAmount = 100000m, // default max amount
+                        B2CMaxAmount = 50000m, // default max amount
 
                         B2BCommissionPct = b2bCommPct,
 

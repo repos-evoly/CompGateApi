@@ -31,6 +31,19 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+app.UseAuditLogging(options =>
+{
+    options.CaptureRequestBody = true;
+    options.CaptureResponseBody = true;
+    options.MaxBodyChars = 4000;
+    options.SkipPathStartsWith = new[] { "/swagger", "/notificationHub" };
+    options.EnrichExtras = ctx => new
+    {
+        TraceId = ctx.TraceIdentifier,
+        Endpoint = ctx.GetEndpoint()?.DisplayName
+    };
+});
+
 app.MapHub<NotificationHub>("/notificationHub");
 
 

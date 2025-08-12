@@ -37,11 +37,11 @@ namespace CompGateApi.Endpoints
          .Produces(StatusCodes.Status404NotFound);
 
       grp.MapPost("/UploadBatch", UploadBatch)
-   .WithName("UploadCompanyAttachmentsBatch")
-   .Accepts<IFormFile>("multipart/form-data")
-   .Produces<IEnumerable<AttachmentDto>>(StatusCodes.Status201Created)
-   .Produces(StatusCodes.Status400BadRequest)
-   .Produces(StatusCodes.Status404NotFound);
+        .WithName("UploadCompanyAttachmentsBatch")
+        .Accepts<IFormFile>("multipart/form-data")
+        .Produces<IEnumerable<AttachmentDto>>(StatusCodes.Status201Created)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status404NotFound);
 
       // DELETE /api/companies/{code}/attachments/{id}
       grp.MapDelete("/{id:guid}", Delete)
@@ -51,15 +51,16 @@ namespace CompGateApi.Endpoints
     }
 
     public static async Task<IResult> GetByCompany(
-        [FromServices] ICompanyRepository companyRepo,
-        [FromServices] IAttachmentRepository repo,
-        [FromRoute] string code)
+         [FromServices] ICompanyRepository companyRepo,
+         [FromServices] IAttachmentRepository repo,
+         [FromRoute] string code,
+         [FromQuery] string? subject)    // 🔸 NEW
     {
       var company = await companyRepo.GetByCodeAsync(code);
       if (company == null)
         return Results.NotFound($"Company '{code}' not found.");
 
-      var list = await repo.GetByCompany(company.Id);
+      var list = await repo.GetByCompany(company.Id, subject);   // 🔸 pass filter
       return Results.Ok(list);
     }
 

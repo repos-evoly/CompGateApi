@@ -16,6 +16,8 @@ namespace CompGateApi.Data.Models
 
         public decimal GlobalLimit { get; set; }
 
+        public string? EvoWallet { get; set; } = null!;
+
 
     }
 }

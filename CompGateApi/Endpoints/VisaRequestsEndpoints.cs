@@ -462,6 +462,8 @@ namespace CompGateApi.Endpoints
                 return Results.NotFound();
 
             ent.Status = dto.Status;
+            ent.Reason = dto.Reason;
+
             await repo.UpdateAsync(ent);
             log.LogInformation("Updated VisaRequest {Id} to Status={Status}", id, dto.Status);
 

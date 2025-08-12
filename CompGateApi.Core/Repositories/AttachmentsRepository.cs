@@ -24,12 +24,19 @@ namespace CompGateApi.Data.Repositories
             _mapper = mapper;
         }
 
-        public async Task<IEnumerable<AttachmentDto>> GetByCompany(int companyId)
+        // CompGateApi.Infrastructure/Repositories/AttachmentRepository.cs
+        public async Task<IEnumerable<AttachmentDto>> GetByCompany(int companyId, string? subject = null)
         {
-            var atts = await _db.Attachments
-                                .Where(a => a.CompanyId == companyId)
-                                .ToListAsync();
-            return _mapper.Map<IEnumerable<AttachmentDto>>(atts);
+            var query = _db.Attachments.Where(a => a.CompanyId == companyId);
+
+            if (!string.IsNullOrWhiteSpace(subject))
+                query = query.Where(a => a.AttSubject.Contains(subject));
+
+            var list = await query
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+
+            return list.Select(_mapper.Map<AttachmentDto>);
         }
 
         // ← New overload:

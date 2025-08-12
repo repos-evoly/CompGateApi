@@ -112,13 +112,222 @@ namespace CompGateApi.Data.Repositories
                         .AsNoTracking()
                         .FirstOrDefaultAsync(t => t.Id == id);
 
-        // ── CREATE / UPDATE ─────────────────────────────────────────────────
-
-        public async Task CreateAsync(TransferRequest tr)
+       
+        public async Task<(bool Success,
+                           string? Error,
+                           TransferRequest? Entity,
+                           string SenderTotal,
+                           string ReceiverTotal,
+                           decimal Commission,
+                           decimal GlobalLimit,
+                           decimal DailyLimit,
+                           decimal MonthlyLimit,
+                           decimal UsedToday,
+                           decimal UsedThisMonth)>
+            CreateAsync(int userId,
+                        int companyId,
+                        int servicePackageId,
+                        TransferRequestCreateDto dto,
+                        string bearer,
+                        CancellationToken ct = default)
         {
-            _db.TransferRequests.Add(tr);
-            await _db.SaveChangesAsync();
+            try
+            {
+                // 1) Determine B2B/B2C via STCOD of receiver
+                var stcod = await GetStCodeByAccount(dto.ToAccount);
+                if (string.IsNullOrWhiteSpace(stcod))
+                    return Fail("Receiver account type unknown");
+
+                bool isB2B = stcod == "CD";
+                string transferMode = isB2B ? "B2B" : "B2C";
+
+                // 2) Currency & Settings
+                var currency = await _db.Currencies.FindAsync(new object?[] { dto.CurrencyId }, ct);
+                if (currency == null)
+                    return Fail("Invalid currency");
+
+                decimal rate = currency.Rate;
+                decimal amountInBase = dto.Amount * rate;
+
+                var settings = await _db.Settings.FirstOrDefaultAsync(ct);
+                if (settings == null)
+                    return Fail("System settings missing");
+
+                if (amountInBase > settings.GlobalLimit)
+                    return Fail("Global limit exceeded");
+
+                // 3) Package detail / per-transaction limits
+                var detail = await _db.ServicePackageDetails
+                    .Include(d => d.TransactionCategory)
+                    .FirstOrDefaultAsync(d =>
+                        d.ServicePackageId == servicePackageId &&
+                        d.TransactionCategoryId == dto.TransactionCategoryId, ct);
+
+                if (detail == null || !detail.IsEnabledForPackage)
+                    return Fail("Internal Transfer not allowed");
+
+                decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
+                if (txnLimit.HasValue && amountInBase > txnLimit.Value)
+                    return Fail("Transaction limit exceeded");
+
+                // 4) Daily & monthly limits
+                var today = DateTime.UtcNow.Date;
+                var monthStart = new DateTime(today.Year, today.Month, 1);
+
+                var todayTotal = await _db.TransferRequests
+                    .Where(t => t.CompanyId == companyId && t.RequestedAt.Date == today)
+                    .Select(t => t.Amount * t.Rate)
+                    .SumAsync(ct);
+
+                var monthTotal = await _db.TransferRequests
+                    .Where(t => t.CompanyId == companyId && t.RequestedAt >= monthStart)
+                    .Select(t => t.Amount * t.Rate)
+                    .SumAsync(ct);
+
+                var pkg = await _db.ServicePackages.FindAsync(new object?[] { servicePackageId }, ct);
+                if (pkg is null)
+                    return Fail("Service package missing");
+
+                if (todayTotal + amountInBase > pkg.DailyLimit)
+                    return Fail("Daily limit exceeded");
+                if (monthTotal + amountInBase > pkg.MonthlyLimit)
+                    return Fail("Monthly limit exceeded");
+
+                // 5) Commission
+                decimal fixedFee = isB2B ? detail.B2BFixedFee ?? 0 : detail.B2CFixedFee ?? 0;
+                decimal pct = isB2B ? detail.B2BCommissionPct ?? 0 : detail.B2CCommissionPct ?? 0;
+                decimal pctFee = dto.Amount * (pct / 100m);
+                decimal commission = Math.Round(Math.Max(fixedFee, pctFee), 3);
+
+                // 6) Currency code mapping for the bank
+                string currencyCode = currency.Id switch
+                {
+                    1 => "LYD",
+                    2 => "USD",
+                    3 => "EUR",
+                    _ => "LYD"
+                };
+
+                // Scale amounts to 3 decimals as fixed-width numeric strings
+                const int DECIMALS = 3;
+                decimal scale = (decimal)Math.Pow(10, DECIMALS);
+                string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
+                string commStr = ((long)(commission * scale)).ToString("D15");
+
+                // 7) Company config: who pays commission
+                var company = await _db.Companies.FindAsync(new object?[] { companyId }, ct);
+                if (company == null)
+                    return Fail("Company not found");
+
+                bool commissionOnRecipient = company.CommissionOnReceiver;
+
+                string senderTotal = commissionOnRecipient
+                            ? dto.Amount.ToString("0.000")
+                            : (dto.Amount + commission).ToString("0.000");
+
+                string receiverTotal = commissionOnRecipient
+                            ? (dto.Amount - commission).ToString("0.000")
+                            : dto.Amount.ToString("0.000");
+
+                string commissionAccount = currencyCode == "USD"
+                    ? settings.CommissionAccountUSD
+                    : settings.CommissionAccount;
+
+                // 8) Call bank API
+                var payload = new
+                {
+                    Header = new
+                    {
+                        system = "MOBILE",
+                        referenceId = Guid.NewGuid().ToString("N")[..16],
+                        userName = "TEDMOB",
+                        customerNumber = dto.ToAccount,
+                        requestTime = DateTime.UtcNow.ToString("o"),
+                        language = "AR"
+                    },
+                    Details = new Dictionary<string, string>
+                    {
+                        ["@TRFCCY"] = currencyCode,
+                        ["@SRCACC"] = dto.FromAccount,
+                        ["@SRCACC2"] = commissionOnRecipient ? dto.ToAccount : dto.FromAccount,
+                        ["@DSTACC"] = dto.ToAccount,
+                        ["@DSTACC2"] = commissionAccount,
+                        ["@TRFAMT"] = amountStr,
+                        ["@APLYTRN2"] = "Y",
+                        ["@TRFAMT2"] = commStr,
+                        ["@NR2"] = dto.Description ?? ""
+                    }
+                };
+
+                _log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
+
+                var httpClient = _httpFactory.CreateClient();
+                var response = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/flexPostTransfer", payload, ct);
+                var bankRaw = await response.Content.ReadAsStringAsync(ct);
+
+                _log.LogInformation("📥 Bank response: {Raw}", bankRaw);
+
+                if (!response.IsSuccessStatusCode)
+                    return Fail("Bank error: " + response.StatusCode);
+
+                // Check ReturnCode == "success"
+                try
+                {
+                    using var doc = JsonDocument.Parse(bankRaw);
+                    if (!doc.RootElement.TryGetProperty("Header", out var hdr) ||
+                        !hdr.TryGetProperty("ReturnCode", out var rc) ||
+                        !string.Equals(rc.GetString(), "success", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var msg = hdr.TryGetProperty("ReturnMessage", out var rm) ? rm.GetString() : "Unknown";
+                        return Fail("Bank rejected: " + msg);
+                    }
+                }
+                catch
+                {
+                    // If shape unexpected, still fail gracefully
+                    return Fail("Bank rejected: invalid response");
+                }
+
+                // 9) Persist transfer
+                var entity = new TransferRequest
+                {
+                    UserId = userId,
+                    CompanyId = companyId,
+                    TransactionCategoryId = dto.TransactionCategoryId,
+                    FromAccount = dto.FromAccount,
+                    ToAccount = dto.ToAccount,
+                    Amount = dto.Amount,
+                    CurrencyId = dto.CurrencyId,
+                    ServicePackageId = servicePackageId,
+                    Description = dto.Description,
+                    RequestedAt = DateTime.UtcNow,
+                    Status = "Completed",
+                    EconomicSectorId = dto.EconomicSectorId,
+                    CommissionAmount = commission,
+                    CommissionOnRecipient = commissionOnRecipient,
+                    Rate = rate,
+                    TransferMode = transferMode
+                };
+
+                _db.TransferRequests.Add(entity);
+                await _db.SaveChangesAsync(ct);
+
+                // 10) Done
+                return (true, null, entity, senderTotal, receiverTotal, commission,
+                        settings.GlobalLimit, pkg.DailyLimit, pkg.MonthlyLimit,
+                        todayTotal + amountInBase, monthTotal + amountInBase);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Unhandled error in CreateAsync()");
+                return Fail("Internal error");
+            }
+
+            (bool, string?, TransferRequest?, string, string, decimal, decimal, decimal, decimal, decimal, decimal)
+                Fail(string msg)
+                => (false, msg, null, "0.000", "0.000", 0m, 0m, 0m, 0m, 0m, 0m);
         }
+
 
         public async Task UpdateAsync(TransferRequest tr)
         {

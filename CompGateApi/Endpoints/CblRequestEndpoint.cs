@@ -663,6 +663,8 @@ namespace CompGateApi.Endpoints
             if (ent == null) return Results.NotFound("Not found");
 
             ent.Status = dto.Status;
+            ent.Reason = dto.Reason;
+
             await repo.UpdateAsync(ent);
             log.LogInformation("Updated CblRequest {Id} → Status='{Status}'", id, dto.Status);
 

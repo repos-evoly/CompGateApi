@@ -5,20 +5,20 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using CompGateApi.Core.Dtos;
 
-public interface IAttachmentRepository
-{
-  Task<IEnumerable<AttachmentDto>> GetByCompany(int companyId);
-  Task<AttachmentDto> Upload(
-         IFormFile file,
-         int companyId,
-         string subject,
-         string description,
-         string createdBy
-     ); Task<AttachmentDto> Delete(Guid id);
+  public interface IAttachmentRepository
+  {
+    Task<IEnumerable<AttachmentDto>> GetByCompany(int companyId, string? subject = null);  // 🔸 add param
+    Task<AttachmentDto> Upload(
+           IFormFile file,
+           int companyId,
+           string subject,
+           string description,
+           string createdBy
+       ); Task<AttachmentDto> Delete(Guid id);
 
-  Task LinkToVisaRequestAsync(Guid attachmentId, int visaRequestId);
+    Task LinkToVisaRequestAsync(Guid attachmentId, int visaRequestId);
 
-  Task LinkToCblRequestAsync(Guid attachmentId, int cblRequestId);
+    Task LinkToCblRequestAsync(Guid attachmentId, int cblRequestId);
 
 
-}
+  }

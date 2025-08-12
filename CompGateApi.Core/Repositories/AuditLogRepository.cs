@@ -2,22 +2,23 @@ using System.Threading.Tasks;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
+using Microsoft.EntityFrameworkCore;
 
-namespace CompGateApi.Core.Repositories
+namespace CompGateApi.Data.Repositories
 {
     public class AuditLogRepository : IAuditLogRepository
     {
-        private readonly CompGateApiDbContext _context;
+        private readonly CompGateApiDbContext _db;
 
-        public AuditLogRepository(CompGateApiDbContext context)
+        public AuditLogRepository(CompGateApiDbContext db)
         {
-            _context = context;
+            _db = db;
         }
 
-        public async Task CreateAsync(AuditLog log)
+        public async Task AddAsync(AuditLog log)
         {
-            _context.AuditLogs.Add(log);
-            await _context.SaveChangesAsync();
+            _db.Set<AuditLog>().Add(log);
+            await _db.SaveChangesAsync();
         }
     }
 }

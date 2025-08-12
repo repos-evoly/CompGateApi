@@ -584,6 +584,7 @@ namespace CompGateApi.Endpoints
                 return Results.NotFound("Check request not found.");
 
             ent.Status = dto.Status;
+            ent.Reason = dto.Reason;
             await repo.UpdateAsync(ent);
 
             var adminId = GetAuthUserId(ctx);

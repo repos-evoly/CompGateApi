@@ -25,7 +25,7 @@ namespace CompGateApi.Core.Dtos
         public bool OtherDoc { get; set; }
         public string Status { get; set; } = string.Empty;
 
-        public string? Reason { get; set; } = string.Empty; 
+        public string? Reason { get; set; } = string.Empty;
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }
@@ -53,5 +53,6 @@ namespace CompGateApi.Core.Dtos
     public class RtgsRequestStatusUpdateDto
     {
         public string Status { get; set; } = string.Empty;
+        public string? Reason { get; set; } // Optional reason for status change
     }
 }

@@ -8,14 +8,43 @@ namespace CompGateApi.Data.Models
     public class AuditLog : Auditable
     {
         [Key]
-        public int Id { get; set; }
+        public long Id { get; set; }
 
-        public int UserId { get; set; }
-        public User User { get; set; } = null!;
+        public int? AuthUserId { get; set; }
+        public int? AppUserId { get; set; }
+        public int? CompanyId { get; set; }
 
         [MaxLength(200)]
-        public string Action { get; set; } = string.Empty;
+        public string? Username { get; set; }
+        [MaxLength(200)]
+        public string? Role { get; set; }
 
-        public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.Now;
+        [MaxLength(10)]
+        public string Method { get; set; } = string.Empty;
+        [MaxLength(512)]
+        public string Path { get; set; } = string.Empty;
+        [MaxLength(1024)]
+        public string? QueryString { get; set; }
+        [MaxLength(256)]
+        public string? RouteName { get; set; }
+
+        // ── Client / Network ────────────────────────────────────────────────
+        [MaxLength(64)]
+        public string? Ip { get; set; }
+        [MaxLength(512)]
+        public string? UserAgent { get; set; }
+
+        // ── Result ──────────────────────────────────────────────────────────
+        public int StatusCode { get; set; }
+        public long DurationMs { get; set; }
+
+        // ── Bodies (trimmed for size) ───────────────────────────────────────
+        public string? RequestBody { get; set; }
+        public string? ResponseBody { get; set; }
+
+        // ── Extra (free-form JSON) ──────────────────────────────────────────
+        public string? ExtrasJson { get; set; }
+
+        // ── When ────────────────────────────────────────────────────────────
     }
 }

@@ -88,8 +88,7 @@ namespace CompGateApi.Endpoints
             if (!TryGetAuthUserId(ctx, out var authId))
                 return Results.Unauthorized();
 
-            var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-            var me = await userRepo.GetUserByAuthId(authId, token);
+            var me = await userRepo.GetUserByAuthId(authId, ctx.Request.Headers["Authorization"]);
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
@@ -150,223 +149,71 @@ namespace CompGateApi.Endpoints
         // ── Create a new transfer ───────────────────────────────────────────────
 
         public static async Task<IResult> CreateTransfer(
-    HttpContext ctx,
-    [FromBody] TransferRequestCreateDto dto,
-    [FromServices] ITransferRequestRepository repo,
-    [FromServices] IUserRepository userRepo,
-    [FromServices] IValidator<TransferRequestCreateDto> validator,
-    [FromServices] IMapper mapper,
-    [FromServices] ILogger<TransferRequestEndpoints> log,
-    [FromServices] IHttpClientFactory httpFactory,
-    [FromServices] CompGateApiDbContext db)
+         HttpContext ctx,
+         [FromBody] TransferRequestCreateDto dto,
+         [FromServices] ITransferRequestRepository repo,
+         [FromServices] IUserRepository userRepo,
+         [FromServices] IValidator<TransferRequestCreateDto> validator,
+         [FromServices] IMapper mapper,
+         [FromServices] ILogger<TransferRequestEndpoints> log,
+         [FromServices] IHttpClientFactory httpFactory,           // kept to preserve signature (unused here)
+         [FromServices] CompGateApiDbContext db)                 // kept to preserve signature (unused here)
         {
-            try
+            // 1) Validate input
+            var v = await validator.ValidateAsync(dto);
+            if (!v.IsValid)
+                return Results.BadRequest(v.Errors.Select(e => e.ErrorMessage));
+
+            // 2) Auth context
+            var rawAuthId =
+                ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                ctx.User.FindFirstValue("nameid") ??
+                ctx.User.FindFirstValue("sub");
+
+            if (!int.TryParse(rawAuthId, out var authId))
+                return Results.Unauthorized();
+
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, bearer);
+            if (me is null || !me.CompanyId.HasValue || me.ServicePackageId <= 0)
+                return Results.Unauthorized();
+
+            // 3) Call repo (use concrete type to access the new CreateAsync overload)
+            if (repo is not CompGateApi.Data.Repositories.TransferRequestRepository concreteRepo)
             {
-                log.LogInformation("🔁 CreateTransfer started");
-
-                var validation = await validator.ValidateAsync(dto);
-                if (!validation.IsValid)
-                {
-                    var errors = validation.Errors.Select(e => e.ErrorMessage);
-                    log.LogWarning("❌ Validation failed: {Errors}", string.Join(", ", errors));
-                    return Results.BadRequest(errors);
-                }
-
-                var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-                var rawAuthId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
-                                  ?? ctx.User.FindFirstValue("nameid")
-                                  ?? ctx.User.FindFirstValue("sub");
-
-                if (!int.TryParse(rawAuthId, out var authId))
-                {
-                    log.LogWarning("❌ Missing or invalid auth ID");
-                    return Results.Unauthorized();
-                }
-
-                var me = await userRepo.GetUserByAuthId(authId, token);
-                if (me == null || !me.CompanyId.HasValue)
-                    return Results.Unauthorized();
-
-                var companyId = me.CompanyId.Value;
-                var pkgId = me.ServicePackageId;
-                if (pkgId <= 0)
-                    return Results.BadRequest("No service package configured");
-
-                var stcod = await repo.GetStCodeByAccount(dto.ToAccount);
-                if (string.IsNullOrWhiteSpace(stcod))
-                    return Results.BadRequest("Receiver account type unknown");
-
-                bool isB2B = stcod == "CD";
-                string transferMode = isB2B ? "B2B" : "B2C";
-
-                var currency = await db.Currencies.FindAsync(dto.CurrencyId);
-                if (currency == null)
-                    return Results.BadRequest("Invalid currency");
-
-                decimal rate = currency.Rate;
-                decimal amountInBase = dto.Amount * rate;
-
-                var settings = await db.Settings.FirstOrDefaultAsync();
-                if (settings == null)
-                    return Results.BadRequest("System settings missing");
-
-
-
-                if (amountInBase > settings.GlobalLimit)
-                    return Results.BadRequest("Global limit exceeded");
-
-                var detail = await db.ServicePackageDetails
-                    .Include(d => d.TransactionCategory)
-                    .FirstOrDefaultAsync(d =>
-                        d.ServicePackageId == pkgId &&
-                        d.TransactionCategoryId == dto.TransactionCategoryId);
-
-                if (detail == null || !detail.IsEnabledForPackage)
-                    return Results.BadRequest("Internal Transfer not allowed");
-
-                decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
-                if (txnLimit.HasValue && amountInBase > txnLimit.Value)
-                    return Results.BadRequest("Transaction limit exceeded");
-
-                var today = DateTime.UtcNow.Date;
-                var monthStart = new DateTime(today.Year, today.Month, 1);
-
-                var todayTotal = await db.TransferRequests
-                    .Where(t => t.CompanyId == companyId && t.RequestedAt.Date == today)
-                    .Select(t => t.Amount * t.Rate).SumAsync();
-
-                var monthTotal = await db.TransferRequests
-                    .Where(t => t.CompanyId == companyId && t.RequestedAt >= monthStart)
-                    .Select(t => t.Amount * t.Rate).SumAsync();
-
-                var pkg = await db.ServicePackages.FindAsync(pkgId);
-                if (todayTotal + amountInBase > pkg!.DailyLimit)
-                    return Results.BadRequest("Daily limit exceeded");
-                if (monthTotal + amountInBase > pkg.MonthlyLimit)
-                    return Results.BadRequest("Monthly limit exceeded");
-
-                decimal fixedFee = isB2B ? detail.B2BFixedFee ?? 0 : detail.B2CFixedFee ?? 0;
-                decimal pct = isB2B ? detail.B2BCommissionPct ?? 0 : detail.B2CCommissionPct ?? 0;
-                decimal pctFee = dto.Amount * (pct / 100m);
-                decimal commission = Math.Round(Math.Max(fixedFee, pctFee), 3);
-
-                string currencyCode = currency.Id switch
-                {
-                    1 => "LYD",
-                    2 => "USD",
-                    3 => "EUR",
-                    _ => "LYD"
-                };
-
-                const int DECIMALS = 3;
-                decimal scale = (decimal)Math.Pow(10, DECIMALS);
-                string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
-                string commStr = ((long)(commission * scale)).ToString("D15");
-
-                // ── load company setting ───────────────────────────
-                var company = await db.Companies.FindAsync(companyId);
-                if (company == null)
-                    return Results.BadRequest("Company not found");
-                bool commissionOnRecipient = company.CommissionOnReceiver;
-
-                // ── totals based on company setting ─────────────────
-                string senderTotal = commissionOnRecipient
-                            ? dto.Amount.ToString("0.000")
-                            : (dto.Amount + commission).ToString("0.000");
-
-                string receiverTotal = commissionOnRecipient
-                    ? (dto.Amount - commission).ToString("0.000")
-                    : dto.Amount.ToString("0.000");
-
-                string commissionAccount = currencyCode == "USD"
-                    ? settings.CommissionAccountUSD
-                    : settings.CommissionAccount;
-
-                var payload = new
-                {
-                    Header = new
-                    {
-                        system = "MOBILE",
-                        referenceId = Guid.NewGuid().ToString("N")[..16],
-                        userName = "TEDMOB",
-                        customerNumber = dto.ToAccount,
-                        requestTime = DateTime.UtcNow.ToString("o"),
-                        language = "AR"
-                    },
-                    Details = new Dictionary<string, string>
-                    {
-                        ["@TRFCCY"] = currencyCode,
-                        ["@SRCACC"] = dto.FromAccount,
-                        ["@SRCACC2"] = commissionOnRecipient ? dto.ToAccount : dto.FromAccount,
-                        ["@DSTACC"] = dto.ToAccount,
-                        ["@DSTACC2"] = commissionAccount,
-                        ["@TRFAMT"] = amountStr,
-                        ["@APLYTRN2"] = "Y",
-                        ["@TRFAMT2"] = commStr,
-                        ["@NR2"] = dto.Description ?? ""
-                    }
-                };
-
-                log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
-
-                var httpClient = httpFactory.CreateClient();
-                var response = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/flexPostTransfer", payload);
-                var bankRaw = await response.Content.ReadAsStringAsync();
-
-                log.LogInformation("📥 Bank response: {Raw}", bankRaw);
-
-                if (!response.IsSuccessStatusCode)
-                    return Results.BadRequest("Bank error: " + response.StatusCode);
-
-                var bankRes = JsonSerializer.Deserialize<BankResponseDto>(bankRaw, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (bankRes?.Header?.ReturnCode?.ToLower() != "success")
-                    return Results.BadRequest("Bank rejected: " + bankRes?.Header?.ReturnMessage);
-
-                var entity = new TransferRequest
-                {
-                    UserId = me.UserId,
-                    CompanyId = companyId,
-                    TransactionCategoryId = dto.TransactionCategoryId,
-                    FromAccount = dto.FromAccount,
-                    ToAccount = dto.ToAccount,
-                    Amount = dto.Amount,
-                    CurrencyId = dto.CurrencyId,
-                    ServicePackageId = pkgId,
-                    Description = dto.Description,
-                    RequestedAt = DateTime.UtcNow,
-                    Status = "Completed",
-                    EconomicSectorId = dto.EconomicSectorId,
-                    CommissionAmount = commission,
-                    CommissionOnRecipient = commissionOnRecipient,
-                    Rate = rate,
-                    TransferMode = transferMode
-                };
-
-                await repo.CreateAsync(entity);
-                var dtoResult = mapper.Map<TransferRequestDto>(entity);
-
-                return Results.Ok(new
-                {
-                    message = "✅ Transfer successful",
-                    transfer = dtoResult,
-                    totalTakenFromSender = senderTotal,
-                    totalReceivedByRecipient = receiverTotal,
-                    commission = commission.ToString("0.000"),
-                    limits = new
-                    {
-                        globalLimit = settings.GlobalLimit,
-                        dailyLimit = pkg.DailyLimit,
-                        usedToday = (todayTotal + amountInBase).ToString("0.000"),
-                        monthlyLimit = pkg.MonthlyLimit,
-                        usedThisMonth = (monthTotal + amountInBase).ToString("0.000")
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "Unhandled error in CreateTransfer");
+                log.LogError("TransferRequestRepository concrete implementation not available.");
                 return Results.StatusCode(500);
             }
+
+            var result = await concreteRepo.CreateAsync(
+                userId: me.UserId,
+                companyId: me.CompanyId.Value,
+                servicePackageId: me.ServicePackageId,
+                dto: dto,
+                bearer: bearer,
+                ct: ctx.RequestAborted);
+
+            if (!result.Success)
+                return Results.BadRequest(result.Error);
+
+            var dtoResult = mapper.Map<TransferRequestDto>(result.Entity!);
+
+            return Results.Ok(new
+            {
+                message = "✅ Transfer successful",
+                transfer = dtoResult,
+                totalTakenFromSender = result.SenderTotal,
+                totalReceivedByRecipient = result.ReceiverTotal,
+                commission = result.Commission.ToString("0.000"),
+                limits = new
+                {
+                    globalLimit = result.GlobalLimit,
+                    dailyLimit = result.DailyLimit,
+                    usedToday = result.UsedToday.ToString("0.000"),
+                    monthlyLimit = result.MonthlyLimit,
+                    usedThisMonth = result.UsedThisMonth.ToString("0.000")
+                }
+            });
         }
 
 
