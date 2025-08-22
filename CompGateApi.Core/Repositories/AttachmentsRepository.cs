@@ -113,5 +113,93 @@ namespace CompGateApi.Data.Repositories
             att.CblRequestId = cblRequestId;
             await _db.SaveChangesAsync();
         }
+
+        public async Task<IEnumerable<AttachmentDto>> GetByVisa(int visaId)
+        {
+            var list = await _db.Attachments
+                .Where(a => a.VisaId == visaId)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync();
+
+            return list.Select(_mapper.Map<AttachmentDto>);
+        }
+
+        public async Task<AttachmentDto> UploadForVisa(
+            IFormFile file,
+            int visaId,
+            string subject,
+            string description,
+            string createdBy)
+        {
+            var dir = Path.Combine("Attachments", "Visa", visaId.ToString());
+            Directory.CreateDirectory(dir);
+
+            var fn = $"{Guid.NewGuid()}-{Path.GetFileName(file.FileName).Replace(" ", "_")}";
+            var full = Path.Combine(dir, fn);
+
+            using var stream = File.Create(full);
+            await file.CopyToAsync(stream);
+
+            var att = new Attachment
+            {
+                CompanyId = null,  // admin asset
+                VisaId = visaId,
+                AttSubject = subject,
+                AttOriginalFileName = file.FileName,
+                AttFileName = fn,
+                AttMime = file.ContentType,
+                AttSize = (int)file.Length,
+                AttUrl = full,
+                Description = description,
+                CreatedBy = createdBy
+            };
+
+            _db.Attachments.Add(att);
+            await _db.SaveChangesAsync();
+
+            return _mapper.Map<AttachmentDto>(att);
+        }
+
+
+        public async Task<IReadOnlyList<AttachmentDto>> UploadForVisaBatch(
+            IFormFileCollection files,
+            int visaId,
+            string[] subjects,
+            string[] descriptions,
+            string createdBy)
+        {
+            var results = new List<AttachmentDto>();
+            for (int i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+                var subject = i < subjects.Length ? subjects[i] : string.Empty;
+                var description = i < descriptions.Length ? descriptions[i] : string.Empty;
+
+                var dto = await UploadForVisa(file, visaId, subject, description, createdBy);
+                results.Add(dto);
+            }
+            return results;
+        }
+        public async Task LinkToVisaAsync(Guid attachmentId, int visaId)
+        {
+            var att = await _db.Attachments.FindAsync(attachmentId);
+            if (att == null)
+                throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+            att.VisaId = visaId;
+            att.CompanyId = null; // ensure admin-owned
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task UnlinkFromVisaAsync(Guid attachmentId)
+        {
+            var att = await _db.Attachments.FindAsync(attachmentId);
+            if (att == null)
+                throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+            att.VisaId = null;
+            await _db.SaveChangesAsync();
+        }
     }
 }
+

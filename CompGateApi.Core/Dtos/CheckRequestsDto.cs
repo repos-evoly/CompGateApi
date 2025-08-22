@@ -19,6 +19,8 @@ namespace CompGateApi.Core.Dtos
         public string? CardNum { get; set; }
         public string? AccountNum { get; set; }
         public string? Beneficiary { get; set; }
+
+        public string? Phone { get; set; }
         public string Status { get; set; } = string.Empty;
 
         public string? Reason { get; set; }
@@ -46,6 +48,7 @@ namespace CompGateApi.Core.Dtos
         public string? CardNum { get; set; }
         public string? AccountNum { get; set; }
         public string? Beneficiary { get; set; }
+        public string? Phone { get; set; }
         public List<CheckRequestLineItemCreateDto> LineItems { get; set; } = new();
     }
 

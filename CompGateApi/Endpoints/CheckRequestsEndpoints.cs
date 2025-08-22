@@ -125,6 +125,7 @@ namespace CompGateApi.Endpoints
                         CardNum = r.CardNum,
                         AccountNum = r.AccountNum,
                         Beneficiary = r.Beneficiary,
+                        Phone = r.Phone,
                         Status = r.Status,
                         Reason = r.Reason,
                         CreatedAt = r.CreatedAt,
@@ -224,6 +225,7 @@ namespace CompGateApi.Endpoints
                     CardNum = ent.CardNum,
                     AccountNum = ent.AccountNum,
                     Beneficiary = ent.Beneficiary,
+                    Phone = ent.Phone,
                     Status = ent.Status,
                     Reason = ent.Reason,
                     CreatedAt = ent.CreatedAt,
@@ -299,6 +301,7 @@ namespace CompGateApi.Endpoints
                     CardNum = dto.CardNum,
                     AccountNum = dto.AccountNum,
                     Beneficiary = dto.Beneficiary,
+                    Phone = dto.Phone,
                     Status = "Pending",
                     RepresentativeId = dto.RepresentativeId,
                     LineItems = dto.LineItems.Select(li => new CheckRequestLineItem
@@ -322,6 +325,7 @@ namespace CompGateApi.Endpoints
                     CardNum = ent.CardNum,
                     AccountNum = ent.AccountNum,
                     Beneficiary = ent.Beneficiary,
+                    Phone = ent.Phone,
                     Status = ent.Status,
                     RepresentativeId = ent.RepresentativeId ?? 0,
                     LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
@@ -383,6 +387,7 @@ namespace CompGateApi.Endpoints
                 ent.CardNum = dto.CardNum;
                 ent.AccountNum = dto.AccountNum;
                 ent.Beneficiary = dto.Beneficiary;
+                ent.Phone = dto.Phone;
                 ent.RepresentativeId = dto.RepresentativeId;
 
                 // replace line items
@@ -404,6 +409,7 @@ namespace CompGateApi.Endpoints
                     CardNum = ent.CardNum,
                     AccountNum = ent.AccountNum,
                     Beneficiary = ent.Beneficiary,
+                    Phone = ent.Phone,
                     Status = ent.Status,
                     Reason = ent.Reason,
                     RepresentativeId = ent.RepresentativeId ?? 0,
@@ -451,6 +457,7 @@ namespace CompGateApi.Endpoints
                     CardNum = r.CardNum,
                     AccountNum = r.AccountNum,
                     Beneficiary = r.Beneficiary,
+                    Phone = r.Phone,
                     Status = r.Status,
                     Reason = r.Reason,
                     CreatedAt = r.CreatedAt,
@@ -532,6 +539,7 @@ namespace CompGateApi.Endpoints
                 CardNum = ent.CardNum,
                 AccountNum = ent.AccountNum,
                 Beneficiary = ent.Beneficiary,
+                Phone = ent.Phone,
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -605,6 +613,7 @@ namespace CompGateApi.Endpoints
                 CardNum = ent.CardNum,
                 AccountNum = ent.AccountNum,
                 Beneficiary = ent.Beneficiary,
+                Phone = ent.Phone,
                 Status = ent.Status,
                 Reason = ent.Reason,
                 LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto

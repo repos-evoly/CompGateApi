@@ -25,10 +25,14 @@ namespace CompGateApi.Data.Models
     public string CreatedBy { get; set; } = string.Empty;
 
     [MaxLength(8)]
-    public int CompanyId { get; set; }
 
+    public int? CompanyId { get; set; }
     [ForeignKey(nameof(CompanyId))]
-    public Company Company { get; set; } = null!;
+    public Company? Company { get; set; }
+
+    public int? VisaId { get; set; }
+    [ForeignKey(nameof(VisaId))]
+    public Visa? Visa { get; set; }
 
     public int? CblRequestId { get; set; }
     [ForeignKey(nameof(CblRequestId))]

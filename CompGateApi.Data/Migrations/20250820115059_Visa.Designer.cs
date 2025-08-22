@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250820115059_Visa")]
+    partial class Visa
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -650,10 +653,6 @@ namespace CompGateApi.Data.Migrations
 
                     b.Property<DateTime?>("Date")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Reason")
                         .HasColumnType("nvarchar(max)");

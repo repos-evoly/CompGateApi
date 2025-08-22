@@ -20,7 +20,7 @@ namespace CompGateApi.Data.Models
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
 
-       
+
         public int? RepresentativeId { get; set; }
 
         [ForeignKey(nameof(RepresentativeId))]
@@ -47,6 +47,9 @@ namespace CompGateApi.Data.Models
         [MaxLength(150)]
         public string? Beneficiary { get; set; }
 
+        [MaxLength(50)]
+        public string? Phone { get; set; }
+
         // 1..* line items
         public ICollection<CheckRequestLineItem> LineItems { get; set; }
             = new List<CheckRequestLineItem>();
@@ -72,7 +75,7 @@ namespace CompGateApi.Data.Models
 
         // Link to your AuditLog entries if you wish
         // (optional navigational: 1..* AuditLogs related to this request)
-        
+
     }
 
     [Table("CheckRequestLineItems")]

@@ -345,6 +345,10 @@ namespace CompGateApi.Core.Startup
       //EmployeeSalary
       services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
 
+      services.AddScoped<IPricingRepository, PricingRepository>();
+
+      services.AddScoped<IVisaRepository, VisaRepository>();
+
       return services;
     }
 

@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250820110130_PricingModel")]
+    partial class PricingModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -58,7 +61,7 @@ namespace CompGateApi.Data.Migrations
                     b.Property<int?>("CblRequestId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("CompanyId")
+                    b.Property<int>("CompanyId")
                         .HasMaxLength(8)
                         .HasColumnType("int");
 
@@ -77,9 +80,6 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int?>("VisaId")
-                        .HasColumnType("int");
-
                     b.Property<int?>("VisaRequestId")
                         .HasColumnType("int");
 
@@ -88,8 +88,6 @@ namespace CompGateApi.Data.Migrations
                     b.HasIndex("CblRequestId");
 
                     b.HasIndex("CompanyId");
-
-                    b.HasIndex("VisaId");
 
                     b.HasIndex("VisaRequestId");
 
@@ -650,10 +648,6 @@ namespace CompGateApi.Data.Migrations
 
                     b.Property<DateTime?>("Date")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Reason")
                         .HasColumnType("nvarchar(max)");
@@ -1773,46 +1767,6 @@ namespace CompGateApi.Data.Migrations
                     b.ToTable("UserRolePermissions");
                 });
 
-            modelBuilder.Entity("CompGateApi.Data.Models.Visa", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("DescriptionAr")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("DescriptionEn")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("NameAr")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("NameEn")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Visas");
-                });
-
             modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -2060,11 +2014,8 @@ namespace CompGateApi.Data.Migrations
                     b.HasOne("CompGateApi.Data.Models.Company", "Company")
                         .WithMany("Attachments")
                         .HasForeignKey("CompanyId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("CompGateApi.Data.Models.Visa", "Visa")
-                        .WithMany("Attachments")
-                        .HasForeignKey("VisaId");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("CompGateApi.Data.Models.VisaRequest", "VisaRequest")
                         .WithMany("Attachments")
@@ -2074,8 +2025,6 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("CblRequest");
 
                     b.Navigation("Company");
-
-                    b.Navigation("Visa");
 
                     b.Navigation("VisaRequest");
                 });
@@ -2700,11 +2649,6 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("UserRolePermissions");
 
                     b.Navigation("VisaRequests");
-                });
-
-            modelBuilder.Entity("CompGateApi.Data.Models.Visa", b =>
-                {
-                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>

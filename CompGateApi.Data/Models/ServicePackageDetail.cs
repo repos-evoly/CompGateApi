@@ -29,6 +29,8 @@ namespace CompGateApi.Data.Models
         public decimal? B2CFixedFee { get; set; }
         public decimal? B2BMinPercentage { get; set; }
         public decimal? B2CMinPercentage { get; set; }
+        public decimal? B2BMaxAmount { get; set; }
+        public decimal? B2CMaxAmount { get; set; }
         public decimal? B2BCommissionPct { get; set; }
         public decimal? B2CCommissionPct { get; set; }
     }

@@ -53,6 +53,9 @@ namespace CompGateApi.Data.Context
               public DbSet<Employee> Employees => Set<Employee>();
               public DbSet<SalaryCycle> SalaryCycles => Set<SalaryCycle>();
               public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
+              public DbSet<Pricing> Pricings => Set<Pricing>();
+
+              public DbSet<Visa> Visas => Set<Visa>();
 
 
 
@@ -179,7 +182,7 @@ namespace CompGateApi.Data.Context
                      });
 
                      // ── AUDIT LOG ─────────────────────────────────────────────────────────
-                  
+
 
                      // ── ROLES & PERMISSIONS ───────────────────────────────────────────────
                      builder.Entity<RolePermission>()
@@ -620,6 +623,31 @@ namespace CompGateApi.Data.Context
                             .HasForeignKey(e => e.EmployeeId)
                             .OnDelete(DeleteBehavior.Cascade); // keep this
                      });
+
+
+                     // ── PRICING ──────────────────────────────────────────
+                     builder.Entity<Pricing>(b =>
+                     {
+                            b.ToTable("Pricing");
+                            b.HasKey(p => p.Id);
+                            b.Property(p => p.PctAmt).HasPrecision(18, 4);
+                            b.Property(p => p.Price).HasPrecision(18, 4);
+                            b.Property(p => p.Description).HasMaxLength(500);
+                            b.Property(p => p.SGL1).HasMaxLength(50);
+                            b.Property(p => p.DGL1).HasMaxLength(50);
+                            b.Property(p => p.SGL2).HasMaxLength(50);
+                            b.Property(p => p.DGL2).HasMaxLength(50);
+                            b.Property(p => p.DTC).HasMaxLength(50);
+                            b.Property(p => p.CTC).HasMaxLength(50);
+                            b.Property(p => p.DTC2).HasMaxLength(50);
+                            b.Property(p => p.CTC2).HasMaxLength(50);
+                            b.Property(p => p.NR2).HasMaxLength(500);
+                            b.HasOne(p => p.TransactionCategory);
+                     });
+
+                
+                  
+
               }
 
               public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

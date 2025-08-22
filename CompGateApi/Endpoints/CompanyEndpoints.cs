@@ -92,7 +92,6 @@ namespace CompGateApi.Endpoints
             var companyAdmin = companies
                 .MapGroup("/{code}/users")
                 .RequireAuthorization("RequireCompanyUser")
-                .RequireAuthorization("RequireCompanyAdmin")
                 .WithTags("CompanyUsers");
 
             // 4a) Add employee
@@ -276,7 +275,7 @@ namespace CompGateApi.Endpoints
             }
             else
             {
-                log.LogWarning("  No company‐admin found for company {CompanyId}", company.Id);
+                log.LogWarning(" No company‐admin found for company {CompanyId}", company.Id);
             }
 
             // 5) Project into a response shape. You can either: 
@@ -360,10 +359,10 @@ namespace CompGateApi.Endpoints
             return Results.NoContent();
         }
         public static async Task<IResult> LookupKyc(
-    string code,
-    [FromServices] ICompanyRepository repo,
-    [FromServices] IHttpClientFactory httpFactory,
-    [FromServices] ILogger<CompanyEndpoints> log)
+            string code,
+            [FromServices] ICompanyRepository repo,
+            [FromServices] IHttpClientFactory httpFactory,
+            [FromServices] ILogger<CompanyEndpoints> log)
         {
             if (code.Length != 6)
                 return Results.BadRequest("Company code must be exactly 6 characters.");

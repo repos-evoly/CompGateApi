@@ -216,8 +216,6 @@ namespace CompGateApi.Endpoints
             });
         }
 
-
-
         // ── Lookups ─────────────────────────────────────────────────────────────
 
         public static async Task<IResult> LookupAccounts(
