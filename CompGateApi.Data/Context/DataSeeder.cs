@@ -305,7 +305,7 @@ namespace CompGateApi.Data.Seeding
 
             var packages = new[]
             {
-                new ServicePackage { Name = "Inquiry Package",  Description = "Inquiry Package", DailyLimit = 1000m,   MonthlyLimit = 10000m },
+                new ServicePackage { Name = "Inquiry",  Description = "Inquiry Package", DailyLimit = 1000m,   MonthlyLimit = 10000m },
                 new ServicePackage { Name = "Full Package", Description = "Full Package", DailyLimit = 5000m,   MonthlyLimit = 50000m },
                 };
 

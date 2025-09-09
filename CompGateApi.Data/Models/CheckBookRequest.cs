@@ -1,4 +1,3 @@
-// CompGateApi.Data.Models/CheckBookRequest.cs
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -24,7 +23,6 @@ namespace CompGateApi.Data.Models
         [ForeignKey(nameof(RepresentativeId))]
         public Representative? Representative { get; set; } = null!;
 
-
         [MaxLength(150)]
         public string? FullName { get; set; }
 
@@ -42,6 +40,7 @@ namespace CompGateApi.Data.Models
 
         public DateTime? Date { get; set; }
 
+        /// <summary>Expected values: "24" or "48"</summary>
         [MaxLength(50)]
         public string? BookContaining { get; set; }
 
@@ -50,5 +49,11 @@ namespace CompGateApi.Data.Models
 
         public string? Reason { get; set; }
 
+        /// <summary>Local TransferRequest Id created for the debit.</summary>
+        public int? TransferRequestId { get; set; }
+
+        /// <summary>Original bank referenceId used for the debit (needed for reversal).</summary>
+        [MaxLength(32)]
+        public string? BankReference { get; set; }
     }
 }

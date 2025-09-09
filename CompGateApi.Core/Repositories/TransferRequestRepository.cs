@@ -3,15 +3,15 @@ using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-
 
 namespace CompGateApi.Data.Repositories
 {
@@ -19,9 +19,7 @@ namespace CompGateApi.Data.Repositories
     {
         private readonly CompGateApiDbContext _db;
         private readonly IHttpClientFactory _httpFactory;
-
         private readonly ILogger<TransferRequestRepository> _log;
-
 
         public TransferRequestRepository(
             CompGateApiDbContext db,
@@ -33,12 +31,9 @@ namespace CompGateApi.Data.Repositories
             _log = log;
         }
 
-        // ── COMPANY (“my transfers”) ────────────────────────────────────────
-
         public async Task<int> GetCountByCompanyAsync(int companyId, string? searchTerm)
         {
-            var q = _db.TransferRequests
-                       .Where(t => t.CompanyId == companyId);
+            var q = _db.TransferRequests.Where(t => t.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = q.Where(t =>
@@ -70,8 +65,6 @@ namespace CompGateApi.Data.Repositories
                 .ToListAsync();
         }
 
-        // ── ADMIN ───────────────────────────────────────────────────────────
-
         public async Task<int> GetCountAsync(string? searchTerm)
         {
             var q = _db.TransferRequests.AsQueryable();
@@ -87,8 +80,7 @@ namespace CompGateApi.Data.Repositories
         public async Task<List<TransferRequest>> GetAllAsync(
             string? searchTerm, int page, int limit)
         {
-            var q = _db.TransferRequests
-                       .Include(t => t.TransactionCategory);
+            var q = _db.TransferRequests.Include(t => t.TransactionCategory);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = (Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<TransferRequest, TransactionCategory>)q.Where(t =>
@@ -104,15 +96,12 @@ namespace CompGateApi.Data.Repositories
                 .ToListAsync();
         }
 
-        // ── SINGLE LOOKUP ───────────────────────────────────────────────────
-
         public async Task<TransferRequest?> GetByIdAsync(int id)
             => await _db.TransferRequests
                         .Include(t => t.TransactionCategory)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(t => t.Id == id);
 
-       
         public async Task<(bool Success,
                            string? Error,
                            TransferRequest? Entity,
@@ -133,7 +122,6 @@ namespace CompGateApi.Data.Repositories
         {
             try
             {
-                // 1) Determine B2B/B2C via STCOD of receiver
                 var stcod = await GetStCodeByAccount(dto.ToAccount);
                 if (string.IsNullOrWhiteSpace(stcod))
                     return Fail("Receiver account type unknown");
@@ -141,7 +129,6 @@ namespace CompGateApi.Data.Repositories
                 bool isB2B = stcod == "CD";
                 string transferMode = isB2B ? "B2B" : "B2C";
 
-                // 2) Currency & Settings
                 var currency = await _db.Currencies.FindAsync(new object?[] { dto.CurrencyId }, ct);
                 if (currency == null)
                     return Fail("Invalid currency");
@@ -156,7 +143,6 @@ namespace CompGateApi.Data.Repositories
                 if (amountInBase > settings.GlobalLimit)
                     return Fail("Global limit exceeded");
 
-                // 3) Package detail / per-transaction limits
                 var detail = await _db.ServicePackageDetails
                     .Include(d => d.TransactionCategory)
                     .FirstOrDefaultAsync(d =>
@@ -170,7 +156,6 @@ namespace CompGateApi.Data.Repositories
                 if (txnLimit.HasValue && amountInBase > txnLimit.Value)
                     return Fail("Transaction limit exceeded");
 
-                // 4) Daily & monthly limits
                 var today = DateTime.UtcNow.Date;
                 var monthStart = new DateTime(today.Year, today.Month, 1);
 
@@ -193,13 +178,11 @@ namespace CompGateApi.Data.Repositories
                 if (monthTotal + amountInBase > pkg.MonthlyLimit)
                     return Fail("Monthly limit exceeded");
 
-                // 5) Commission
                 decimal fixedFee = isB2B ? detail.B2BFixedFee ?? 0 : detail.B2CFixedFee ?? 0;
                 decimal pct = isB2B ? detail.B2BCommissionPct ?? 0 : detail.B2CCommissionPct ?? 0;
                 decimal pctFee = dto.Amount * (pct / 100m);
                 decimal commission = Math.Round(Math.Max(fixedFee, pctFee), 3);
 
-                // 6) Currency code mapping for the bank
                 string currencyCode = currency.Id switch
                 {
                     1 => "LYD",
@@ -208,13 +191,11 @@ namespace CompGateApi.Data.Repositories
                     _ => "LYD"
                 };
 
-                // Scale amounts to 3 decimals as fixed-width numeric strings
                 const int DECIMALS = 3;
                 decimal scale = (decimal)Math.Pow(10, DECIMALS);
                 string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
                 string commStr = ((long)(commission * scale)).ToString("D15");
 
-                // 7) Company config: who pays commission
                 var company = await _db.Companies.FindAsync(new object?[] { companyId }, ct);
                 if (company == null)
                     return Fail("Company not found");
@@ -234,12 +215,14 @@ namespace CompGateApi.Data.Repositories
                     : settings.CommissionAccount;
 
                 // 8) Call bank API
+                var referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
+
                 var payload = new
                 {
                     Header = new
                     {
                         system = "MOBILE",
-                        referenceId = Guid.NewGuid().ToString("N")[..16],
+                        referenceId = referenceId,
                         userName = "TEDMOB",
                         customerNumber = dto.ToAccount,
                         requestTime = DateTime.UtcNow.ToString("o"),
@@ -270,7 +253,6 @@ namespace CompGateApi.Data.Repositories
                 if (!response.IsSuccessStatusCode)
                     return Fail("Bank error: " + response.StatusCode);
 
-                // Check ReturnCode == "success"
                 try
                 {
                     using var doc = JsonDocument.Parse(bankRaw);
@@ -284,11 +266,10 @@ namespace CompGateApi.Data.Repositories
                 }
                 catch
                 {
-                    // If shape unexpected, still fail gracefully
                     return Fail("Bank rejected: invalid response");
                 }
 
-                // 9) Persist transfer
+                // 9) Persist transfer (store referenceId)
                 var entity = new TransferRequest
                 {
                     UserId = userId,
@@ -306,13 +287,13 @@ namespace CompGateApi.Data.Repositories
                     CommissionAmount = commission,
                     CommissionOnRecipient = commissionOnRecipient,
                     Rate = rate,
-                    TransferMode = transferMode
+                    TransferMode = transferMode,
+                    BankReference = referenceId // ← NEW
                 };
 
                 _db.TransferRequests.Add(entity);
                 await _db.SaveChangesAsync(ct);
 
-                // 10) Done
                 return (true, null, entity, senderTotal, receiverTotal, commission,
                         settings.GlobalLimit, pkg.DailyLimit, pkg.MonthlyLimit,
                         todayTotal + amountInBase, monthTotal + amountInBase);
@@ -328,14 +309,11 @@ namespace CompGateApi.Data.Repositories
                 => (false, msg, null, "0.000", "0.000", 0m, 0m, 0m, 0m, 0m, 0m);
         }
 
-
         public async Task UpdateAsync(TransferRequest tr)
         {
             _db.TransferRequests.Update(tr);
             await _db.SaveChangesAsync();
         }
-
-        // ── EXTERNAL ACCOUNT LOOKUP ─────────────────────────────────────────
 
         public async Task<List<AccountDto>> GetAccountsAsync(string codeOrAccount)
         {
@@ -359,9 +337,9 @@ namespace CompGateApi.Data.Repositories
                     language = "AR"
                 },
                 Details = new Dictionary<string, string> {
-            { "@CID", code },
-            { "@GETAVB","Y" }
-        }
+                    { "@CID", code },
+                    { "@GETAVB","Y" }
+                }
             });
 
             var stcodTask = client.PostAsJsonAsync("/api/mobile/GetCustomerInfo", new
@@ -376,8 +354,8 @@ namespace CompGateApi.Data.Repositories
                     language = "AR"
                 },
                 Details = new Dictionary<string, string> {
-            { "@CID", code }
-        }
+                    { "@CID", code }
+                }
             });
 
             await Task.WhenAll(accountsTask, stcodTask);
@@ -398,8 +376,8 @@ namespace CompGateApi.Data.Repositories
                     details.TryGetProperty("CustInfo", out var custArr) &&
                     custArr.GetArrayLength() > 0)
                 {
-                    var stcod = custArr[0].GetProperty("STCOD").GetString()?.Trim();
-                    transferType = stcod switch
+                    var st = custArr[0].GetProperty("STCOD").GetString()?.Trim();
+                    transferType = st switch
                     {
                         "CD" => "B2B",
                         "EA" => "B2C",
@@ -416,8 +394,6 @@ namespace CompGateApi.Data.Repositories
                 TransferType = transferType
             }).ToList();
         }
-
-        // ── EXTERNAL STATEMENT ───────────────────────────────────────────────
 
         public async Task<List<StatementEntryDto>> GetStatementAsync(string account, DateTime from, DateTime to)
         {
@@ -483,7 +459,6 @@ namespace CompGateApi.Data.Repositories
             try
             {
                 var client = _httpFactory.CreateClient("BankApi");
-
                 var cid = account.Substring(4, 6);
 
                 var payload = new
@@ -497,11 +472,7 @@ namespace CompGateApi.Data.Repositories
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
                     },
-
-                    Details = new Dictionary<string, string>
-            {
-                { "@CID", cid }
-            }
+                    Details = new Dictionary<string, string> { { "@CID", cid } }
                 };
 
                 var response = await client.PostAsJsonAsync("/api/mobile/GetCustomerInfo", payload);
@@ -515,23 +486,14 @@ namespace CompGateApi.Data.Repositories
 
                 using var doc = JsonDocument.Parse(raw);
                 if (!doc.RootElement.TryGetProperty("Details", out var details))
-                {
-                    _log.LogError("Missing 'Details' in response for account {Account}. Raw: {Raw}", account, raw);
                     return null;
-                }
 
                 if (!details.TryGetProperty("CustInfo", out var custArr) || custArr.ValueKind != JsonValueKind.Array || custArr.GetArrayLength() == 0)
-                {
-                    _log.LogError("Missing or empty 'CustInfo' for account {Account}. Raw: {Raw}", account, raw);
                     return null;
-                }
 
                 var stcod = custArr[0].GetProperty("STCOD").GetString();
                 if (string.IsNullOrWhiteSpace(stcod))
-                {
-                    _log.LogWarning("STCOD is empty or null for account: {Account}", account);
                     return null;
-                }
 
                 _log.LogInformation("Fetched STCOD={Stcod} for account {Account}", stcod, account);
                 return stcod;
@@ -543,9 +505,6 @@ namespace CompGateApi.Data.Repositories
             }
         }
 
-
-
-        // ── helper classes for external JSON ────────────────────────────────
         private class ExternalAccountsResponseDto
         {
             public object Header { get; set; } = null!;

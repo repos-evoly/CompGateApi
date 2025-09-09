@@ -1,4 +1,3 @@
-using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;

@@ -20,12 +20,10 @@ namespace CompGateApi.Data.Models
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
 
-
         public int? RepresentativeId { get; set; }
 
         [ForeignKey(nameof(RepresentativeId))]
         public Representative? Representative { get; set; } = null!;
-
 
         [MaxLength(100)]
         public string? Branch { get; set; }
@@ -54,9 +52,9 @@ namespace CompGateApi.Data.Models
         public ICollection<CheckRequestLineItem> LineItems { get; set; }
             = new List<CheckRequestLineItem>();
 
-        // --------------------------------
+        // ------------------------------------------------
         // Life-cycle fields:
-        // --------------------------------
+        // ------------------------------------------------
 
         // Pending / Approved / Rejected
         [Required]
@@ -65,7 +63,6 @@ namespace CompGateApi.Data.Models
 
         public string? Reason { get; set; }
 
-
         // Which admin (local User.Id) approved/rejected
         public int? ApprovedByUserId { get; set; }
         public User? ApprovedByUser { get; set; }
@@ -73,9 +70,15 @@ namespace CompGateApi.Data.Models
         // When approval happened (nullable until approved)
         public DateTimeOffset? ApprovalTimestamp { get; set; }
 
-        // Link to your AuditLog entries if you wish
-        // (optional navigational: 1..* AuditLogs related to this request)
+        // ------------------------------------------------
+        // Debit/Refund linkage (same pattern as CheckBook)
+        // ------------------------------------------------
+        public int? TransferRequestId { get; set; }
+        [ForeignKey(nameof(TransferRequestId))]
+        public TransferRequest? TransferRequest { get; set; }
 
+        [MaxLength(50)]
+        public string? BankReference { get; set; } // Header.referenceId we sent/saved
     }
 
     [Table("CheckRequestLineItems")]
@@ -88,12 +91,11 @@ namespace CompGateApi.Data.Models
         public int CheckRequestId { get; set; }
         public CheckRequest CheckRequest { get; set; } = null!;
 
+        // free-form; we’ll parse Lyd when computing total
         [MaxLength(50)]
         public string? Dirham { get; set; }
 
         [MaxLength(50)]
         public string? Lyd { get; set; }
-
-        // You could also add quantity, amount, etc. here if needed
     }
 }

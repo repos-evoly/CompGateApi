@@ -67,5 +67,8 @@ namespace CompGateApi.Data.Models
 
         public string? GroupId { get; set; }
 
+       public string? BankReference  { get; set; }
+
+
     }
 }

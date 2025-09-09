@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace CompGateApi.Data.Repositories
@@ -35,17 +34,19 @@ namespace CompGateApi.Data.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 q = q.Where(p =>
-                    (p.Description ?? "").Contains(searchTerm) ||
-                    (p.SGL1 ?? "").Contains(searchTerm) ||
-                    (p.DGL1 ?? "").Contains(searchTerm) ||
-                    (p.SGL2 ?? "").Contains(searchTerm) ||
-                    (p.DGL2 ?? "").Contains(searchTerm) ||
-                    (p.DTC ?? "").Contains(searchTerm) ||
-                    (p.CTC ?? "").Contains(searchTerm) ||
-                    (p.DTC2 ?? "").Contains(searchTerm) ||
-                    (p.CTC2 ?? "").Contains(searchTerm) ||
-                    (p.NR2 ?? "").Contains(searchTerm)
+                    (p.Description ?? "").Contains(term) ||
+                    (p.AmountRule ?? "").Contains(term) ||
+                    (p.GL1 ?? "").Contains(term) ||
+                    (p.GL2 ?? "").Contains(term) ||
+                    (p.GL3 ?? "").Contains(term) ||
+                    (p.GL4 ?? "").Contains(term) ||
+                    (p.DTC ?? "").Contains(term) ||
+                    (p.CTC ?? "").Contains(term) ||
+                    (p.DTC2 ?? "").Contains(term) ||
+                    (p.CTC2 ?? "").Contains(term) ||
+                    (p.NR2 ?? "").Contains(term)
                 );
             }
 
@@ -61,19 +62,24 @@ namespace CompGateApi.Data.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 q = q.Where(p =>
-                    (p.Description ?? "").Contains(searchTerm) ||
-                    (p.SGL1 ?? "").Contains(searchTerm) ||
-                    (p.DGL1 ?? "").Contains(searchTerm) ||
-                    (p.SGL2 ?? "").Contains(searchTerm) ||
-                    (p.DGL2 ?? "").Contains(searchTerm) ||
-                    (p.DTC ?? "").Contains(searchTerm) ||
-                    (p.CTC ?? "").Contains(searchTerm) ||
-                    (p.DTC2 ?? "").Contains(searchTerm) ||
-                    (p.CTC2 ?? "").Contains(searchTerm) ||
-                    (p.NR2 ?? "").Contains(searchTerm)
+                    (p.Description ?? "").Contains(term) ||
+                    (p.AmountRule ?? "").Contains(term) ||
+                    (p.GL1 ?? "").Contains(term) ||
+                    (p.GL2 ?? "").Contains(term) ||
+                    (p.GL3 ?? "").Contains(term) ||
+                    (p.GL4 ?? "").Contains(term) ||
+                    (p.DTC ?? "").Contains(term) ||
+                    (p.CTC ?? "").Contains(term) ||
+                    (p.DTC2 ?? "").Contains(term) ||
+                    (p.CTC2 ?? "").Contains(term) ||
+                    (p.NR2 ?? "").Contains(term)
                 );
             }
+
+            if (page <= 0) page = 1;
+            if (limit <= 0 || limit > 500) limit = 50;
 
             return await q.OrderByDescending(p => p.Id)
                           .Skip((page - 1) * limit)
@@ -84,10 +90,22 @@ namespace CompGateApi.Data.Repositories
 
         public async Task<Pricing> CreateAsync(Pricing entity)
         {
-            // Validate FK to TransactionCategory to avoid FK exception later
             var exists = await _db.TransactionCategories.AnyAsync(tc => tc.Id == entity.TrxCatId);
             if (!exists)
                 throw new KeyNotFoundException($"TransactionCategory {entity.TrxCatId} not found.");
+
+            // normalize minimal strings
+            entity.AmountRule = string.IsNullOrWhiteSpace(entity.AmountRule) ? null : entity.AmountRule.Trim();
+            entity.Description = string.IsNullOrWhiteSpace(entity.Description) ? null : entity.Description.Trim();
+            entity.GL1 = string.IsNullOrWhiteSpace(entity.GL1) ? null : entity.GL1.Trim();
+            entity.GL2 = string.IsNullOrWhiteSpace(entity.GL2) ? null : entity.GL2.Trim();
+            entity.GL3 = string.IsNullOrWhiteSpace(entity.GL3) ? null : entity.GL3.Trim();
+            entity.GL4 = string.IsNullOrWhiteSpace(entity.GL4) ? null : entity.GL4.Trim();
+            entity.DTC = string.IsNullOrWhiteSpace(entity.DTC) ? null : entity.DTC.Trim();
+            entity.CTC = string.IsNullOrWhiteSpace(entity.CTC) ? null : entity.CTC.Trim();
+            entity.DTC2 = string.IsNullOrWhiteSpace(entity.DTC2) ? null : entity.DTC2.Trim();
+            entity.CTC2 = string.IsNullOrWhiteSpace(entity.CTC2) ? null : entity.CTC2.Trim();
+            entity.NR2 = string.IsNullOrWhiteSpace(entity.NR2) ? null : entity.NR2.Trim();
 
             _db.Set<Pricing>().Add(entity);
             await _db.SaveChangesAsync();
@@ -99,7 +117,6 @@ namespace CompGateApi.Data.Repositories
             var current = await _db.Set<Pricing>().FirstOrDefaultAsync(x => x.Id == entity.Id);
             if (current == null) return false;
 
-            // optional FK validation if TrxCatId changed
             if (current.TrxCatId != entity.TrxCatId)
             {
                 var ok = await _db.TransactionCategories.AnyAsync(tc => tc.Id == entity.TrxCatId);
@@ -109,19 +126,21 @@ namespace CompGateApi.Data.Repositories
             current.TrxCatId = entity.TrxCatId;
             current.PctAmt = entity.PctAmt;
             current.Price = entity.Price;
-            current.Description = entity.Description;
+            current.AmountRule = string.IsNullOrWhiteSpace(entity.AmountRule) ? null : entity.AmountRule.Trim();
+            current.Unit = entity.Unit;
+            current.Description = string.IsNullOrWhiteSpace(entity.Description) ? null : entity.Description.Trim();
 
-            current.SGL1 = entity.SGL1;
-            current.DGL1 = entity.DGL1;
-            current.SGL2 = entity.SGL2;
-            current.DGL2 = entity.DGL2;
+            current.GL1 = string.IsNullOrWhiteSpace(entity.GL1) ? null : entity.GL1.Trim();
+            current.GL2 = string.IsNullOrWhiteSpace(entity.GL2) ? null : entity.GL2.Trim();
+            current.GL3 = string.IsNullOrWhiteSpace(entity.GL3) ? null : entity.GL3.Trim();
+            current.GL4 = string.IsNullOrWhiteSpace(entity.GL4) ? null : entity.GL4.Trim();
 
-            current.DTC = entity.DTC;
-            current.CTC = entity.CTC;
-            current.DTC2 = entity.DTC2;
-            current.CTC2 = entity.CTC2;
+            current.DTC = string.IsNullOrWhiteSpace(entity.DTC) ? null : entity.DTC.Trim();
+            current.CTC = string.IsNullOrWhiteSpace(entity.CTC) ? null : entity.CTC.Trim();
+            current.DTC2 = string.IsNullOrWhiteSpace(entity.DTC2) ? null : entity.DTC2.Trim();
+            current.CTC2 = string.IsNullOrWhiteSpace(entity.CTC2) ? null : entity.CTC2.Trim();
 
-            current.NR2 = entity.NR2;
+            current.NR2 = string.IsNullOrWhiteSpace(entity.NR2) ? null : entity.NR2.Trim();
             current.APPLYTR2 = entity.APPLYTR2;
 
             await _db.SaveChangesAsync();

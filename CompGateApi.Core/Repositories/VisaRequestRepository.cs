@@ -119,7 +119,8 @@ namespace CompGateApi.Data.Repositories
             existing.ForeignAmount = entity.ForeignAmount;
             existing.LocalAmount = entity.LocalAmount;
             existing.Pldedge = entity.Pldedge;
-            // leave Status & Reason unchanged
+            existing.Status = entity.Status;
+            existing.Reason = entity.Reason;
 
             await _context.SaveChangesAsync();
         }

@@ -4,17 +4,20 @@ using System.Text.Json;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
+using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CompGateApi.Endpoints
 {
     public class VisaRequestEndpoints : IEndpoints
     {
+      
         public void RegisterEndpoints(WebApplication app)
         {
             var company = app
@@ -29,6 +32,7 @@ namespace CompGateApi.Endpoints
                    .Produces<VisaRequestDto>(200)
                    .Produces(404);
 
+            // Create = save only (NO DEBIT HERE)
             company.MapPost("/", CreateMyRequest)
                    .Accepts<IFormFile>("multipart/form-data")
                    .Produces<VisaRequestDto>(201)
@@ -39,8 +43,6 @@ namespace CompGateApi.Endpoints
                    .Produces<VisaRequestDto>(200)
                    .Produces(400)
                    .Produces(404);
-
-
             var admin = app
                 .MapGroup("/api/admin/visarequests")
                 .WithTags("VisaRequests")
@@ -50,23 +52,29 @@ namespace CompGateApi.Endpoints
             admin.MapGet("/", GetAllAdmin)
                  .Produces<PagedResult<VisaRequestDto>>(200);
 
+            // Admin approves = DEBIT; rejects = REFUND (if already debited)
             admin.MapPut("/{id:int}/status", UpdateStatus)
                  .Accepts<VisaRequestStatusUpdateDto>("application/json")
                  .Produces<VisaRequestDto>(200)
                  .Produces(404);
 
             admin.MapGet("/{id:int}", GetByIdAdmin)
-                .Produces<VisaRequestDto>(200)
-                .Produces(404);
+                 .Produces<VisaRequestDto>(200)
+                 .Produces(404);
         }
 
         private static int GetAuthUserId(HttpContext ctx)
         {
-            var raw = ctx.User.FindFirst("nameid")?.Value;
+            var raw = ctx.User.FindFirst("nameid")?.Value
+                   ?? ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (int.TryParse(raw, out var id)) return id;
             throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
         }
 
+    
+        // ───────────────────────────────────────────────────────────────────
+        // Company – List
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> GetMyRequests(
             HttpContext ctx,
             [FromServices] IVisaRequestRepository repo,
@@ -90,6 +98,9 @@ namespace CompGateApi.Endpoints
             {
                 Id = v.Id,
                 UserId = v.UserId,
+                CompanyId = v.CompanyId,
+                VisaId = v.VisaId,
+                Quantity = v.Quantity,
                 Branch = v.Branch,
                 Date = v.Date,
                 AccountHolderName = v.AccountHolderName,
@@ -118,6 +129,9 @@ namespace CompGateApi.Endpoints
             });
         }
 
+        // ───────────────────────────────────────────────────────────────────
+        // Company – Get one
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> GetMyById(
             int id,
             HttpContext ctx,
@@ -138,6 +152,9 @@ namespace CompGateApi.Endpoints
             {
                 Id = ent.Id,
                 UserId = ent.UserId,
+                CompanyId = ent.CompanyId,
+                VisaId = ent.VisaId,
+                Quantity = ent.Quantity,
                 Branch = ent.Branch,
                 Date = ent.Date,
                 AccountHolderName = ent.AccountHolderName,
@@ -152,7 +169,6 @@ namespace CompGateApi.Endpoints
                 Pldedge = ent.Pldedge,
                 Status = ent.Status,
                 Reason = ent.Reason,
-                // ← map all attachments
                 Attachments = ent.Attachments.Select(a => new AttachmentDto
                 {
                     Id = a.Id,
@@ -172,6 +188,9 @@ namespace CompGateApi.Endpoints
             return Results.Ok(dto);
         }
 
+        // ───────────────────────────────────────────────────────────────────
+        // Company – Create (NO DEBIT HERE)
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> CreateMyRequest(
            HttpRequest req,
            HttpContext ctx,
@@ -181,10 +200,10 @@ namespace CompGateApi.Endpoints
            IValidator<VisaRequestCreateDto> validator,
            ILogger<VisaRequestEndpoints> log)
         {
-            log.LogInformation("CreateMyRequest (multipart/form-data)");
+            log.LogInformation("Visa CreateMyRequest (multipart/form-data)");
 
-            // — Authenticate —
-            var raw = ctx.User.FindFirst("nameid")?.Value;
+            var raw = ctx.User.FindFirst("nameid")?.Value
+                   ?? ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(raw, out var authId))
                 return Results.Unauthorized();
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -192,7 +211,6 @@ namespace CompGateApi.Endpoints
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
-            // — Parse form —
             if (!req.HasFormContentType)
                 return Results.BadRequest("Must be multipart/form-data.");
             var form = await req.ReadFormAsync();
@@ -213,16 +231,17 @@ namespace CompGateApi.Endpoints
                 return Results.BadRequest("Invalid JSON in 'Dto' field.");
             }
 
-            // — Validate —
             var validation = await validator.ValidateAsync(dto);
             if (!validation.IsValid)
                 return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
 
-            // — Save parent request —
+            // Only persist (no debit)
             var ent = new VisaRequest
             {
                 UserId = me.UserId,
                 CompanyId = me.CompanyId.Value,
+                VisaId = dto.VisaId,
+                Quantity = dto.Quantity <= 0 ? 1 : dto.Quantity,
                 Branch = dto.Branch,
                 Date = dto.Date,
                 AccountHolderName = dto.AccountHolderName,
@@ -240,7 +259,6 @@ namespace CompGateApi.Endpoints
             await repo.CreateAsync(ent);
             log.LogInformation("Persisted VisaRequest Id={RequestId}", ent.Id);
 
-            // — Link any uploaded files —
             var attachments = new List<AttachmentDto>();
             foreach (var file in form.Files)
             {
@@ -256,11 +274,13 @@ namespace CompGateApi.Endpoints
                 attachments.Add(attDto);
             }
 
-            // — Build response DTO —
             var outDto = new VisaRequestDto
             {
                 Id = ent.Id,
                 UserId = ent.UserId,
+                CompanyId = ent.CompanyId,
+                VisaId = ent.VisaId,
+                Quantity = ent.Quantity,
                 Branch = ent.Branch,
                 Date = ent.Date,
                 AccountHolderName = ent.AccountHolderName,
@@ -283,7 +303,9 @@ namespace CompGateApi.Endpoints
             return Results.Created($"/api/visarequests/{ent.Id}", outDto);
         }
 
-
+        // ───────────────────────────────────────────────────────────────────
+        // Company – Update metadata (NO DEBIT)
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> UpdateMyRequest(
             int id,
             HttpRequest req,
@@ -294,9 +316,10 @@ namespace CompGateApi.Endpoints
             IValidator<VisaRequestCreateDto> validator,
             ILogger<VisaRequestEndpoints> log)
         {
-            log.LogInformation("UpdateMyRequest Id={Id} (multipart/form-data)", id);
+            log.LogInformation("Visa UpdateMyRequest Id={Id} (multipart/form-data)", id);
 
-            var raw = ctx.User.FindFirst("nameid")?.Value;
+            var raw = ctx.User.FindFirst("nameid")?.Value
+                   ?? ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(raw, out var authId))
                 return Results.Unauthorized();
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -311,6 +334,7 @@ namespace CompGateApi.Endpoints
             var dtoJson = form["Dto"].FirstOrDefault();
             if (string.IsNullOrEmpty(dtoJson))
                 return Results.BadRequest("Missing 'Dto' field.");
+
             VisaRequestCreateDto dto;
             try
             {
@@ -332,7 +356,9 @@ namespace CompGateApi.Endpoints
             if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest("Cannot edit a printed request.");
 
-            // update fields
+            // update metadata (no debit)
+            ent.VisaId = dto.VisaId;
+            ent.Quantity = dto.Quantity <= 0 ? 1 : dto.Quantity;
             ent.Branch = dto.Branch;
             ent.Date = dto.Date;
             ent.AccountHolderName = dto.AccountHolderName;
@@ -345,7 +371,6 @@ namespace CompGateApi.Endpoints
             ent.ForeignAmount = dto.ForeignAmount;
             ent.LocalAmount = dto.LocalAmount;
             ent.Pldedge = dto.Pldedge;
-            // leave Status & Reason unchanged
 
             await repo.UpdateAsync(ent);
 
@@ -353,7 +378,6 @@ namespace CompGateApi.Endpoints
             {
                 foreach (var file in form.Files)
                 {
-                    // 1️⃣ upload it
                     var attDto = await attRepo.Upload(
                         file,
                         me.CompanyId.Value,
@@ -362,7 +386,6 @@ namespace CompGateApi.Endpoints
                         createdBy: me.UserId.ToString()
                     );
 
-                    // 2️⃣ link it to this VisaRequest
                     await attRepo.LinkToVisaRequestAsync(attDto.Id, ent.Id);
                 }
             }
@@ -371,6 +394,9 @@ namespace CompGateApi.Endpoints
             {
                 Id = ent.Id,
                 UserId = ent.UserId,
+                CompanyId = ent.CompanyId,
+                VisaId = ent.VisaId,
+                Quantity = ent.Quantity,
                 Branch = ent.Branch,
                 Date = ent.Date,
                 AccountHolderName = ent.AccountHolderName,
@@ -404,6 +430,9 @@ namespace CompGateApi.Endpoints
             return Results.Ok(outDto);
         }
 
+        // ───────────────────────────────────────────────────────────────────
+        // Admin – List
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> GetAllAdmin(
             [FromServices] IVisaRequestRepository repo,
             [FromServices] ILogger<VisaRequestEndpoints> log,
@@ -418,6 +447,9 @@ namespace CompGateApi.Endpoints
             {
                 Id = v.Id,
                 UserId = v.UserId,
+                CompanyId = v.CompanyId,
+                VisaId = v.VisaId,
+                Quantity = v.Quantity,
                 Branch = v.Branch,
                 Date = v.Date,
                 AccountHolderName = v.AccountHolderName,
@@ -446,7 +478,12 @@ namespace CompGateApi.Endpoints
             });
         }
 
-        public static async Task<IResult> UpdateStatus(
+        // ───────────────────────────────────────────────────────────────────
+        // Admin – Update status:
+        //    - Approved → DEBIT (if not yet debited)
+        //    - Rejected → REFUND (if already debited)
+        // ───────────────────────────────────────────────────────────────────
+       public static async Task<IResult> UpdateStatus(
             int id,
             [FromBody] VisaRequestStatusUpdateDto dto,
             [FromServices] IVisaRequestRepository repo,
@@ -491,6 +528,12 @@ namespace CompGateApi.Endpoints
             return Results.Ok(outDto);
         }
 
+
+
+
+        // ───────────────────────────────────────────────────────────────────
+        // Admin – Get one
+        // ───────────────────────────────────────────────────────────────────
         public static async Task<IResult> GetByIdAdmin(
             int id,
             [FromServices] IVisaRequestRepository repo,
@@ -506,6 +549,9 @@ namespace CompGateApi.Endpoints
             {
                 Id = ent.Id,
                 UserId = ent.UserId,
+                CompanyId = ent.CompanyId,
+                VisaId = ent.VisaId,
+                Quantity = ent.Quantity,
                 Branch = ent.Branch,
                 Date = ent.Date,
                 AccountHolderName = ent.AccountHolderName,

@@ -39,7 +39,6 @@ namespace CompGateApi.Endpoints
                .Produces(404);
         }
 
-        // GET /api/admin/pricing?page=&limit=&trxCatId=&searchTerm=
         public static async Task<IResult> GetAll(
             [FromServices] IPricingRepository repo,
             [FromQuery] int page = 1,
@@ -61,35 +60,31 @@ namespace CompGateApi.Endpoints
                 Page = page,
                 Limit = limit,
                 TotalRecords = total,
-                TotalPages = (int)Math.Ceiling(total / (double)limit)
+                TotalPages = (int)System.Math.Ceiling(total / (double)limit)
             });
         }
 
-        // GET /api/admin/pricing/{id}
-        public static async Task<IResult> GetById(
-            [FromServices] IPricingRepository repo,
-            int id)
+        public static async Task<IResult> GetById([FromServices] IPricingRepository repo, int id)
         {
             var entity = await repo.GetByIdAsync(id);
             return entity is null ? Results.NotFound() : Results.Ok(ToDto(entity));
         }
 
-        // POST /api/admin/pricing
-        public static async Task<IResult> Create(
-            [FromServices] IPricingRepository repo,
-            [FromBody] PricingCreateDto dto)
+        public static async Task<IResult> Create([FromServices] IPricingRepository repo, [FromBody] PricingCreateDto dto)
         {
             var entity = new Pricing
             {
                 TrxCatId = dto.TrxCatId,
                 PctAmt = dto.PctAmt,
                 Price = dto.Price,
+                AmountRule = string.IsNullOrWhiteSpace(dto.AmountRule) ? null : dto.AmountRule.Trim(),
+                Unit = dto.Unit,
                 Description = dto.Description,
 
-                SGL1 = dto.SGL1,
-                DGL1 = dto.DGL1,
-                SGL2 = dto.SGL2,
-                DGL2 = dto.DGL2,
+                GL1 = dto.GL1,
+                GL2 = dto.GL2,
+                GL3 = dto.GL3,
+                GL4 = dto.GL4,
 
                 DTC = dto.DTC,
                 CTC = dto.CTC,
@@ -111,11 +106,7 @@ namespace CompGateApi.Endpoints
             }
         }
 
-        // PUT /api/admin/pricing/{id}
-        public static async Task<IResult> Update(
-            [FromServices] IPricingRepository repo,
-            int id,
-            [FromBody] PricingUpdateDto dto)
+        public static async Task<IResult> Update([FromServices] IPricingRepository repo, int id, [FromBody] PricingUpdateDto dto)
         {
             var toUpdate = new Pricing
             {
@@ -123,12 +114,14 @@ namespace CompGateApi.Endpoints
                 TrxCatId = dto.TrxCatId,
                 PctAmt = dto.PctAmt,
                 Price = dto.Price,
+                AmountRule = string.IsNullOrWhiteSpace(dto.AmountRule) ? null : dto.AmountRule.Trim(),
+                Unit = dto.Unit,
                 Description = dto.Description,
 
-                SGL1 = dto.SGL1,
-                DGL1 = dto.DGL1,
-                SGL2 = dto.SGL2,
-                DGL2 = dto.DGL2,
+                GL1 = dto.GL1,
+                GL2 = dto.GL2,
+                GL3 = dto.GL3,
+                GL4 = dto.GL4,
 
                 DTC = dto.DTC,
                 CTC = dto.CTC,
@@ -152,10 +145,7 @@ namespace CompGateApi.Endpoints
             }
         }
 
-        // DELETE /api/admin/pricing/{id}
-        public static async Task<IResult> Delete(
-            [FromServices] IPricingRepository repo,
-            int id)
+        public static async Task<IResult> Delete([FromServices] IPricingRepository repo, int id)
         {
             var ok = await repo.DeleteAsync(id);
             return ok ? Results.NoContent() : Results.NotFound();
@@ -167,12 +157,14 @@ namespace CompGateApi.Endpoints
             TrxCatId = p.TrxCatId,
             PctAmt = p.PctAmt,
             Price = p.Price,
+            AmountRule = p.AmountRule,
+            Unit = p.Unit,
             Description = p.Description,
 
-            SGL1 = p.SGL1,
-            DGL1 = p.DGL1,
-            SGL2 = p.SGL2,
-            DGL2 = p.DGL2,
+            GL1 = p.GL1,
+            GL2 = p.GL2,
+            GL3 = p.GL3,
+            GL4 = p.GL4,
 
             DTC = p.DTC,
             CTC = p.CTC,

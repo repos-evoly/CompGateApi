@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using CompGateApi.Data.Context;  // for Auditable
 namespace CompGateApi.Data.Models
 {
@@ -24,6 +25,12 @@ namespace CompGateApi.Data.Models
         // navigation
         public User User { get; set; } = null!;
         public Company Company { get; set; } = null!;
+
+        public int? TransferRequestId { get; set; }
+
+        /// <summary>Original bank referenceId used for the debit (needed for reversal).</summary>
+        [MaxLength(32)]
+        public string? BankReference { get; set; }
 
 
     }

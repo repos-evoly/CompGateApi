@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250901100628_PricingChanges")]
+    partial class PricingChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -629,10 +632,6 @@ namespace CompGateApi.Data.Migrations
                     b.Property<int?>("ApprovedByUserId")
                         .HasColumnType("int");
 
-                    b.Property<string>("BankReference")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("Beneficiary")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
@@ -677,9 +676,6 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<int?>("TransferRequestId")
-                        .HasColumnType("int");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -693,8 +689,6 @@ namespace CompGateApi.Data.Migrations
                     b.HasIndex("CompanyId");
 
                     b.HasIndex("RepresentativeId");
-
-                    b.HasIndex("TransferRequestId");
 
                     b.HasIndex("UserId");
 
@@ -1857,18 +1851,8 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<DateTimeOffset?>("ApprovalTimestamp")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int?>("ApprovedByUserId")
-                        .HasColumnType("int");
-
                     b.Property<Guid?>("AttachmentId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("BankReference")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Branch")
                         .HasMaxLength(100)
@@ -1914,9 +1898,6 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
-                    b.Property<int>("Quantity")
-                        .HasColumnType("int");
-
                     b.Property<string>("Reason")
                         .HasColumnType("nvarchar(max)");
 
@@ -1925,29 +1906,17 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<int?>("TransferRequestId")
-                        .HasColumnType("int");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
 
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int>("VisaId")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("ApprovedByUserId");
 
                     b.HasIndex("CompanyId");
 
-                    b.HasIndex("TransferRequestId");
-
                     b.HasIndex("UserId");
-
-                    b.HasIndex("VisaId");
 
                     b.ToTable("VisaRequests", (string)null);
                 });
@@ -2337,10 +2306,6 @@ namespace CompGateApi.Data.Migrations
                         .HasForeignKey("RepresentativeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("CompGateApi.Data.Models.TransferRequest", "TransferRequest")
-                        .WithMany()
-                        .HasForeignKey("TransferRequestId");
-
                     b.HasOne("CompGateApi.Data.Models.User", "User")
                         .WithMany("CheckRequests")
                         .HasForeignKey("UserId")
@@ -2352,8 +2317,6 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("Company");
 
                     b.Navigation("Representative");
-
-                    b.Navigation("TransferRequest");
 
                     b.Navigation("User");
                 });
@@ -2600,19 +2563,11 @@ namespace CompGateApi.Data.Migrations
 
             modelBuilder.Entity("CompGateApi.Data.Models.VisaRequest", b =>
                 {
-                    b.HasOne("CompGateApi.Data.Models.User", "ApprovedByUser")
-                        .WithMany()
-                        .HasForeignKey("ApprovedByUserId");
-
                     b.HasOne("CompGateApi.Data.Models.Company", "Company")
                         .WithMany("VisaRequests")
                         .HasForeignKey("CompanyId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("CompGateApi.Data.Models.TransferRequest", "TransferRequest")
-                        .WithMany()
-                        .HasForeignKey("TransferRequestId");
 
                     b.HasOne("CompGateApi.Data.Models.User", "User")
                         .WithMany("VisaRequests")
@@ -2620,21 +2575,9 @@ namespace CompGateApi.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CompGateApi.Data.Models.Visa", "Visa")
-                        .WithMany()
-                        .HasForeignKey("VisaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ApprovedByUser");
-
                     b.Navigation("Company");
 
-                    b.Navigation("TransferRequest");
-
                     b.Navigation("User");
-
-                    b.Navigation("Visa");
                 });
 
             modelBuilder.Entity("Employee", b =>

@@ -61,6 +61,11 @@ namespace CompGateApi.Data.Models
         public string Status { get; set; } = "Pending";
         public string? Reason { get; set; }
 
+        public int? TransferRequestId { get; set; }
+
+        [MaxLength(32)]
+        public string? BankReference { get; set; }
+
 
     }
 }

@@ -51,6 +51,8 @@ namespace CompGateApi.Core.Dtos
         public decimal Rate { get; set; }
         public string TransferMode { get; set; } = string.Empty;
         public string? Description { get; set; }
+
+        public string? BankReference { get; set; }
     }
 
     // What the client posts to update only the status

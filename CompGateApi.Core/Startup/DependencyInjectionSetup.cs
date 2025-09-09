@@ -91,6 +91,9 @@ namespace CompGateApi.Core.Startup
                                           "http://10.3.3.11:3012",
                                           "http://localhost:5000",
                                           "http://10.1.1.205:3012",
+                                         "http://192.168.0.245:3012",
+                                         "http://192.168.0.245:3013",
+                                          "http://localhost:3013",
                                           "http://10.1.1.205:3013")
                              .AllowAnyHeader()
                              .AllowAnyMethod()
@@ -348,6 +351,8 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<IPricingRepository, PricingRepository>();
 
       services.AddScoped<IVisaRepository, VisaRepository>();
+
+      services.AddScoped<IGenericTransferRepository, GenericTransferRepository>();
 
       return services;
     }

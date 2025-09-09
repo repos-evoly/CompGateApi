@@ -1,22 +1,30 @@
 // CompGateApi.Endpoints/CheckRequestEndpoints.cs
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
+using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace CompGateApi.Endpoints
 {
     public class CheckRequestEndpoints : IEndpoints
     {
+        // Configure your TransactionCategory for Check Requests
+        private const int TRXCAT_CHECKREQUEST = 5;   // ← set to your real category id
+        private const int DEFAULT_UNIT = 1;          // unit for check request pricing
+        private const string DEFAULT_CURRENCY = "LYD";
+
         public void RegisterEndpoints(WebApplication app)
         {
             // ── COMPANY PORTAL ─────────────────────────────────────────────
@@ -25,18 +33,15 @@ namespace CompGateApi.Endpoints
                 .WithTags("CheckRequests")
                 .RequireAuthorization("RequireCompanyUser");
 
-            // List all company check-requests
             company.MapGet("/", GetCompanyRequests)
                    .WithName("GetCompanyCheckRequests")
                    .Produces<PagedResult<CheckRequestDto>>(200);
 
-            // Get single by Id
             company.MapGet("/{id:int}", GetCompanyRequestById)
                    .WithName("GetCompanyCheckRequestById")
                    .Produces<CheckRequestDto>(200)
                    .Produces(404);
 
-            // Create new
             company.MapPost("/", CreateCompanyRequest)
                    .WithName("CreateCheckRequest")
                    .Accepts<CheckRequestCreateDto>("application/json")
@@ -45,12 +50,11 @@ namespace CompGateApi.Endpoints
                    .Produces(401);
 
             company.MapPut("/{id:int}", UpdateCompanyRequest)
-                    .WithName("UpdateCheckRequest")
-                    .Accepts<CheckRequestCreateDto>("application/json")
-                    .Produces<CheckRequestDto>(200)
-                    .Produces(400)
-                    .Produces(404);
-
+                   .WithName("UpdateCheckRequest")
+                   .Accepts<CheckRequestCreateDto>("application/json")
+                   .Produces<CheckRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
 
             // ── ADMIN PORTAL ───────────────────────────────────────────────
             var admin = app
@@ -87,17 +91,51 @@ namespace CompGateApi.Endpoints
             return id;
         }
 
+        // branch-aware GL1 resolver (same logic you use elsewhere)
+        private static string ResolveDestinationAccount(string? pricingGl1, string fromAccount, string? branchField)
+        {
+            if (string.IsNullOrWhiteSpace(pricingGl1))
+                throw new ArgumentException("Pricing.GL1 is not configured.");
+
+            if (!string.IsNullOrWhiteSpace(branchField) &&
+                branchField.Trim().Equals("xxxx", StringComparison.OrdinalIgnoreCase))
+            {
+                var senderBranch = (fromAccount?.Length >= 4) ? fromAccount.Substring(0, 4) : "";
+                if (string.IsNullOrWhiteSpace(senderBranch) || senderBranch.Length != 4)
+                    throw new ArgumentException("Cannot derive branch from sender account.");
+
+                if (pricingGl1.IndexOf("{BRANCH}", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return pricingGl1.Replace("{BRANCH}", senderBranch, StringComparison.OrdinalIgnoreCase);
+
+                if (pricingGl1.Length == 13 && fromAccount?.Length == 13)
+                    return senderBranch + pricingGl1.Substring(4);
+            }
+
+            return pricingGl1;
+        }
+
+        private static decimal SumLineItemsLyd(IEnumerable<CheckRequestLineItem> items)
+        {
+            decimal total = 0m;
+            foreach (var li in items)
+            {
+                if (!string.IsNullOrWhiteSpace(li.Lyd) && decimal.TryParse(li.Lyd, out var v))
+                    total += v;
+            }
+            return total;
+        }
+
         // ── COMPANY: list requests by company ───────────────────────────
         public static async Task<IResult> GetCompanyRequests(
-     HttpContext ctx,
-     ICheckRequestRepository repo,
-     IRepresentativeRepository repRepo,
-     IUserRepository userRepo,
-     ILogger<CheckRequestEndpoints> log,
-     [FromQuery] string? searchTerm,
-     [FromQuery] string? searchBy,
-     [FromQuery] int page = 1,
-     [FromQuery] int limit = 50)
+            HttpContext ctx,
+            ICheckRequestRepository repo,
+            IRepresentativeRepository repRepo,
+            IUserRepository userRepo,
+            ILogger<CheckRequestEndpoints> log,
+            [FromQuery] string? searchTerm,
+            [FromQuery] string? searchBy,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 50)
         {
             try
             {
@@ -130,17 +168,15 @@ namespace CompGateApi.Endpoints
                         Reason = r.Reason,
                         CreatedAt = r.CreatedAt,
                         UpdatedAt = r.UpdatedAt,
-                        LineItems = r.LineItems
-                                             .Select(li => new CheckRequestLineItemDto
-                                             {
-                                                 Id = li.Id,
-                                                 Dirham = li.Dirham,
-                                                 Lyd = li.Lyd
-                                             }).ToList(),
+                        LineItems = r.LineItems.Select(li => new CheckRequestLineItemDto
+                        {
+                            Id = li.Id,
+                            Dirham = li.Dirham,
+                            Lyd = li.Lyd
+                        }).ToList(),
                         RepresentativeId = r.RepresentativeId
                     };
 
-                    // **Populate the Representative DTO if we have an ID**
                     if (r.RepresentativeId.HasValue)
                     {
                         var rep = await repRepo.GetByIdAsync(r.RepresentativeId.Value);
@@ -150,8 +186,7 @@ namespace CompGateApi.Endpoints
                             {
                                 Id = rep.Id,
                                 Name = rep.Name,
-                                Number = rep.Number,
-                                // any other fields you need…
+                                Number = rep.Number
                             };
                         }
                     }
@@ -175,20 +210,18 @@ namespace CompGateApi.Endpoints
             }
         }
 
-
         // ── COMPANY: get single by id ─────────────────────────────────
         public static async Task<IResult> GetCompanyRequestById(
-    int id,
-    HttpContext ctx,
-    ICheckRequestRepository repo,
-    IRepresentativeRepository repRepo,    // ← add this
-    IUserRepository userRepo,
-    ILogger<CheckRequestEndpoints> log)
+            int id,
+            HttpContext ctx,
+            ICheckRequestRepository repo,
+            IRepresentativeRepository repRepo,
+            IUserRepository userRepo,
+            ILogger<CheckRequestEndpoints> log)
         {
             log.LogInformation("GetCompanyRequestById({Id})", id);
             try
             {
-                // 1️⃣ Authenticate
                 var raw = ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                              ?? ctx.User.FindFirst("nameid")?.Value;
                 if (!int.TryParse(raw, out var authId))
@@ -199,21 +232,14 @@ namespace CompGateApi.Endpoints
                 if (me == null || !me.CompanyId.HasValue)
                     return Results.Unauthorized();
 
-                // 2️⃣ Load the request
                 var ent = await repo.GetByIdAsync(id);
                 if (ent == null || ent.CompanyId != me.CompanyId.Value)
                     return Results.NotFound("Check request not found.");
 
-                // 3️⃣ Load its representative, if any
                 Representative? rep = null;
                 if (ent.RepresentativeId.HasValue)
-                {
                     rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
-                    if (rep == null)
-                        log.LogWarning("Representative {RepId} not found", ent.RepresentativeId);
-                }
 
-                // 4️⃣ Project to DTO
                 var dto = new CheckRequestDto
                 {
                     Id = ent.Id,
@@ -230,31 +256,25 @@ namespace CompGateApi.Endpoints
                     Reason = ent.Reason,
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt,
-
                     RepresentativeId = ent.RepresentativeId,
-                    Representative = rep == null
-                        ? null
-                        : new RepresentativeDto
-                        {
-                            Id = rep.Id,
-                            Name = rep.Name,
-                            Number = rep.Number,
-                            PassportNumber = rep.PassportNumber,
-                            IsActive = rep.IsActive,
-                            IsDeleted = rep.IsDeleted,
-                            PhotoUrl = rep.PhotoUrl,
-                            CreatedAt = rep.CreatedAt,
-                            UpdatedAt = rep.UpdatedAt
-                        },
-
-                    LineItems = ent.LineItems
-                                  .Select(li => new CheckRequestLineItemDto
-                                  {
-                                      Id = li.Id,
-                                      Dirham = li.Dirham,
-                                      Lyd = li.Lyd
-                                  })
-                                  .ToList()
+                    Representative = rep == null ? null : new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number,
+                        PassportNumber = rep.PassportNumber,
+                        IsActive = rep.IsActive,
+                        IsDeleted = rep.IsDeleted,
+                        PhotoUrl = rep.PhotoUrl,
+                        CreatedAt = rep.CreatedAt,
+                        UpdatedAt = rep.UpdatedAt
+                    },
+                    LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
+                    {
+                        Id = li.Id,
+                        Dirham = li.Dirham,
+                        Lyd = li.Lyd
+                    }).ToList()
                 };
 
                 return Results.Ok(dto);
@@ -266,13 +286,14 @@ namespace CompGateApi.Endpoints
             }
         }
 
-
-        // ── COMPANY: create new request ───────────────────────────────
+        // ── COMPANY: create new request (+ debit now) ─────────────────
         public static async Task<IResult> CreateCompanyRequest(
             [FromBody] CheckRequestCreateDto dto,
             HttpContext ctx,
             ICheckRequestRepository repo,
             IUserRepository userRepo,
+            IGenericTransferRepository genericTransferRepo,
+            CompGateApiDbContext db,
             IValidator<CheckRequestCreateDto> validator,
             ILogger<CheckRequestEndpoints> log)
         {
@@ -285,11 +306,10 @@ namespace CompGateApi.Endpoints
                 var authId = GetAuthUserId(ctx);
                 var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
                 var me = await userRepo.GetUserByAuthId(authId, bearer);
-                if (me == null) return Results.Unauthorized();
-
-                if (!me.CompanyId.HasValue)
+                if (me == null || !me.CompanyId.HasValue)
                     return Results.Unauthorized();
 
+                // 1) Persist request first (Pending)
                 var ent = new CheckRequest
                 {
                     UserId = me.UserId,
@@ -310,10 +330,91 @@ namespace CompGateApi.Endpoints
                         Lyd = li.Lyd
                     }).ToList()
                 };
-
                 await repo.CreateAsync(ent);
                 log.LogInformation("Created CheckRequest Id={Id}", ent.Id);
 
+                // 2) Pricing (TrxCatId=TRXCAT_CHECKREQUEST, Unit=DEFAULT_UNIT)
+                var pricing = await db.Pricings.AsNoTracking()
+                                  .Where(p => p.TrxCatId == TRXCAT_CHECKREQUEST && p.Unit == DEFAULT_UNIT)
+                                  .FirstOrDefaultAsync();
+                if (pricing == null)
+                    return Results.BadRequest($"Pricing not configured (TrxCatId={TRXCAT_CHECKREQUEST}, Unit={DEFAULT_UNIT}).");
+
+                // 3) Compute amount
+                decimal amountToCharge;
+                if (!string.IsNullOrWhiteSpace(pricing.AmountRule))
+                {
+                    if (pricing.AmountRule.Trim().Equals("amount", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Sum user-provided line items (LYD)
+                        amountToCharge = SumLineItemsLyd(ent.LineItems);
+                    }
+                    else if (decimal.TryParse(pricing.AmountRule, out var fixedVal))
+                    {
+                        amountToCharge = fixedVal;
+                    }
+                    else
+                    {
+                        amountToCharge = pricing.Price ?? 0m;
+                    }
+                }
+                else
+                {
+                    amountToCharge = pricing.Price ?? 0m;
+                }
+
+                if (amountToCharge <= 0m)
+                    return Results.BadRequest("Computed amount is invalid (<= 0). Check Pricing/AmountRule or line items.");
+
+                // 4) Validate source account from request
+                if (string.IsNullOrWhiteSpace(ent.AccountNum))
+                    return Results.BadRequest("AccountNum is required to debit the check request.");
+
+                // 5) Resolve destination account from GL1 (+ branch 'xxxx' rule)
+                string toAccount;
+                try
+                {
+                    toAccount = ResolveDestinationAccount(pricing.GL1, ent.AccountNum!, ent.Branch);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Failed to resolve destination account from GL1/Branch (CheckRequest).");
+                    return Results.BadRequest(ex.Message);
+                }
+
+                // 6) Narrative: pricing.NR2 preferred
+                var narrative = string.IsNullOrWhiteSpace(pricing.NR2)
+                    ? "Check request fee"
+                    : pricing.NR2;
+
+                // 7) Debit via GenericTransferRepository → CompanyGatewayPostTransfer
+                var debit = await genericTransferRepo.DebitForServiceAsync(
+                    userId: me.UserId,
+                    companyId: me.CompanyId.Value,
+                    servicePackageId: (me.ServicePackageId as int?) ?? 0,
+                    trxCategoryId: TRXCAT_CHECKREQUEST,
+                    fromAccount: ent.AccountNum!,
+                    toAccount: toAccount,
+                    amount: amountToCharge,
+                    description: "Check request fee",
+                    currencyCode: DEFAULT_CURRENCY,
+                    dtc: pricing.DTC,
+                    ctc: pricing.CTC,
+                    dtc2: pricing.DTC2,
+                    ctc2: pricing.CTC2,
+                    applySecondLeg: pricing.APPLYTR2,
+                    narrativeOverride: narrative
+                );
+
+                if (!debit.Success)
+                    return Results.BadRequest(debit.Error);
+
+                // 8) Link transfer + bank ref
+                ent.TransferRequestId = debit.Entity!.Id;
+                ent.BankReference = debit.BankReference;
+                await repo.UpdateAsync(ent);
+
+                // 9) return DTO
                 var outDto = new CheckRequestDto
                 {
                     Id = ent.Id,
@@ -337,6 +438,7 @@ namespace CompGateApi.Endpoints
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt
                 };
+
                 return Results.Created($"/api/checkrequests/{ent.Id}", outDto);
             }
             catch (UnauthorizedAccessException ex)
@@ -347,13 +449,13 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> UpdateCompanyRequest(
-    int id,
-    [FromBody] CheckRequestCreateDto dto,
-    HttpContext ctx,
-    ICheckRequestRepository repo,
-    IUserRepository userRepo,
-    IValidator<CheckRequestCreateDto> validator,
-    ILogger<CheckRequestEndpoints> log)
+            int id,
+            [FromBody] CheckRequestCreateDto dto,
+            HttpContext ctx,
+            ICheckRequestRepository repo,
+            IUserRepository userRepo,
+            IValidator<CheckRequestCreateDto> validator,
+            ILogger<CheckRequestEndpoints> log)
         {
             log.LogInformation("UpdateCompanyRequest payload: {@Dto}", dto);
 
@@ -414,8 +516,8 @@ namespace CompGateApi.Endpoints
                     Reason = ent.Reason,
                     RepresentativeId = ent.RepresentativeId ?? 0,
                     LineItems = ent.LineItems
-                                        .Select(li => new CheckRequestLineItemDto { Id = li.Id, Dirham = li.Dirham, Lyd = li.Lyd })
-                                        .ToList(),
+                        .Select(li => new CheckRequestLineItemDto { Id = li.Id, Dirham = li.Dirham, Lyd = li.Lyd })
+                        .ToList(),
                     CreatedAt = ent.CreatedAt,
                     UpdatedAt = ent.UpdatedAt
                 };
@@ -429,16 +531,15 @@ namespace CompGateApi.Endpoints
             }
         }
 
-
         // ── ADMIN: list all ───────────────────────────────────────────
         public static async Task<IResult> AdminGetAll(
-          ICheckRequestRepository repo,
-          IRepresentativeRepository repRepo,
-          ILogger<CheckRequestEndpoints> log,
-          [FromQuery] string? searchTerm,
-          [FromQuery] string? searchBy,
-          [FromQuery] int page = 1,
-          [FromQuery] int limit = 50)
+            ICheckRequestRepository repo,
+            IRepresentativeRepository repRepo,
+            ILogger<CheckRequestEndpoints> log,
+            [FromQuery] string? searchTerm,
+            [FromQuery] string? searchBy,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 50)
         {
             var list = await repo.GetAllAsync(searchTerm, searchBy, page, limit);
             var total = await repo.GetCountAsync(searchTerm, searchBy);
@@ -462,17 +563,15 @@ namespace CompGateApi.Endpoints
                     Reason = r.Reason,
                     CreatedAt = r.CreatedAt,
                     UpdatedAt = r.UpdatedAt,
-                    LineItems = r.LineItems
-                                            .Select(li => new CheckRequestLineItemDto
-                                            {
-                                                Id = li.Id,
-                                                Dirham = li.Dirham,
-                                                Lyd = li.Lyd
-                                            }).ToList(),
+                    LineItems = r.LineItems.Select(li => new CheckRequestLineItemDto
+                    {
+                        Id = li.Id,
+                        Dirham = li.Dirham,
+                        Lyd = li.Lyd
+                    }).ToList(),
                     RepresentativeId = r.RepresentativeId
                 };
 
-                // **Populate the Representative DTO if we have an ID**
                 if (r.RepresentativeId.HasValue)
                 {
                     var rep = await repRepo.GetByIdAsync(r.RepresentativeId.Value);
@@ -500,17 +599,15 @@ namespace CompGateApi.Endpoints
             });
         }
 
-
         // ── ADMIN: get by id ──────────────────────────────────────────
         public static async Task<IResult> AdminGetById(
-    int id,
-    [FromServices] ICheckRequestRepository repo,
-    [FromServices] IRepresentativeRepository repRepo,   // ← add this
-    [FromServices] ILogger<CheckRequestEndpoints> log)
+            int id,
+            [FromServices] ICheckRequestRepository repo,
+            [FromServices] IRepresentativeRepository repRepo,
+            [FromServices] ILogger<CheckRequestEndpoints> log)
         {
             log.LogInformation("AdminGetById({Id})", id);
 
-            // 1️⃣ Load the request
             var ent = await repo.GetByIdAsync(id);
             if (ent == null)
             {
@@ -518,16 +615,10 @@ namespace CompGateApi.Endpoints
                 return Results.NotFound("Check request not found.");
             }
 
-            // 2️⃣ Load its representative, if any
             Representative? rep = null;
             if (ent.RepresentativeId.HasValue)
-            {
                 rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
-                if (rep == null)
-                    log.LogWarning("Representative {RepId} not found", ent.RepresentativeId);
-            }
 
-            // 3️⃣ Project to DTO
             var dto = new CheckRequestDto
             {
                 Id = ent.Id,
@@ -544,43 +635,38 @@ namespace CompGateApi.Endpoints
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt,
-
                 RepresentativeId = ent.RepresentativeId,
-                Representative = rep == null
-                    ? null
-                    : new RepresentativeDto
-                    {
-                        Id = rep.Id,
-                        Name = rep.Name,
-                        Number = rep.Number,
-                        PassportNumber = rep.PassportNumber,
-                        IsActive = rep.IsActive,
-                        IsDeleted = rep.IsDeleted,
-                        PhotoUrl = rep.PhotoUrl,
-                        CreatedAt = rep.CreatedAt,
-                        UpdatedAt = rep.UpdatedAt
-                    },
-
-                LineItems = ent.LineItems
-                              .Select(li => new CheckRequestLineItemDto
-                              {
-                                  Id = li.Id,
-                                  Dirham = li.Dirham,
-                                  Lyd = li.Lyd
-                              })
-                              .ToList()
+                Representative = rep == null ? null : new RepresentativeDto
+                {
+                    Id = rep.Id,
+                    Name = rep.Name,
+                    Number = rep.Number,
+                    PassportNumber = rep.PassportNumber,
+                    IsActive = rep.IsActive,
+                    IsDeleted = rep.IsDeleted,
+                    PhotoUrl = rep.PhotoUrl,
+                    CreatedAt = rep.CreatedAt,
+                    UpdatedAt = rep.UpdatedAt
+                },
+                LineItems = ent.LineItems.Select(li => new CheckRequestLineItemDto
+                {
+                    Id = li.Id,
+                    Dirham = li.Dirham,
+                    Lyd = li.Lyd
+                }).ToList()
             };
 
             return Results.Ok(dto);
         }
 
-        // ── ADMIN: update status & audit ─────────────────────────────
+        // ── ADMIN: update status (refund if Rejected) ─────────────────
         public static async Task<IResult> AdminUpdateStatus(
             int id,
             [FromBody] CheckRequestStatusUpdateDto dto,
             [FromServices] ICheckRequestRepository repo,
+            [FromServices] IGenericTransferRepository genericTransferRepo,
+            [FromServices] CompGateApiDbContext db,
             [FromServices] IValidator<CheckRequestStatusUpdateDto> validator,
-            // [FromServices] IAuditLogRepository auditRepo,
             HttpContext ctx)
         {
             var validation = await validator.ValidateAsync(dto);
@@ -591,16 +677,43 @@ namespace CompGateApi.Endpoints
             if (ent == null)
                 return Results.NotFound("Check request not found.");
 
+            // If Rejected and we have a transfer → reverse money back to customer
+            if (dto.Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase)
+                && ent.TransferRequestId.HasValue)
+            {
+                var tr = await db.TransferRequests.AsNoTracking()
+                            .FirstOrDefaultAsync(t => t.Id == ent.TransferRequestId.Value);
+
+                if (tr == null)
+                    return Results.BadRequest("Refund failed: original transfer not found.");
+
+                var originalRef = !string.IsNullOrWhiteSpace(ent.BankReference)
+                    ? ent.BankReference!
+                    : (string.IsNullOrWhiteSpace(tr.BankReference) ? null : tr.BankReference);
+
+                if (string.IsNullOrWhiteSpace(originalRef))
+                    return Results.BadRequest("Refund failed: original bank reference missing.");
+
+                var srcAcc = tr.ToAccount;   // fees (received) → debit
+                var dstAcc = tr.FromAccount; // customer (sent)  → credit
+
+                var rv = await genericTransferRepo.RefundByOriginalRefAsync(
+                    originalBankRef: originalRef!,
+                    currencyCode: tr.CurrencyId == 2 ? "USD" : tr.CurrencyId == 3 ? "EUR" : DEFAULT_CURRENCY,
+                    srcAcc: srcAcc,
+                    dstAcc: dstAcc,
+                    srcAcc2: srcAcc,
+                    dstAcc2: dstAcc,
+                    amount: tr.Amount,
+                    note: $"Refund check request #{ent.Id}");
+
+                if (!rv.Success)
+                    return Results.BadRequest("Refund failed: " + rv.Error);
+            }
+
             ent.Status = dto.Status;
             ent.Reason = dto.Reason;
             await repo.UpdateAsync(ent);
-
-            var adminId = GetAuthUserId(ctx);
-            // await auditRepo.CreateAsync(new AuditLog
-            // {
-            //     UserId = adminId,
-            //     Action = $"Updated CheckRequest {id} status to '{dto.Status}'"
-            // });
 
             var dtoOut = new CheckRequestDto
             {

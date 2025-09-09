@@ -9,12 +9,20 @@ namespace CompGateApi.Core.Dtos
 
         public decimal? PctAmt { get; set; }
         public decimal? Price { get; set; }
+
+        /// <summary>
+        /// "amount" to take from request; or any numeric string like "20" to force fixed price.
+        /// If null/empty, consumers should fallback to Price.
+        /// </summary>
+        public string? AmountRule { get; set; }
+
+        public int Unit { get; set; } = 1;
         public string? Description { get; set; }
 
-        public string? SGL1 { get; set; }
-        public string? DGL1 { get; set; }
-        public string? SGL2 { get; set; }
-        public string? DGL2 { get; set; }
+        public string? GL1 { get; set; }
+        public string? GL2 { get; set; }
+        public string? GL3 { get; set; }
+        public string? GL4 { get; set; }
 
         public string? DTC { get; set; }
         public string? CTC { get; set; }
@@ -32,12 +40,21 @@ namespace CompGateApi.Core.Dtos
 
         public decimal? PctAmt { get; set; }
         public decimal? Price { get; set; }
+
+        /// <summary>
+        /// "amount" to take from request; or any numeric string like "20".
+        /// Optional; if omitted, consumers fallback to Price.
+        /// </summary>
+        [MaxLength(50)]
+        public string? AmountRule { get; set; }
+
+        public int Unit { get; set; } = 1;
         public string? Description { get; set; }
 
-        public string? SGL1 { get; set; }
-        public string? DGL1 { get; set; }
-        public string? SGL2 { get; set; }
-        public string? DGL2 { get; set; }
+        public string? GL1 { get; set; }
+        public string? GL2 { get; set; }
+        public string? GL3 { get; set; }
+        public string? GL4 { get; set; }
 
         public string? DTC { get; set; }
         public string? CTC { get; set; }
@@ -55,12 +72,21 @@ namespace CompGateApi.Core.Dtos
 
         public decimal? PctAmt { get; set; }
         public decimal? Price { get; set; }
+
+        /// <summary>
+        /// "amount" to take from request; or any numeric string like "20".
+        /// Optional; if omitted, consumers fallback to Price.
+        /// </summary>
+        [MaxLength(50)]
+        public string? AmountRule { get; set; }
+
+        public int Unit { get; set; } = 1;
         public string? Description { get; set; }
 
-        public string? SGL1 { get; set; }
-        public string? DGL1 { get; set; }
-        public string? SGL2 { get; set; }
-        public string? DGL2 { get; set; }
+        public string? GL1 { get; set; }
+        public string? GL2 { get; set; }
+        public string? GL3 { get; set; }
+        public string? GL4 { get; set; }
 
         public string? DTC { get; set; }
         public string? CTC { get; set; }

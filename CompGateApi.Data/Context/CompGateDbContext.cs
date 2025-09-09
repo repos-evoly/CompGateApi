@@ -627,26 +627,34 @@ namespace CompGateApi.Data.Context
 
                      // ── PRICING ──────────────────────────────────────────
                      builder.Entity<Pricing>(b =>
-                     {
-                            b.ToTable("Pricing");
-                            b.HasKey(p => p.Id);
-                            b.Property(p => p.PctAmt).HasPrecision(18, 4);
-                            b.Property(p => p.Price).HasPrecision(18, 4);
-                            b.Property(p => p.Description).HasMaxLength(500);
-                            b.Property(p => p.SGL1).HasMaxLength(50);
-                            b.Property(p => p.DGL1).HasMaxLength(50);
-                            b.Property(p => p.SGL2).HasMaxLength(50);
-                            b.Property(p => p.DGL2).HasMaxLength(50);
-                            b.Property(p => p.DTC).HasMaxLength(50);
-                            b.Property(p => p.CTC).HasMaxLength(50);
-                            b.Property(p => p.DTC2).HasMaxLength(50);
-                            b.Property(p => p.CTC2).HasMaxLength(50);
-                            b.Property(p => p.NR2).HasMaxLength(500);
-                            b.HasOne(p => p.TransactionCategory);
-                     });
+              {
+                     b.ToTable("Pricing");
+                     b.HasKey(p => p.Id);
 
-                
-                  
+                     b.Property(p => p.PctAmt).HasPrecision(18, 4);
+                     b.Property(p => p.Price).HasPrecision(18, 4);
+                     b.Property(p => p.Unit).HasDefaultValue(1);
+
+                     b.Property(p => p.Description).HasMaxLength(500);
+
+                     b.Property(p => p.GL1).HasMaxLength(50);
+                     b.Property(p => p.GL2).HasMaxLength(50);
+                     b.Property(p => p.GL3).HasMaxLength(50);
+                     b.Property(p => p.GL4).HasMaxLength(50);
+
+                     b.Property(p => p.DTC).HasMaxLength(50);
+                     b.Property(p => p.CTC).HasMaxLength(50);
+                     b.Property(p => p.DTC2).HasMaxLength(50);
+                     b.Property(p => p.CTC2).HasMaxLength(50);
+
+                     b.Property(p => p.NR2).HasMaxLength(500);
+
+                     b.HasOne(p => p.TransactionCategory);
+              });
+
+
+
+
 
               }
 

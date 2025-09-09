@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using CompGateApi.Data.Migrations;
+
 using CompGateApi.Data.Models;
 
 namespace CompGateApi.Core.Dtos

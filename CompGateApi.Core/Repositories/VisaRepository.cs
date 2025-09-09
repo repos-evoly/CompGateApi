@@ -52,6 +52,7 @@ namespace CompGateApi.Data.Repositories
             existing.Price = entity.Price;
             existing.DescriptionEn = entity.DescriptionEn;
             existing.DescriptionAr = entity.DescriptionAr;
+            
 
             await _db.SaveChangesAsync(ct);
             return existing;
