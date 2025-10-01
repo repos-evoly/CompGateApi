@@ -63,22 +63,44 @@ namespace CompGateApi.Data.Repositories
 
         public async Task<IList<CblRequest>> GetAllAsync(string? searchTerm, string? searchBy, int page, int limit)
         {
-            var q = _ctx.CblRequests.AsQueryable();
+            var q = _ctx.CblRequests
+                .Include(r => r.Company) // allow filters on Company
+                .AsQueryable();
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                    case "companycode":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Code, $"%{term}%"));
+                        break;
+
+                    case "company":
+                    case "companyname":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Name, $"%{term}%"));
+                        break;
+
                     case "status":
-                        q = q.Where(r => r.Status!.Contains(searchTerm));
+                        q = q.Where(r => r.Status != null && EF.Functions.Like(r.Status, $"%{term}%"));
                         break;
+
                     case "party":
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm));
+                        q = q.Where(r => r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%"));
                         break;
+
                     default:
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm) || r.Status!.Contains(searchTerm));
+                        q = q.Where(r =>
+                            (r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%")) ||
+                            (r.Status != null && EF.Functions.Like(r.Status, $"%{term}%")) ||
+                            (r.Company != null &&
+                                (EF.Functions.Like(r.Company.Code, $"%{term}%") ||
+                                 EF.Functions.Like(r.Company.Name, $"%{term}%"))));
                         break;
                 }
             }
+
             return await q
                 .OrderByDescending(r => r.CreatedAt)
                 .Skip((page - 1) * limit)
@@ -89,23 +111,45 @@ namespace CompGateApi.Data.Repositories
 
         public async Task<int> GetCountAsync(string? searchTerm, string? searchBy)
         {
-            var q = _ctx.CblRequests.AsQueryable();
+            var q = _ctx.CblRequests
+                .Include(r => r.Company) // keep consistent with GetAllAsync
+                .AsQueryable();
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                    case "companycode":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Code, $"%{term}%"));
+                        break;
+
+                    case "company":
+                    case "companyname":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Name, $"%{term}%"));
+                        break;
+
                     case "status":
-                        q = q.Where(r => r.Status!.Contains(searchTerm));
+                        q = q.Where(r => r.Status != null && EF.Functions.Like(r.Status, $"%{term}%"));
                         break;
+
                     case "party":
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm));
+                        q = q.Where(r => r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%"));
                         break;
+
                     default:
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm) || r.Status!.Contains(searchTerm));
+                        q = q.Where(r =>
+                            (r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%")) ||
+                            (r.Status != null && EF.Functions.Like(r.Status, $"%{term}%")) ||
+                            (r.Company != null &&
+                                (EF.Functions.Like(r.Company.Code, $"%{term}%") ||
+                                 EF.Functions.Like(r.Company.Name, $"%{term}%"))));
                         break;
                 }
             }
-            return await q.CountAsync();
+
+            return await q.AsNoTracking().CountAsync();
         }
 
         public async Task<CblRequest?> GetByIdAsync(int id)
@@ -139,24 +183,40 @@ namespace CompGateApi.Data.Repositories
         }
 
         public async Task<IList<CblRequest>> GetAllByCompanyAsync(
-    int companyId, string? searchTerm, string? searchBy, int page, int limit)
+      int companyId, string? searchTerm, string? searchBy, int page, int limit)
         {
-            var q = _ctx.CblRequests.Where(r => r.CompanyId == companyId);
+            var q = _ctx.CblRequests
+                .Where(r => r.CompanyId == companyId)            // ✅ filter by company
+                .Include(r => r.Company)
+                .Include(r => r.Officials)
+                .Include(r => r.Signatures)
+                .AsQueryable();
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Code, $"%{term}%"));
+                        break;
                     case "status":
-                        q = q.Where(r => r.Status!.Contains(searchTerm)); break;
+                        q = q.Where(r => r.Status != null && EF.Functions.Like(r.Status, $"%{term}%"));
+                        break;
                     case "party":
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm)); break;
+                        q = q.Where(r => r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%"));
+                        break;
                     default:
                         q = q.Where(r =>
-                            r.PartyName!.Contains(searchTerm) ||
-                            r.Status!.Contains(searchTerm));
+                            (r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%")) ||
+                            (r.Status != null && EF.Functions.Like(r.Status, $"%{term}%")) ||
+                            (r.Company != null &&
+                                (EF.Functions.Like(r.Company.Code, $"%{term}%") ||
+                                 EF.Functions.Like(r.Company.Name, $"%{term}%"))));
                         break;
                 }
             }
+
             return await q
                 .OrderByDescending(r => r.CreatedAt)
                 .Skip((page - 1) * limit)
@@ -168,23 +228,38 @@ namespace CompGateApi.Data.Repositories
         public async Task<int> GetCountByCompanyAsync(
             int companyId, string? searchTerm, string? searchBy)
         {
-            var q = _ctx.CblRequests.Where(r => r.CompanyId == companyId);
+            var q = _ctx.CblRequests
+                .Where(r => r.CompanyId == companyId)            // ✅ filter by company
+                .Include(r => r.Company)
+                .AsQueryable();
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim();
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                        q = q.Where(r => r.Company != null && EF.Functions.Like(r.Company.Code, $"%{term}%"));
+                        break;
                     case "status":
-                        q = q.Where(r => r.Status!.Contains(searchTerm)); break;
+                        q = q.Where(r => r.Status != null && EF.Functions.Like(r.Status, $"%{term}%"));
+                        break;
                     case "party":
-                        q = q.Where(r => r.PartyName!.Contains(searchTerm)); break;
+                        q = q.Where(r => r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%"));
+                        break;
                     default:
                         q = q.Where(r =>
-                            r.PartyName!.Contains(searchTerm) ||
-                            r.Status!.Contains(searchTerm));
+                            (r.PartyName != null && EF.Functions.Like(r.PartyName, $"%{term}%")) ||
+                            (r.Status != null && EF.Functions.Like(r.Status, $"%{term}%")) ||
+                            (r.Company != null &&
+                                (EF.Functions.Like(r.Company.Code, $"%{term}%") ||
+                                 EF.Functions.Like(r.Company.Name, $"%{term}%"))));
                         break;
                 }
             }
-            return await q.CountAsync();
+
+            return await q.AsNoTracking().CountAsync();
         }
+
     }
 }

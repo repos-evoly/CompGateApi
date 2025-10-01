@@ -1,3 +1,4 @@
+// CompGateApi.Endpoints/CreditFacilitiesOrLetterOfGuaranteeRequestEndpoints.cs
 using System;
 using System.Linq;
 using System.Security.Claims;
@@ -22,7 +23,6 @@ namespace CompGateApi.Endpoints
                 .MapGroup("/api/creditfacilities")
                 .WithTags("CreditFacilities")
                 .RequireAuthorization("RequireCompanyUser");
-            // .RequireAuthorization("CanRequestCreditFacilities");
 
             company.MapGet("/", GetMyRequests)
                    .Produces<PagedResult<CreditFacilitiesOrLetterOfGuaranteeRequestDto>>(200);
@@ -43,12 +43,10 @@ namespace CompGateApi.Endpoints
                 .Produces(400)
                 .Produces(404);
 
-
             var admin = app
                 .MapGroup("/api/admin/creditfacilities")
                 .WithTags("CreditFacilities")
                 .RequireAuthorization("RequireAdminUser");
-            // .RequireAuthorization("AdminAccess");
 
             admin.MapGet("/", GetAllAdmin)
                  .Produces<PagedResult<CreditFacilitiesOrLetterOfGuaranteeRequestDto>>(200);
@@ -98,12 +96,14 @@ namespace CompGateApi.Endpoints
                 UserId = r.UserId,
                 AccountNumber = r.AccountNumber,
                 Date = r.Date,
+                ValidUntil = r.ValidUntil,                         // NEW
                 Amount = r.Amount,
                 Purpose = r.Purpose,
                 AdditionalInfo = r.AdditionalInfo,
                 Curr = r.Curr,
                 ReferenceNumber = r.ReferenceNumber,
                 Type = r.Type,
+                LetterOfGuarenteePct = r.LetterOfGuarenteePct,     // NEW
                 Status = r.Status,
                 Reason = r.Reason,
                 CreatedAt = r.CreatedAt,
@@ -143,12 +143,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                       // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,   // NEW
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -162,12 +164,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
             IUserRepository userRepo)
-        // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto> validator)
         {
-            // var validation = await validator.ValidateAsync(dto);
-            // if (!validation.IsValid)
-            //     return Results.BadRequest(validation.Errors.Select(e => e.ErrorMessage));
-
             if (!TryGetAuthUserId(ctx, out var auth))
                 return Results.Unauthorized();
 
@@ -183,12 +180,14 @@ namespace CompGateApi.Endpoints
                 AccountNumber = dto.AccountNumber,
                 CompanyId = me.CompanyId.Value,
                 Date = dto.Date,
+                ValidUntil = dto.ValidUntil,                       // NEW
                 Amount = dto.Amount,
                 Purpose = dto.Purpose,
                 AdditionalInfo = dto.AdditionalInfo,
                 Curr = dto.Curr,
                 ReferenceNumber = dto.ReferenceNumber,
                 Type = dto.Type,
+                LetterOfGuarenteePct = dto.LetterOfGuarenteePct,   // NEW
                 Status = "Pending"
             };
 
@@ -200,12 +199,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                       // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,   // NEW
                 Status = ent.Status,
                 CreatedAt = ent.CreatedAt,
                 UpdatedAt = ent.UpdatedAt
@@ -214,16 +215,15 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> UpdateRequest(
-    int id,
-    [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto dto,
-    HttpContext ctx,
-    ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
-    IUserRepository userRepo,
-    ILogger<CreditFacilitiesOrLetterOfGuaranteeRequestEndpoints> log)
+            int id,
+            [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto dto,
+            HttpContext ctx,
+            ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
+            IUserRepository userRepo,
+            ILogger<CreditFacilitiesOrLetterOfGuaranteeRequestEndpoints> log)
         {
             log.LogInformation("UpdateRequest payload: {@Dto}", dto);
 
-            // auth
             if (!TryGetAuthUserId(ctx, out var auth))
                 return Results.Unauthorized();
 
@@ -232,7 +232,6 @@ namespace CompGateApi.Endpoints
             if (me == null || me.CompanyId == null)
                 return Results.Unauthorized();
 
-            // fetch entity
             var ent = await repo.GetByIdAsync(id);
             if (ent == null || ent.CompanyId != me.CompanyId.Value)
                 return Results.NotFound();
@@ -240,16 +239,16 @@ namespace CompGateApi.Endpoints
             if (ent.Status.Equals("printed", StringComparison.OrdinalIgnoreCase))
                 return Results.BadRequest("Cannot edit a printed form.");
 
-            // update fields
             ent.AccountNumber = dto.AccountNumber;
             ent.Date = dto.Date;
+            ent.ValidUntil = dto.ValidUntil;                         // NEW
             ent.Amount = dto.Amount;
             ent.Purpose = dto.Purpose;
             ent.AdditionalInfo = dto.AdditionalInfo;
             ent.Curr = dto.Curr;
             ent.ReferenceNumber = dto.ReferenceNumber;
             ent.Type = dto.Type;
-            // leave Status/Reason untouched
+            ent.LetterOfGuarenteePct = dto.LetterOfGuarenteePct;     // NEW
 
             await repo.UpdateAsync(ent);
             log.LogInformation("Updated CreditFacilities request Id={Id}", id);
@@ -260,12 +259,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                         // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,     // NEW
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -275,9 +276,8 @@ namespace CompGateApi.Endpoints
             return Results.Ok(outDto);
         }
 
-
         public static async Task<IResult> GetAllAdmin(
-            ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo,
+            ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo, 
             ILogger<CreditFacilitiesOrLetterOfGuaranteeRequestEndpoints> log,
             [FromQuery] string? searchTerm,
             [FromQuery] string? searchBy,
@@ -293,12 +293,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                         // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,     // NEW
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -328,12 +330,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                         // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,     // NEW
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,
@@ -346,12 +350,7 @@ namespace CompGateApi.Endpoints
             int id,
             [FromBody] CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto dto,
             ICreditFacilitiesOrLetterOfGuaranteeRequestRepository repo)
-        // IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto> validator)
         {
-            // var res = await validator.ValidateAsync(dto);
-            // if (!res.IsValid)
-            //     return Results.BadRequest(res.Errors.Select(e => e.ErrorMessage));
-
             var ent = await repo.GetByIdAsync(id);
             if (ent == null) return Results.NotFound();
 
@@ -367,12 +366,14 @@ namespace CompGateApi.Endpoints
                 UserId = ent.UserId,
                 AccountNumber = ent.AccountNumber,
                 Date = ent.Date,
+                ValidUntil = ent.ValidUntil,                         // NEW
                 Amount = ent.Amount,
                 Purpose = ent.Purpose,
                 AdditionalInfo = ent.AdditionalInfo,
                 Curr = ent.Curr,
                 ReferenceNumber = ent.ReferenceNumber,
                 Type = ent.Type,
+                LetterOfGuarenteePct = ent.LetterOfGuarenteePct,     // NEW
                 Status = ent.Status,
                 Reason = ent.Reason,
                 CreatedAt = ent.CreatedAt,

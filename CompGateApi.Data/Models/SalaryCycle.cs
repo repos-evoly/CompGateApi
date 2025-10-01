@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using CompGateApi.Data.Models;
-public class SalaryCycle: Auditable
+public class SalaryCycle : Auditable
 {
     public int Id { get; set; }
     public int CompanyId { get; set; }
@@ -19,6 +19,15 @@ public class SalaryCycle: Auditable
 
     [Column(TypeName = "decimal(18,2)")]
     public decimal TotalAmount { get; set; }
+
+    [MaxLength(32)]
+    public string? BankReference { get; set; }       // HID/referenceId sent to bank
+
+    [Column(TypeName = "nvarchar(max)")]
+    public string? BankResponseRaw { get; set; }
+
+    [MaxLength(32)] public string? BankFeeReference { get; set; }
+    public string? BankFeeResponseRaw { get; set; }
 
     public ICollection<SalaryEntry> Entries { get; set; } = new List<SalaryEntry>();
 }

@@ -94,6 +94,7 @@ namespace CompGateApi.Core.Startup
                                          "http://192.168.0.245:3012",
                                          "http://192.168.0.245:3013",
                                           "http://localhost:3013",
+                                          "https://webanking.bcd.ly/Companygw",
                                           "http://10.1.1.205:3013")
                              .AllowAnyHeader()
                              .AllowAnyMethod()

@@ -1,6 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // CompGateApi.Data.Repositories/CertifiedBankStatementRequestRepository.cs
-// ─────────────────────────────────────────────────────────────────────────────
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +15,7 @@ namespace CompGateApi.Data.Repositories
         public CertifiedBankStatementRequestRepository(CompGateApiDbContext context)
             => _context = context;
 
-        // COMPANY: only this company’s requests
+        // ---------------- COMPANY SCOPE ----------------
         public async Task<IList<CertifiedBankStatementRequest>> GetAllByCompanyAsync(
             int companyId, string? searchTerm, string? searchBy, int page, int limit)
         {
@@ -26,32 +24,38 @@ namespace CompGateApi.Data.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim().ToLower();
+
                 switch ((searchBy ?? "").ToLower())
                 {
                     case "holder":
-                        q = q.Where(r => r.AccountHolderName!.Contains(searchTerm));
+                        q = q.Where(r => r.AccountHolderName != null &&
+                                         r.AccountHolderName.ToLower().Contains(term));
                         break;
+
                     case "authname":
-                        q = q.Where(r => r.AuthorizedOnTheAccountName!.Contains(searchTerm));
+                        q = q.Where(r => r.AuthorizedOnTheAccountName != null &&
+                                         r.AuthorizedOnTheAccountName.ToLower().Contains(term));
                         break;
+
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(searchTerm));
+                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
                         break;
+
                     default:
                         q = q.Where(r =>
-                            r.AccountHolderName!.Contains(searchTerm) ||
-                            r.AuthorizedOnTheAccountName!.Contains(searchTerm) ||
-                            r.AccountNumber.ToString().Contains(searchTerm));
+                            (r.AccountHolderName != null && r.AccountHolderName.ToLower().Contains(term)) ||
+                            (r.AuthorizedOnTheAccountName != null && r.AuthorizedOnTheAccountName.ToLower().Contains(term)) ||
+                            r.AccountNumber.ToString().Contains(term));
                         break;
                 }
             }
 
-            return await q
-                .OrderByDescending(r => r.CreatedAt)
-                .Skip((page - 1) * limit)
-                .Take(limit)
-                .AsNoTracking()
-                .ToListAsync();
+            return await q.OrderByDescending(r => r.CreatedAt)
+                          .Skip((page - 1) * limit)
+                          .Take(limit)
+                          .AsNoTracking()
+                          .ToListAsync();
         }
 
         public async Task<int> GetCountByCompanyAsync(
@@ -62,22 +66,29 @@ namespace CompGateApi.Data.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim().ToLower();
+
                 switch ((searchBy ?? "").ToLower())
                 {
                     case "holder":
-                        q = q.Where(r => r.AccountHolderName!.Contains(searchTerm));
+                        q = q.Where(r => r.AccountHolderName != null &&
+                                         r.AccountHolderName.ToLower().Contains(term));
                         break;
+
                     case "authname":
-                        q = q.Where(r => r.AuthorizedOnTheAccountName!.Contains(searchTerm));
+                        q = q.Where(r => r.AuthorizedOnTheAccountName != null &&
+                                         r.AuthorizedOnTheAccountName.ToLower().Contains(term));
                         break;
+
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(searchTerm));
+                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
                         break;
+
                     default:
                         q = q.Where(r =>
-                            r.AccountHolderName!.Contains(searchTerm) ||
-                            r.AuthorizedOnTheAccountName!.Contains(searchTerm) ||
-                            r.AccountNumber.ToString().Contains(searchTerm));
+                            (r.AccountHolderName != null && r.AccountHolderName.ToLower().Contains(term)) ||
+                            (r.AuthorizedOnTheAccountName != null && r.AuthorizedOnTheAccountName.ToLower().Contains(term)) ||
+                            r.AccountNumber.ToString().Contains(term));
                         break;
                 }
             }
@@ -85,70 +96,122 @@ namespace CompGateApi.Data.Repositories
             return await q.CountAsync();
         }
 
-        // ADMIN: all requests
+        // ---------------- ADMIN SCOPE ----------------
         public async Task<IList<CertifiedBankStatementRequest>> GetAllAsync(
             string? searchTerm, string? searchBy, int page, int limit)
         {
-            var q = _context.CertifiedBankStatementRequests.AsQueryable();
+            var q = _context.CertifiedBankStatementRequests
+                            .Include(r => r.Company) // needed for Company filters
+                            .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim().ToLower();
+                var like = $"%{term}%";
+
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                    case "companycode":
+                        q = q.Where(r => r.Company != null &&
+                                         r.Company.Code != null &&
+                                         EF.Functions.Like(r.Company.Code.ToLower(), like));
+                        break;
+
+                    case "company":
+                    case "companyname":
+                        q = q.Where(r => r.Company != null &&
+                                         r.Company.Name != null &&
+                                         EF.Functions.Like(r.Company.Name.ToLower(), like));
+                        break;
+
                     case "holder":
-                        q = q.Where(r => r.AccountHolderName!.Contains(searchTerm));
+                        q = q.Where(r => r.AccountHolderName != null &&
+                                         EF.Functions.Like(r.AccountHolderName.ToLower(), like));
                         break;
+
                     case "authname":
-                        q = q.Where(r => r.AuthorizedOnTheAccountName!.Contains(searchTerm));
+                        q = q.Where(r => r.AuthorizedOnTheAccountName != null &&
+                                         EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like));
                         break;
+
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(searchTerm));
+                        // If AccountNumber is numeric, ToString may not translate for some providers.
+                        // If it doesn’t, consider storing a normalized searchable shadow column.
+                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
                         break;
+
                     default:
                         q = q.Where(r =>
-                            r.AccountHolderName!.Contains(searchTerm) ||
-                            r.AuthorizedOnTheAccountName!.Contains(searchTerm) ||
-                            r.AccountNumber.ToString().Contains(searchTerm));
+                            (r.AccountHolderName != null && EF.Functions.Like(r.AccountHolderName.ToLower(), like)) ||
+                            (r.AuthorizedOnTheAccountName != null && EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like)) ||
+                            r.AccountNumber.ToString().Contains(term) ||
+                            (r.Company != null && r.Company.Code != null && EF.Functions.Like(r.Company.Code.ToLower(), like)) ||
+                            (r.Company != null && r.Company.Name != null && EF.Functions.Like(r.Company.Name.ToLower(), like)));
                         break;
                 }
             }
 
-            return await q
-                .OrderByDescending(r => r.CreatedAt)
-                .Skip((page - 1) * limit)
-                .Take(limit)
-                .AsNoTracking()
-                .ToListAsync();
+            return await q.OrderByDescending(r => r.CreatedAt)
+                          .Skip((page - 1) * limit)
+                          .Take(limit)
+                          .AsNoTracking()
+                          .ToListAsync();
         }
 
-        public async Task<int> GetCountAsync(
-            string? searchTerm, string? searchBy)
+        public async Task<int> GetCountAsync(string? searchTerm, string? searchBy)
         {
-            var q = _context.CertifiedBankStatementRequests.AsQueryable();
+            var q = _context.CertifiedBankStatementRequests
+                            .Include(r => r.Company)
+                            .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
+                var term = searchTerm.Trim().ToLower();
+                var like = $"%{term}%";
+
                 switch ((searchBy ?? "").ToLower())
                 {
+                    case "code":
+                    case "companycode":
+                        q = q.Where(r => r.Company != null &&
+                                         r.Company.Code != null &&
+                                         EF.Functions.Like(r.Company.Code.ToLower(), like));
+                        break;
+
+                    case "company":
+                    case "companyname":
+                        q = q.Where(r => r.Company != null &&
+                                         r.Company.Name != null &&
+                                         EF.Functions.Like(r.Company.Name.ToLower(), like));
+                        break;
+
                     case "holder":
-                        q = q.Where(r => r.AccountHolderName!.Contains(searchTerm));
+                        q = q.Where(r => r.AccountHolderName != null &&
+                                         EF.Functions.Like(r.AccountHolderName.ToLower(), like));
                         break;
+
                     case "authname":
-                        q = q.Where(r => r.AuthorizedOnTheAccountName!.Contains(searchTerm));
+                        q = q.Where(r => r.AuthorizedOnTheAccountName != null &&
+                                         EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like));
                         break;
+
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(searchTerm));
+                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
                         break;
+
                     default:
                         q = q.Where(r =>
-                            r.AccountHolderName!.Contains(searchTerm) ||
-                            r.AuthorizedOnTheAccountName!.Contains(searchTerm) ||
-                            r.AccountNumber.ToString().Contains(searchTerm));
+                            (r.AccountHolderName != null && EF.Functions.Like(r.AccountHolderName.ToLower(), like)) ||
+                            (r.AuthorizedOnTheAccountName != null && EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like)) ||
+                            r.AccountNumber.ToString().Contains(term) ||
+                            (r.Company != null && r.Company.Code != null && EF.Functions.Like(r.Company.Code.ToLower(), like)) ||
+                            (r.Company != null && r.Company.Name != null && EF.Functions.Like(r.Company.Name.ToLower(), like)));
                         break;
                 }
             }
 
-            return await q.CountAsync();
+            return await q.AsNoTracking().CountAsync();
         }
 
         public async Task<CertifiedBankStatementRequest?> GetByIdAsync(int id)

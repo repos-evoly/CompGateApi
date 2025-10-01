@@ -1,4 +1,4 @@
-// CreditFacilitiesOrLetterOfGuaranteeRequestDtos.cs
+// CompGateApi.Core.Dtos/CreditFacilitiesOrLetterOfGuaranteeRequestDtos.cs
 using System;
 
 namespace CompGateApi.Core.Dtos
@@ -10,12 +10,14 @@ namespace CompGateApi.Core.Dtos
 
         public string AccountNumber { get; set; } = null!;
         public DateTime Date { get; set; }
+        public DateTime ValidUntil { get; set; }                 // NEW
         public decimal Amount { get; set; }
         public string Purpose { get; set; } = null!;
         public string AdditionalInfo { get; set; } = null!;
         public string Curr { get; set; } = null!;
         public string ReferenceNumber { get; set; } = null!;
         public string Type { get; set; } = null!;
+        public string LetterOfGuarenteePct { get; set; } = null!; // NEW
 
         public string Status { get; set; } = null!;
         public string? Reason { get; set; }
@@ -28,12 +30,14 @@ namespace CompGateApi.Core.Dtos
     {
         public string AccountNumber { get; set; } = null!;
         public DateTime Date { get; set; }
+        public DateTime ValidUntil { get; set; }                 // NEW
         public decimal Amount { get; set; }
         public string Purpose { get; set; } = null!;
         public string AdditionalInfo { get; set; } = null!;
         public string Curr { get; set; } = null!;
         public string ReferenceNumber { get; set; } = null!;
         public string Type { get; set; } = null!;
+        public string LetterOfGuarenteePct { get; set; } = null!; // NEW
     }
 
     public class CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto

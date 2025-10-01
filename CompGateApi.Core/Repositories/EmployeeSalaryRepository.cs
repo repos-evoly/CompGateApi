@@ -19,6 +19,23 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         _db = db; _http = http; _mapper = mapper;
     }
 
+
+    private static string NormalizeAcc13(string? acc)
+    {
+        if (string.IsNullOrWhiteSpace(acc)) return acc ?? "";
+        return acc.Trim().PadLeft(13, '0');
+    }
+
+    // fee GL builder: {BRANCH}{932702}{CCY3 from sender}
+    private static string BuildCommissionGlFromSender(string senderAcc13)
+    {
+        var acc = NormalizeAcc13(senderAcc13);
+        if (acc.Length != 13) throw new Exception("Sender/debit account must be 13 digits.");
+        var branch = acc.Substring(0, 4);
+        var ccy3 = acc.Substring(10, 3); // last 3
+        return $"{branch}932702{ccy3}";
+    }
+
     public async Task<PagedResult<EmployeeDto>> GetAllEmployeesAsync(int companyId, string? searchTerm, int page, int limit)
     {
         var query = _db.Employees.Where(e => e.CompanyId == companyId);
@@ -245,7 +262,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     }
     public async Task<SalaryCycleDto?> PostSalaryCycleAsync(int companyId, int cycleId, int postedBy)
     {
-        // 1) load cycle
+        // 1) Load cycle
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
             .Include(c => c.Company).ThenInclude(c => c.ServicePackage)
@@ -254,7 +271,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         if (cycle is null) return null;
         if (cycle.PostedAt != null) return null;
 
-        // 2) package rule
+        // 2) Package rule (Salary Payment enabled)
         var pkgId = cycle.Company.ServicePackageId;
         var detail = await _db.ServicePackageDetails
             .Include(d => d.TransactionCategory)
@@ -263,44 +280,74 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         if (detail is null || !detail.IsEnabledForPackage)
             throw new PayrollException("Salary payments are not enabled for your service package.");
 
-        // 3) eligible entries (account type + 13 digits)
+        // 3) Eligible entries (account + 13 digits)
         var eligibleEntries = cycle.Entries
-            .Where(e => e.Employee.AccountType.Equals("account", StringComparison.OrdinalIgnoreCase)
-                     && e.Employee.AccountNumber?.Length == 13)
+            .Where(e => e.Employee != null
+                        && e.Employee.AccountType.Equals("account", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(e.Employee.AccountNumber)
+                        && e.Employee.AccountNumber!.Length == 13)
             .ToList();
         if (eligibleEntries.Count == 0)
             throw new PayrollException("No eligible employees (13-digit account numbers of type 'account') found.");
 
-        // 4) (optional) validate per-entry limit + recompute total with commission if you use it
-        // NOTE: If you still need commission, compute e.CommissionAmount here.
+        // 4) Load fixed fee pricing (TrxCatId = 17, Unit = 1)
+        const int TRXCAT_SALARY_FIXED_FEE = 17;
+        var feePricing = await _db.Pricings.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TrxCatId == TRXCAT_SALARY_FIXED_FEE && p.Unit == 1);
+        if (feePricing == null)
+            throw new PayrollException("Pricing for salary fixed fee (TrxCatId=17, Unit=1) is not configured.");
 
+        var fixedFee = feePricing.Price;
+        if (fixedFee is null || fixedFee <= 0m)
+            throw new PayrollException("Invalid pricing: fixed fee must be greater than zero.");
+
+        // Fee GL (prefer configured GL1, fallback to derived from sender)
+        // Fee narration (prefer NR2, fallback default)
+        var debitAcc13 = NormalizeAcc13(cycle.DebitAccount);
+        if (debitAcc13.Length != 13)
+            throw new PayrollException("Debit account must be 13 digits.");
+
+        var feeGl = !string.IsNullOrWhiteSpace(feePricing.GL1)
+            ? NormalizeAcc13(feePricing.GL1)
+            : BuildCommissionGlFromSender(debitAcc13);
+        if (feeGl.Length != 13)
+            throw new PayrollException("Configured fee GL (GL1) must be a 13-digit account.");
+
+        var feeNarration = string.IsNullOrWhiteSpace(feePricing.NR2)
+            ? "Salary receiver-paid fixed fee"
+            : feePricing.NR2;
+
+        // 5) Build EMPLOYEE-ONLY payload (no fee lines here)
         const int SCALE = 1000; // 3 decimals
-        const int PAD = 15;     // 000000000000000
+        const int PAD = 15;
 
-        // Build 16-char IDs: yyyyMMddHHmm + "GT" + "00/01/.."
         var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmm");
-        var hid = baseId + "GT00";
+        var hidEmp = baseId + "GT00";           // 16 chars
+        cycle.BankReference = hidEmp;           // save immediately
+        await _db.SaveChangesAsync();
 
-        var list = new List<Dictionary<string, string>>();
+        var groupAccountsEmp = new List<Dictionary<string, string>>();
         int i = 1;
+
         foreach (var e in eligibleEntries)
         {
-            var net = e.Amount;
-            var comm = e.CommissionAmount;          // 0 if you don't use commission
-            var total = net + comm;
+            var amount = e.Amount;
+            var fee = fixedFee.Value;
+            if (amount < fee)
+                throw new PayrollException($"Salary {amount:0.###} LYD is less than the fixed fee {fee:0.###} LYD (employee #{e.EmployeeId}).");
 
-            var did = baseId + $"GT{i:00}"; // 16-char detail id
-            i++;
+            var employeeCredit = amount - fee;  // net to employee
+            var didEmp = baseId + $"GT{i:00}"; i++;
 
-            list.Add(new Dictionary<string, string>
+            groupAccountsEmp.Add(new Dictionary<string, string>
             {
-                ["YBCD06DID"] = did,
-                ["YBCD06DACC"] = cycle.DebitAccount,
-                ["YBCD06CACC"] = e.Employee.AccountNumber,
-                ["YBCD06AMT"] = ((long)(net * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06DID"] = didEmp,
+                ["YBCD06DACC"] = debitAcc13,
+                ["YBCD06CACC"] = e.Employee!.AccountNumber!,
+                ["YBCD06AMT"] = ((long)(employeeCredit * SCALE)).ToString($"D{PAD}"),
                 ["YBCD06CCY"] = cycle.Currency,
-                ["YBCD06AMTC"] = ((long)(total * SCALE)).ToString($"D{PAD}"),
-                ["YBCD06COMA"] = ((long)(comm * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06AMTC"] = ((long)(employeeCredit * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06COMA"] = "000000000000000",
                 ["YBCD06CNR3"] = "",
                 ["YBCD06DNR2"] = "",
                 ["YBCD06RESP"] = "",
@@ -308,17 +355,13 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             });
         }
 
-        // Customer/CID: bank expects 6-digit customer number; derive from debit account
-        var customerNumber = !string.IsNullOrEmpty(cycle.DebitAccount) && cycle.DebitAccount.Length >= 10
-            ? cycle.DebitAccount.Substring(4, 6)
-            : cycle.DebitAccount ?? "";
-
-        var payload = new
+        var customerNumber = debitAcc13.Substring(4, 6);
+        var payloadEmp = new
         {
             Header = new
             {
                 system = "MOBILE",
-                referenceId = hid,              // MUST be 16 chars & match @HID
+                referenceId = hidEmp,
                 userName = "TEDMOB",
                 customerNumber = customerNumber,
                 requestTime = DateTime.UtcNow.ToString("o"),
@@ -326,37 +369,30 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             },
             Details = new Dictionary<string, object>
             {
-                ["@HID"] = hid,
+                ["@HID"] = hidEmp,
                 ["@APPLY"] = "Y",
                 ["@APPLYALL"] = "N",
-                ["GroupAccounts"] = list
+                ["GroupAccounts"] = groupAccountsEmp
             }
         };
 
-        // 5) call Bank API
+        // 6) Call bank for EMPLOYEES transfer
         var bankCli = _http.CreateClient("BankApi");
         var requestUri = new Uri(bankCli.BaseAddress!, "api/mobile/PostGroupTransfer");
-        var bankRes = await bankCli.PostAsJsonAsync(requestUri, payload);
+        var bankResEmp = await bankCli.PostAsJsonAsync(requestUri, payloadEmp);
+        var rawEmp = await bankResEmp.Content.ReadAsStringAsync();
 
-        var raw = await bankRes.Content.ReadAsStringAsync();
-        if (!bankRes.IsSuccessStatusCode)
-            throw new PayrollException($"Bank HTTP {(int)bankRes.StatusCode} at {requestUri}: {raw}");
+        cycle.BankResponseRaw = rawEmp;         // keep raw (success or fail)
+        await _db.SaveChangesAsync();
 
-        // Parse header to check success + collect per-item RESP
-        // (we still need the raw for RESP mapping even when header is Success)
-        BankResponseDto? bankDoc = null;
-        try
-        {
-            bankDoc = System.Text.Json.JsonSerializer.Deserialize<BankResponseDto>(
-                raw, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        }
-        catch { /* fall through; we only need RESP values below */ }
+        if (!bankResEmp.IsSuccessStatusCode)
+            throw new PayrollException($"Bank HTTP {(int)bankResEmp.StatusCode} at {requestUri}: {rawEmp}");
 
-        // Map successful items (RESP == "S") by Credit Account (CACC)
+        // 7) Parse success accounts for employees
         var successAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            using var jdoc = System.Text.Json.JsonDocument.Parse(raw);
+            using var jdoc = System.Text.Json.JsonDocument.Parse(rawEmp);
             if (jdoc.RootElement.TryGetProperty("Details", out var d1) &&
                 d1.TryGetProperty("Details", out var d2) &&
                 d2.TryGetProperty("GroupAccounts", out var arr) &&
@@ -366,52 +402,123 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 {
                     var resp = item.TryGetProperty("YBCD06RESP", out var rEl) ? rEl.GetString() : null;
                     var cacc = item.TryGetProperty("YBCD06CACC", out var cEl) ? cEl.GetString() : null;
-                    if (string.Equals(resp, "S", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(cacc))
+                    if (string.Equals(resp, "S", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(cacc))
+                    {
                         successAccounts.Add(cacc.Trim());
+                    }
                 }
             }
         }
         catch
         {
-            // if parsing fails, fall back to "all success" based on header
-            if (string.Equals(bankDoc?.Header?.ReturnCode, "Success", StringComparison.OrdinalIgnoreCase))
+            // Fallback: treat whole bulk as success if top-level says Success
+            try
             {
-                foreach (var e in eligibleEntries)
-                    successAccounts.Add(e.Employee.AccountNumber ?? "");
+                var bankDoc = System.Text.Json.JsonSerializer.Deserialize<BankResponseDto>(
+                    rawEmp, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (string.Equals(bankDoc?.Header?.ReturnCode, "Success", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var e in eligibleEntries)
+                        successAccounts.Add(e.Employee!.AccountNumber!);
+                }
             }
+            catch { /* ignore */ }
         }
 
-        // If header indicates failure and we couldn't parse RESP -> surface message
-        if (!string.Equals(bankDoc?.Header?.ReturnCode, "Success", StringComparison.OrdinalIgnoreCase) &&
-            successAccounts.Count == 0)
-        {
-            throw new PayrollException($"Bank rejected payroll: {bankDoc?.Header?.ReturnMessage}");
-        }
-
-        // 6) update entries: only mark those with RESP == "S"
+        // Mark successes & compute gross/fee totals for successful only
         var anySuccess = false;
+        decimal successGrossTotal = 0m;
+        int successCount = 0;
+
         foreach (var e in eligibleEntries)
         {
-            if (!string.IsNullOrEmpty(e.Employee.AccountNumber) &&
-                successAccounts.Contains(e.Employee.AccountNumber))
+            if (successAccounts.Contains(e.Employee!.AccountNumber!))
             {
                 e.IsTransferred = true;
                 e.TransferredAt = DateTime.UtcNow;
                 e.PostedByUserId = postedBy;
+                successGrossTotal += e.Amount; // GROSS salary
+                successCount++;
                 anySuccess = true;
             }
         }
 
-        // 7) set cycle-level PostedAt/PostedBy if ANY succeeded (your requested policy)
-        if (anySuccess)
+        if (!anySuccess)
+            throw new PayrollException("Bank rejected all employee transfers.");
+
+        // Update cycle totals to ONLY successful gross
+        cycle.TotalAmount = successGrossTotal;
+
+        // 8) Fee settlement as a second (single-line) transfer for successes only
+        var totalFeeForSuccess = successCount * fixedFee.Value;
+        if (totalFeeForSuccess > 0m)
         {
-            cycle.PostedAt = DateTime.UtcNow;
-            cycle.PostedByUserId = postedBy;
+            var baseIdFee = DateTime.UtcNow.ToString("yyyyMMddHHmm");
+            var hidFee = baseIdFee + "GF00";     // 16 chars; separate reference for fee settlement
+            cycle.BankFeeReference = hidFee;
+
+            var didFee = baseIdFee + "GF01";
+
+            var groupAccountsFee = new List<Dictionary<string, string>>
+        {
+            new()
+            {
+                ["YBCD06DID"] = didFee,
+                ["YBCD06DACC"] = debitAcc13,
+                ["YBCD06CACC"] = feeGl,
+                ["YBCD06AMT"]  = ((long)(totalFeeForSuccess * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06CCY"]  = cycle.Currency,
+                ["YBCD06AMTC"] = ((long)(totalFeeForSuccess * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06COMA"] = "000000000000000",
+                ["YBCD06CNR3"] = "",
+                ["YBCD06DNR2"] = feeNarration,
+                ["YBCD06RESP"] = "",
+                ["YBCD06RESPD"] = ""
+            }
+        };
+
+            var payloadFee = new
+            {
+                Header = new
+                {
+                    system = "MOBILE",
+                    referenceId = hidFee,
+                    userName = "TEDMOB",
+                    customerNumber = customerNumber,
+                    requestTime = DateTime.UtcNow.ToString("o"),
+                    language = "AR"
+                },
+                Details = new Dictionary<string, object>
+                {
+                    ["@HID"] = hidFee,
+                    ["@APPLY"] = "Y",
+                    ["@APPLYALL"] = "N",
+                    ["GroupAccounts"] = groupAccountsFee
+                }
+            };
+
+            var bankResFee = await bankCli.PostAsJsonAsync(requestUri, payloadFee);
+            var rawFee = await bankResFee.Content.ReadAsStringAsync();
+            cycle.BankFeeResponseRaw = rawFee;
+
+            // We persist response regardless of outcome
+            await _db.SaveChangesAsync();
+
+            // Optional policy: do not fail the whole cycle if fee settlement fails.
+            // If you want to fail instead, uncomment the next lines:
+            // if (!bankResFee.IsSuccessStatusCode)
+            //     throw new PayrollException($"Fee settlement failed HTTP {(int)bankResFee.StatusCode}: {rawFee}");
         }
+
+        // 9) Mark cycle posted
+        cycle.PostedAt = DateTime.UtcNow;
+        cycle.PostedByUserId = postedBy;
 
         await _db.SaveChangesAsync();
         return _mapper.Map<SalaryCycleDto>(cycle);
     }
+
 
     public async Task<EmployeeDto?> GetEmployeeAsync(int companyId, int employeeId)
     {
@@ -557,6 +664,201 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         await _db.SaveChangesAsync();
         return _mapper.Map<SalaryCycleDto>(cycle);
     }
+
+    #region ADMIN-SALARYCYCLES
+
+    public async Task<int> AdminGetSalaryCyclesCountAsync(
+        string? companyCode,
+        string? searchTerm,
+        string? searchBy,
+        DateTime? from,
+        DateTime? to)
+    {
+        var q = _db.SalaryCycles
+            .Include(s => s.Company)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(companyCode))
+            q = q.Where(s => s.Company.Code.Contains(companyCode));
+
+        if (from.HasValue)
+            q = q.Where(s => s.SalaryMonth >= from.Value.Date);
+
+        if (to.HasValue)
+        {
+            var end = to.Value.Date.AddDays(1);
+            q = q.Where(s => s.SalaryMonth < end);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            switch ((searchBy ?? "").ToLower())
+            {
+                case "debitaccount":
+                    q = q.Where(s => s.DebitAccount.Contains(searchTerm));
+                    break;
+                case "currency":
+                    q = q.Where(s => s.Currency.Contains(searchTerm));
+                    break;
+                case "bankreference":
+                    q = q.Where(s => s.BankReference != null && s.BankReference.Contains(searchTerm));
+                    break;
+                case "companyname":
+                    q = q.Where(s => s.Company.Name.Contains(searchTerm));
+                    break;
+                case "companycode":
+                    q = q.Where(s => s.Company.Code.Contains(searchTerm));
+                    break;
+                default:
+                    q = q.Where(s =>
+                        s.Company.Code.Contains(searchTerm) ||
+                        s.Company.Name.Contains(searchTerm) ||
+                        s.DebitAccount.Contains(searchTerm) ||
+                        s.Currency.Contains(searchTerm) ||
+                        (s.BankReference != null && s.BankReference.Contains(searchTerm)));
+                    break;
+            }
+        }
+
+        return await q.CountAsync();
+    }
+
+    public async Task<PagedResult<SalaryCycleAdminListItemDto>> AdminGetSalaryCyclesAsync(
+        string? companyCode,
+        string? searchTerm,
+        string? searchBy,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int limit)
+    {
+        var q = _db.SalaryCycles
+            .Include(s => s.Company)
+            .AsNoTracking()
+            .AsQueryable();
+
+
+        if (!string.IsNullOrWhiteSpace(companyCode))
+            q = q.Where(s => s.Company.Code.Contains(companyCode));
+
+        if (from.HasValue)
+            q = q.Where(s => s.SalaryMonth >= from.Value.Date);
+
+        if (to.HasValue)
+        {
+            var end = to.Value.Date.AddDays(1);
+            q = q.Where(s => s.SalaryMonth < end);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            switch ((searchBy ?? "").ToLower())
+            {
+                case "debitaccount":
+                    q = q.Where(s => s.DebitAccount.Contains(searchTerm));
+                    break;
+                case "currency":
+                    q = q.Where(s => s.Currency.Contains(searchTerm));
+                    break;
+                case "bankreference":
+                    q = q.Where(s => s.BankReference != null && s.BankReference.Contains(searchTerm));
+                    break;
+                case "companyname":
+                    q = q.Where(s => s.Company.Name.Contains(searchTerm));
+                    break;
+                case "companycode":
+                    q = q.Where(s => s.Company.Code.Contains(searchTerm));
+                    break;
+                default:
+                    q = q.Where(s =>
+                        s.Company.Code.Contains(searchTerm) ||
+                        s.Company.Name.Contains(searchTerm) ||
+                        s.DebitAccount.Contains(searchTerm) ||
+                        s.Currency.Contains(searchTerm) ||
+                        (s.BankReference != null && s.BankReference.Contains(searchTerm)));
+                    break;
+            }
+        }
+
+        var total = await q.CountAsync();
+
+        var data = await q
+            .OrderByDescending(s => s.CreatedAt)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .Select(s => new SalaryCycleAdminListItemDto
+            {
+                Id = s.Id,
+                CompanyId = s.CompanyId,
+                CompanyCode = s.Company.Code,
+                CompanyName = s.Company.Name,
+                SalaryMonth = s.SalaryMonth,
+                DebitAccount = s.DebitAccount,
+                Currency = s.Currency,
+                CreatedAt = s.CreatedAt,
+                PostedAt = s.PostedAt,
+                CreatedByUserId = s.CreatedByUserId,
+                PostedByUserId = s.PostedByUserId,
+                TotalAmount = s.TotalAmount,
+                BankReference = s.BankReference
+            })
+            .ToListAsync();
+
+        return new PagedResult<SalaryCycleAdminListItemDto>
+        {
+            Data = data,
+            Page = page,
+            Limit = limit,
+            TotalRecords = total,
+            TotalPages = (int)Math.Ceiling(total / (double)limit)
+        };
+    }
+
+    public async Task<SalaryCycleAdminDetailDto?> AdminGetSalaryCycleAsync(int cycleId)
+    {
+        var s = await _db.SalaryCycles
+            .Include(x => x.Company)
+            .Include(x => x.Entries).ThenInclude(e => e.Employee)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == cycleId);
+
+        if (s == null) return null;
+
+        return new SalaryCycleAdminDetailDto
+        {
+            Id = s.Id,
+            CompanyId = s.CompanyId,
+            CompanyCode = s.Company.Code,
+            CompanyName = s.Company.Name,
+            SalaryMonth = s.SalaryMonth,
+            DebitAccount = s.DebitAccount,
+            Currency = s.Currency,
+            CreatedAt = s.CreatedAt,
+            PostedAt = s.PostedAt,
+            CreatedByUserId = s.CreatedByUserId,
+            PostedByUserId = s.PostedByUserId,
+            TotalAmount = s.TotalAmount,
+            BankReference = s.BankReference,
+            BankResponseRaw = s.BankResponseRaw,
+            Entries = s.Entries.Select(e => new SalaryEntryDto
+            {
+                Id = e.Id,
+                EmployeeId = e.EmployeeId,
+                Name = e.Employee.Name,
+                Email = e.Employee.Email,
+                Phone = e.Employee.Phone,
+                Salary = e.Amount,
+                Date = e.Employee.Date,
+                AccountNumber = e.Employee.AccountNumber,
+                AccountType = e.Employee.AccountType,
+                SendSalary = e.Employee.SendSalary,
+                CanPost = e.Employee.CanPost,
+                IsTransferred = e.IsTransferred
+            }).ToList()
+        };
+    }
+
+    #endregion
 
 
 }

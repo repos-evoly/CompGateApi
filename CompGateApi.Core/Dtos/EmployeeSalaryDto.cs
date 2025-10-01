@@ -39,6 +39,9 @@ public class SalaryCycleDto
     public int CreatedByUserId { get; set; }
     public int? PostedByUserId { get; set; }
     public List<SalaryEntryDto> Entries { get; set; } = new();
+
+    public string? BankReference { get; set; }
+    public string? BankResponseRaw { get; set; }
 }
 
 public class SalaryCycleCreateDto
@@ -84,4 +87,51 @@ public class SalaryEntryUpsertDto
 {
     public int EmployeeId { get; set; }
     public decimal Salary { get; set; }
+}
+
+public class SalaryCycleAdminListItemDto
+{
+    public int Id { get; set; }
+    public int CompanyId { get; set; }
+    public string CompanyCode { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+
+    public DateTime SalaryMonth { get; set; }
+    public string DebitAccount { get; set; } = string.Empty;
+    public string Currency { get; set; } = "LYD";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? PostedAt { get; set; }
+    public int CreatedByUserId { get; set; }
+    public int? PostedByUserId { get; set; }
+    public decimal TotalAmount { get; set; }
+
+    public string? BankReference { get; set; }
+
+    public string? BankFeeReference { get; set; }
+
+}
+
+public class SalaryCycleAdminDetailDto
+{
+    public int Id { get; set; }
+    public int CompanyId { get; set; }
+    public string CompanyCode { get; set; } = string.Empty;
+    public string CompanyName { get; set; } = string.Empty;
+
+    public DateTime SalaryMonth { get; set; }
+    public string DebitAccount { get; set; } = string.Empty;
+    public string Currency { get; set; } = "LYD";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? PostedAt { get; set; }
+    public int CreatedByUserId { get; set; }
+    public int? PostedByUserId { get; set; }
+    public decimal TotalAmount { get; set; }
+
+    public string? BankReference { get; set; }
+    public string? BankResponseRaw { get; set; }
+
+    public string? BankFeeReference { get; set; }
+    public string? BankFeeResponseRaw { get; set; }
+
+    public List<SalaryEntryDto> Entries { get; set; } = new();
 }

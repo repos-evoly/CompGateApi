@@ -97,6 +97,7 @@ namespace CompGateApi.Core.Repositories
                     RegistrationStatus = RegistrationStatus.UnderReview,
                     RegistrationStatusMessage = null,
                     ServicePackageId = 1,
+                    CommissionOnReceiver = false,
                 };
                 _db.Companies.Add(company);
                 await _db.SaveChangesAsync();
@@ -204,7 +205,7 @@ namespace CompGateApi.Core.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 q = q.Where(c =>
                     c.Code.Contains(searchTerm) ||
-                    (c.KycLegalCompanyNameLt != null && c.KycLegalCompanyNameLt.Contains(searchTerm)));
+                    (c.Name != null && c.Name.Contains(searchTerm)));
 
             if (statusFilter.HasValue)
                 q = q.Where(c => c.RegistrationStatus == statusFilter.Value);

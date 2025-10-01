@@ -11,57 +11,61 @@ namespace CompGateApi.Data.Models
     [Owned]
     public class ServicesRequest
     {
-        public bool ReactivateIdfaali          { get; set; }
-        public bool DeactivateIdfaali          { get; set; }
-        public bool ResetDigitalBankPassword   { get; set; }
-        public bool ResendMobileBankingPin     { get; set; }
-        public bool ChangePhoneNumber          { get; set; }
+        public bool ReactivateIdfaali { get; set; }
+        public bool DeactivateIdfaali { get; set; }
+        public bool ResetDigitalBankPassword { get; set; }
+        public bool ResendMobileBankingPin { get; set; }
+        public bool ChangePhoneNumber { get; set; }
     }
 
     [Owned]
     public class StatementRequest
     {
-        public bool? CurrentAccountStatementArabic  { get; set; }
+        public bool? CurrentAccountStatementArabic { get; set; }
         public bool? CurrentAccountStatementEnglish { get; set; }
-        public bool? VisaAccountStatement           { get; set; }
-        public bool? AccountStatement               { get; set; }
-        public bool? JournalMovement                { get; set; }
-        public bool? NonFinancialCommitment         { get; set; }
-        public DateTime? FromDate                   { get; set; }
-        public DateTime? ToDate                     { get; set; }
+        public bool? VisaAccountStatement { get; set; }
+        public bool? AccountStatement { get; set; }
+        public bool? JournalMovement { get; set; }
+        public bool? NonFinancialCommitment { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
     }
 
     [Table("CertifiedBankStatementRequests")]
     public class CertifiedBankStatementRequest : Auditable
     {
-        [Key]
-        public int Id { get; set; }
+        [Key] public int Id { get; set; }
 
-        // multi-tenant
-        public int UserId    { get; set; }
+        public int UserId { get; set; }
         public int CompanyId { get; set; }
 
         [Required, MaxLength(150)]
-        public string AccountHolderName          { get; set; } = null!;
+        public string AccountHolderName { get; set; } = null!;
         [Required, MaxLength(150)]
         public string AuthorizedOnTheAccountName { get; set; } = null!;
-        public long AccountNumber                { get; set; }
-        public long? OldAccountNumber            { get; set; }
-        public long? NewAccountNumber            { get; set; }
 
-        // owned value objects
-        public ServicesRequest  ServiceRequests   { get; set; } = new();
-        public StatementRequest StatementRequest  { get; set; } = new();
+        public long AccountNumber { get; set; }            // SOURCE account (will be debited)
+        public long? OldAccountNumber { get; set; }
+        public long? NewAccountNumber { get; set; }
 
-        // workflow
+        public ServicesRequest ServiceRequests { get; set; } = new();
+        public StatementRequest StatementRequest { get; set; } = new();
+
         [Required, MaxLength(20)]
         public string Status { get; set; } = "Pending";
-
         public string? Reason { get; set; }
 
-        // nav
-        public User    User    { get; set; } = null!;
+        // NEW: payment audit
+        public int? TransferRequestId { get; set; }
+        [MaxLength(50)]
+        public string? BankReference { get; set; }
+
+        public User User { get; set; } = null!;
         public Company Company { get; set; } = null!;
+
+        //TotalAmountLyd
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal TotalAmountLyd { get; set; }
 
     }
 }

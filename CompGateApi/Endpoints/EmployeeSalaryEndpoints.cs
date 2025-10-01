@@ -36,6 +36,17 @@ namespace CompGateApi.Endpoints
             // in RegisterEndpoints
             group.MapPut("/salarycycles/{id:int}", SaveSalaryCycle);
 
+
+            var admin = app.MapGroup("/api/admin/salarycycles")
+                        .WithTags("Employees & Salaries (Admin)")
+                        .RequireAuthorization("RequireAdminUser");
+
+            admin.MapGet("/", AdminGetSalaryCycles)
+                 .Produces<PagedResult<SalaryCycleAdminListItemDto>>(200);
+
+            admin.MapGet("/{id:int}", AdminGetSalaryCycleById)
+                 .Produces<SalaryCycleAdminDetailDto>(200)
+                 .Produces(404);
         }
 
         private static int GetAuthUserId(HttpContext ctx)
@@ -273,6 +284,38 @@ namespace CompGateApi.Endpoints
             return saved == null ? Results.NotFound() : Results.Ok(saved);
         }
 
+
+        // ── ADMIN HANDLERS ────────────────────────────────────────────────────────────────
+        public static async Task<IResult> AdminGetSalaryCycles(
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromQuery] string? companyCode,
+            [FromQuery] string? searchTerm,
+            [FromQuery] string? searchBy,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 50)
+        {
+            var total = await repo.AdminGetSalaryCyclesCountAsync(companyCode, searchTerm, searchBy, from, to);
+            var list = await repo.AdminGetSalaryCyclesAsync(companyCode, searchTerm, searchBy, from, to, page, limit);
+
+            return Results.Ok(new PagedResult<SalaryCycleAdminListItemDto>
+            {
+                Data = list.Data,
+                Page = page,
+                Limit = limit,
+                TotalRecords = total,
+                TotalPages = (int)Math.Ceiling(total / (double)limit)
+            });
+        }
+
+        public static async Task<IResult> AdminGetSalaryCycleById(
+            int id,
+            [FromServices] IEmployeeSalaryRepository repo)
+        {
+            var dto = await repo.AdminGetSalaryCycleAsync(id);
+            return dto == null ? Results.NotFound() : Results.Ok(dto);
+        }
 
     }
 }

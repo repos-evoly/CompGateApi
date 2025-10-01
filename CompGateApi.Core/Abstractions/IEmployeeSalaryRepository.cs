@@ -22,4 +22,22 @@ public interface IEmployeeSalaryRepository
 
     Task<SalaryCycleDto?> SaveSalaryCycleAsync(int companyId, int cycleId, SalaryCycleSaveDto dto);
 
+    Task<int> AdminGetSalaryCyclesCountAsync(
+         string? companyCode,
+         string? searchTerm,
+         string? searchBy,
+         DateTime? from,
+         DateTime? to);
+
+    Task<PagedResult<SalaryCycleAdminListItemDto>> AdminGetSalaryCyclesAsync(
+        string? companyCode,
+        string? searchTerm,
+        string? searchBy,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int limit);
+
+    Task<SalaryCycleAdminDetailDto?> AdminGetSalaryCycleAsync(int cycleId);
+
 }

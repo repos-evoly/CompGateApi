@@ -11,12 +11,15 @@ namespace CompGateApi.Data.Models
 
         public string AccountNumber { get; set; } = null!;
         public DateTime Date { get; set; }
+
         public decimal Amount { get; set; }
         public string Purpose { get; set; } = null!;
         public string AdditionalInfo { get; set; } = null!;
         public string Curr { get; set; } = null!;
         public string ReferenceNumber { get; set; } = null!;
         public string Type { get; set; } = null!;
+        public DateTime ValidUntil { get; set; }
+        public string LetterOfGuarenteePct { get; set; } = null!;
 
         // audit / workflow
         public string Status { get; set; } = "Pending";

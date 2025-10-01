@@ -69,6 +69,10 @@ namespace CompGateApi.Core.Dtos
         public decimal DebitBalance { get; set; }
         public string? TransferType { get; set; } // (values: "B2B", "B2C", or null)
 
+        public string? CompanyName { get; set; }
+        public string? BranchCode { get; set; }
+        public string? BranchName { get; set; }
+
     }
 
     // For /api/transfers/statement

@@ -152,9 +152,9 @@ namespace CompGateApi.Data.Repositories
                 if (detail == null || !detail.IsEnabledForPackage)
                     return Fail("Internal Transfer not allowed");
 
-                decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
-                if (txnLimit.HasValue && amountInBase > txnLimit.Value)
-                    return Fail("Transaction limit exceeded");
+                // decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
+                // if (txnLimit.HasValue && amountInBase > txnLimit.Value)
+                //     return Fail("Transaction limit exceeded");
 
                 var today = DateTime.UtcNow.Date;
                 var monthStart = new DateTime(today.Year, today.Month, 1);
@@ -317,83 +317,136 @@ namespace CompGateApi.Data.Repositories
 
         public async Task<List<AccountDto>> GetAccountsAsync(string codeOrAccount)
         {
+            // Derive 6-digit customer code from either 6 or 13 digit input
             string code = codeOrAccount.Length == 6
                 ? codeOrAccount
                 : codeOrAccount.Length == 13
                     ? codeOrAccount.Substring(4, 6)
                     : throw new ArgumentException("Must be 6 or 13 digits", nameof(codeOrAccount));
 
-            var client = _httpFactory.CreateClient("BankApi");
+            var bankClient = _httpFactory.CreateClient("BankApi");
+            var kycClient = _httpFactory.CreateClient("KycApi");
 
-            var accountsTask = client.PostAsJsonAsync("/api/mobile/accounts", new
+            // Prepare payloads
+            var header = new Func<string>(() => Guid.NewGuid().ToString("N").Substring(0, 16));
+
+            var accountsTask = bankClient.PostAsJsonAsync("/api/mobile/accounts", new
             {
                 Header = new
                 {
                     system = "MOBILE",
-                    referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
+                    referenceId = header(),
                     userName = "TEDMOB",
                     customerNumber = code,
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
                 },
                 Details = new Dictionary<string, string> {
-                    { "@CID", code },
-                    { "@GETAVB","Y" }
-                }
+            { "@CID", code },
+            { "@GETAVB","Y" }
+        }
             });
 
-            var stcodTask = client.PostAsJsonAsync("/api/mobile/GetCustomerInfo", new
+            var stcodTask = bankClient.PostAsJsonAsync("/api/mobile/GetCustomerInfo", new
             {
                 Header = new
                 {
                     system = "MOBILE",
-                    referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
+                    referenceId = header(),
                     userName = "TEDMOB",
                     customerNumber = code,
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
                 },
                 Details = new Dictionary<string, string> {
-                    { "@CID", code }
-                }
+            { "@CID", code }
+        }
             });
 
-            await Task.WhenAll(accountsTask, stcodTask);
+            // Branches (KYC) – we’ll map CABBN (branch number) -> CABRN (branch name)
+            var branchesTask = kycClient.GetAsync("kycapi/api/core/getActiveBranches");
+
+            await Task.WhenAll(accountsTask, stcodTask, branchesTask);
 
             var accountsResp = accountsTask.Result;
             var stcodResp = stcodTask.Result;
+            var branchesResp = branchesTask.Result;
 
             if (!accountsResp.IsSuccessStatusCode) return new();
 
             var bankDto = await accountsResp.Content.ReadFromJsonAsync<ExternalAccountsResponseDto>();
             if (bankDto?.Details?.Accounts == null) return new();
 
+            // Compute transfer type from STCOD, if available
             string? transferType = null;
             if (stcodResp.IsSuccessStatusCode)
             {
-                using var json = JsonDocument.Parse(await stcodResp.Content.ReadAsStringAsync());
-                if (json.RootElement.TryGetProperty("Details", out var details) &&
-                    details.TryGetProperty("CustInfo", out var custArr) &&
-                    custArr.GetArrayLength() > 0)
+                try
                 {
-                    var st = custArr[0].GetProperty("STCOD").GetString()?.Trim();
-                    transferType = st switch
+                    using var json = await System.Text.Json.JsonDocument.ParseAsync(await stcodResp.Content.ReadAsStreamAsync());
+                    if (json.RootElement.TryGetProperty("Details", out var details) &&
+                        details.TryGetProperty("CustInfo", out var custArr) &&
+                        custArr.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                        custArr.GetArrayLength() > 0 &&
+                        custArr[0].TryGetProperty("STCOD", out var stcodEl))
                     {
-                        "CD" => "B2B",
-                        "EA" => "B2C",
-                        _ => null
-                    };
+                        var st = stcodEl.GetString()?.Trim();
+                        transferType = st switch
+                        {
+                            "CD" => "B2B",
+                            "EA" => "B2C",
+                            _ => null
+                        };
+                    }
                 }
+                catch { /* ignore STCOD parsing errors */ }
             }
 
-            return bankDto.Details.Accounts.Select(a => new AccountDto
+            // Build a branch map from KYC: CABBN (branch number/code) -> CABRN (branch name)
+            var branchMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (branchesResp.IsSuccessStatusCode)
             {
-                AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
-                AvailableBalance = a.YBCD01CABL,
-                DebitBalance = a.YBCD01LDBL,
-                TransferType = transferType
+                try
+                {
+                    using var jdoc = await System.Text.Json.JsonDocument.ParseAsync(await branchesResp.Content.ReadAsStreamAsync());
+                    if (jdoc.RootElement.TryGetProperty("Details", out var det) &&
+                        det.TryGetProperty("Branches", out var arr) &&
+                        arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var item in arr.EnumerateArray())
+                        {
+                            var codeEl = item.TryGetProperty("CABBN", out var c) ? c.GetString() : null; // branch number
+                            var nameEl = item.TryGetProperty("CABRN", out var n) ? n.GetString() : null; // branch name
+                            if (!string.IsNullOrWhiteSpace(codeEl))
+                                branchMap[codeEl!.Trim()] = (nameEl ?? string.Empty).Trim();
+                        }
+                    }
+                }
+                catch { /* ignore branches parsing errors; we'll just omit branch names */ }
+            }
+
+            // Map accounts → AccountDto (with company name & branch info)
+            var result = bankDto.Details.Accounts.Select(a =>
+            {
+                var ab = a.YBCD01AB?.Trim(); // branch number from accounts API (e.g., "0015")
+                branchMap.TryGetValue(ab ?? string.Empty, out var branchName);
+
+                return new AccountDto
+                {
+                    AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
+                    AvailableBalance = a.YBCD01CABL,
+                    DebitBalance = a.YBCD01LDBL,
+                    TransferType = transferType,
+
+                    CompanyName = a.YBCD01CUN?.Trim(), // ← company name from accounts API
+                    BranchCode = ab,                  // ← YBCD01AB
+                    BranchName = string.IsNullOrWhiteSpace(branchName) ? null : branchName
+                };
             }).ToList();
+
+            return result;
         }
+
 
         public async Task<List<StatementEntryDto>> GetStatementAsync(string account, DateTime from, DateTime to)
         {
@@ -521,6 +574,7 @@ namespace CompGateApi.Data.Repositories
             public string? YBCD01AS { get; set; }
             public decimal YBCD01CABL { get; set; }
             public decimal YBCD01LDBL { get; set; }
+            public string? YBCD01CUN { get; set; }
         }
     }
 }

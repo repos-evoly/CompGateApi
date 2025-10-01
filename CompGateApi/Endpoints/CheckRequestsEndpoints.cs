@@ -286,6 +286,41 @@ namespace CompGateApi.Endpoints
             }
         }
 
+        // ───────────────────────────────
+        // Add these small helpers
+        // ───────────────────────────────
+        private static decimal ParseFirstLineAmountLyd(CheckRequestCreateDto dto)
+        {
+            if (dto.LineItems == null || dto.LineItems.Count == 0)
+                throw new ArgumentException("At least one line item is required.");
+
+            var first = dto.LineItems[0];
+            // Lyd and Dirham are strings in your model; parse safely
+            decimal lyd = 0m, dirham = 0m;
+            if (!string.IsNullOrWhiteSpace(first.Lyd)) decimal.TryParse(first.Lyd, out lyd);
+            if (!string.IsNullOrWhiteSpace(first.Dirham)) decimal.TryParse(first.Dirham, out dirham);
+
+            // Libya: 1 LYD = 1000 dirhams → 500 dirhams = 0.500 LYD
+            return lyd + (dirham / 1000m);
+        }
+
+        private static string BuildBranchGlFrom(string? branchNum, string? pricingGl1)
+        {
+            // Prefer configured GL1 with {BRANCH} token; fallback to BranchNum + 831892434
+            var br = (branchNum ?? "").Trim();
+            if (br.Length != 4) throw new ArgumentException("BranchNum must be exactly 4 digits.");
+
+            if (!string.IsNullOrWhiteSpace(pricingGl1) &&
+                pricingGl1.IndexOf("{BRANCH}", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return pricingGl1.Replace("{BRANCH}", br, StringComparison.InvariantCultureIgnoreCase);
+            }
+
+            return $"{br}831892434"; // 4 + 9 = 13 digits
+        }
+
+
+        // ── COMPANY: create new request (+ debit now) ─────────────────
         // ── COMPANY: create new request (+ debit now) ─────────────────
         public static async Task<IResult> CreateCompanyRequest(
             [FromBody] CheckRequestCreateDto dto,
@@ -309,7 +344,15 @@ namespace CompGateApi.Endpoints
                 if (me == null || !me.CompanyId.HasValue)
                     return Results.Unauthorized();
 
-                // 1) Persist request first (Pending)
+                // 0) Guard rails
+                if (string.IsNullOrWhiteSpace(dto.AccountNum))
+                    return Results.BadRequest("AccountNum (debit) is required.");
+                if (string.IsNullOrWhiteSpace(dto.BranchNum) || dto.BranchNum.Trim().Length != 4)
+                    return Results.BadRequest("BranchNum must be exactly 4 digits.");
+                if (dto.LineItems == null || dto.LineItems.Count == 0)
+                    return Results.BadRequest("At least one line item is required.");
+
+                // 1) Persist the form first (Pending)
                 var ent = new CheckRequest
                 {
                     UserId = me.UserId,
@@ -333,88 +376,69 @@ namespace CompGateApi.Endpoints
                 await repo.CreateAsync(ent);
                 log.LogInformation("Created CheckRequest Id={Id}", ent.Id);
 
-                // 2) Pricing (TrxCatId=TRXCAT_CHECKREQUEST, Unit=DEFAULT_UNIT)
+                // 2) Pricing (TrxCatId=TRXCAT_CHECKREQUEST, Unit=1) → only to fetch GL1/NR2/Codes
                 var pricing = await db.Pricings.AsNoTracking()
                                   .Where(p => p.TrxCatId == TRXCAT_CHECKREQUEST && p.Unit == DEFAULT_UNIT)
                                   .FirstOrDefaultAsync();
-                if (pricing == null)
-                    return Results.BadRequest($"Pricing not configured (TrxCatId={TRXCAT_CHECKREQUEST}, Unit={DEFAULT_UNIT}).");
 
-                // 3) Compute amount
+                // 3) Amount = first line (LYD + dirham/1000)
                 decimal amountToCharge;
-                if (!string.IsNullOrWhiteSpace(pricing.AmountRule))
-                {
-                    if (pricing.AmountRule.Trim().Equals("amount", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Sum user-provided line items (LYD)
-                        amountToCharge = SumLineItemsLyd(ent.LineItems);
-                    }
-                    else if (decimal.TryParse(pricing.AmountRule, out var fixedVal))
-                    {
-                        amountToCharge = fixedVal;
-                    }
-                    else
-                    {
-                        amountToCharge = pricing.Price ?? 0m;
-                    }
-                }
-                else
-                {
-                    amountToCharge = pricing.Price ?? 0m;
-                }
-
-                if (amountToCharge <= 0m)
-                    return Results.BadRequest("Computed amount is invalid (<= 0). Check Pricing/AmountRule or line items.");
-
-                // 4) Validate source account from request
-                if (string.IsNullOrWhiteSpace(ent.AccountNum))
-                    return Results.BadRequest("AccountNum is required to debit the check request.");
-
-                // 5) Resolve destination account from GL1 (+ branch 'xxxx' rule)
-                string toAccount;
                 try
                 {
-                    toAccount = ResolveDestinationAccount(pricing.GL1, ent.AccountNum!, ent.Branch);
+                    amountToCharge = ParseFirstLineAmountLyd(dto);
                 }
                 catch (Exception ex)
                 {
-                    log.LogWarning(ex, "Failed to resolve destination account from GL1/Branch (CheckRequest).");
                     return Results.BadRequest(ex.Message);
                 }
 
-                // 6) Narrative: pricing.NR2 preferred
-                var narrative = string.IsNullOrWhiteSpace(pricing.NR2)
-                    ? "Check request fee"
-                    : pricing.NR2;
+                if (amountToCharge <= 0m)
+                    return Results.BadRequest("Computed amount (first line) must be > 0.");
 
-                // 7) Debit via GenericTransferRepository → CompanyGatewayPostTransfer
+                // 4) Destination GL = BranchNum + 831892434, unless GL1 with {BRANCH} is configured
+                string toAccount;
+                try
+                {
+                    toAccount = BuildBranchGlFrom(dto.BranchNum, pricing?.GL1);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Failed to build destination GL for CheckRequest.");
+                    return Results.BadRequest(ex.Message);
+                }
+
+                // 5) Narrative & codes from pricing (optional)
+                var narrative = string.IsNullOrWhiteSpace(pricing?.NR2)
+                    ? "Check request amount"
+                    : pricing!.NR2;
+
+                // 6) Debit via GenericTransferRepository → CompanyGatewayPostTransfer
                 var debit = await genericTransferRepo.DebitForServiceAsync(
                     userId: me.UserId,
                     companyId: me.CompanyId.Value,
                     servicePackageId: (me.ServicePackageId as int?) ?? 0,
                     trxCategoryId: TRXCAT_CHECKREQUEST,
-                    fromAccount: ent.AccountNum!,
+                    fromAccount: dto.AccountNum!,
                     toAccount: toAccount,
                     amount: amountToCharge,
-                    description: "Check request fee",
+                    description: narrative,
                     currencyCode: DEFAULT_CURRENCY,
-                    dtc: pricing.DTC,
-                    ctc: pricing.CTC,
-                    dtc2: pricing.DTC2,
-                    ctc2: pricing.CTC2,
-                    applySecondLeg: pricing.APPLYTR2,
+                    dtc: pricing?.DTC,
+                    ctc: pricing?.CTC,
+                    dtc2: pricing?.DTC2,
+                    ctc2: pricing?.CTC2,
+                    applySecondLeg: pricing?.APPLYTR2 ?? false,
                     narrativeOverride: narrative
                 );
 
                 if (!debit.Success)
                     return Results.BadRequest(debit.Error);
 
-                // 8) Link transfer + bank ref
+                // 7) Link transfer + bank ref and return DTO
                 ent.TransferRequestId = debit.Entity!.Id;
                 ent.BankReference = debit.BankReference;
                 await repo.UpdateAsync(ent);
 
-                // 9) return DTO
                 var outDto = new CheckRequestDto
                 {
                     Id = ent.Id,
@@ -447,6 +471,7 @@ namespace CompGateApi.Endpoints
                 return Results.Unauthorized();
             }
         }
+
 
         public static async Task<IResult> UpdateCompanyRequest(
             int id,

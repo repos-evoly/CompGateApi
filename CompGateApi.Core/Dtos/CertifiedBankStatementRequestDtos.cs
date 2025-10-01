@@ -34,6 +34,7 @@ namespace CompGateApi.Core.Dtos
         public long AccountNumber { get; set; }
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
+        public decimal TotalAmountLyd { get; set; }
 
         public ServicesRequestDto? ServiceRequests { get; set; }
         public StatementRequestDto? StatementRequest { get; set; }
@@ -53,6 +54,7 @@ namespace CompGateApi.Core.Dtos
         public long AccountNumber { get; set; }
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
+        public decimal TotalAmountLyd { get; set; }
 
         public ServicesRequestDto? ServiceRequests { get; set; }
         public StatementRequestDto? StatementRequest { get; set; }
