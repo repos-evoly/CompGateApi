@@ -115,7 +115,7 @@ namespace CompGateApi.Data.Repositories
                     JsonSerializer.Serialize(payload));
 
                 var httpClient = _httpFactory.CreateClient();
-                var resp = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/postTransfer", payload, ct);
+                var resp = await httpClient.PostAsJsonAsync("http://10.1.1.205:7070/api/mobile/postTransfer", payload, ct);
                 var raw = await resp.Content.ReadAsStringAsync(ct);
 
                 _log.LogInformation("📥 CompanyGatewayPostTransfer response: {Raw}", raw);
@@ -219,7 +219,7 @@ namespace CompGateApi.Data.Repositories
             };
 
             var http = _httpFactory.CreateClient();
-            var resp = await http.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/postTransfer", payload, ct);
+            var resp = await http.PostAsJsonAsync("http://10.1.1.205:7070/api/mobile/postTransfer", payload, ct);
             var raw = await resp.Content.ReadAsStringAsync(ct);
 
             _log.LogInformation("🔄 Reverse payload: {Payload}", JsonSerializer.Serialize(payload));

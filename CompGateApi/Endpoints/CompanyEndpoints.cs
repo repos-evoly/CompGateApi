@@ -39,7 +39,7 @@ namespace CompGateApi.Endpoints
                      .WithName("RegisterCompany")
                      .Accepts<CompanyRegistrationDto>("application/json")
                      .Produces(201)
-                     .Produces(400);
+                     .Produces(401);
 
             companies.MapGet("/getInfo/{code}", GetCompanyInfo)
                     .WithName("GetCompanyInfo")
@@ -429,7 +429,7 @@ namespace CompGateApi.Endpoints
             if (!result.Success)
             {
                 log.LogWarning("Company registration failed: {Error}", result.Error);
-                return Results.BadRequest(new { error = result.Error });
+                return Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status401Unauthorized);
             }
 
             // Success → 201 + Location header

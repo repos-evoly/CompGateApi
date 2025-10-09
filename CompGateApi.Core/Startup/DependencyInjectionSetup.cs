@@ -95,6 +95,10 @@ namespace CompGateApi.Core.Startup
                                          "http://192.168.0.245:3013",
                                           "http://localhost:3013",
                                           "https://webanking.bcd.ly/Companygw",
+                                          "http://192.168.113.10",
+                                           "http://192.168.113.10:3012",
+                                             "http://192.168.113.11",
+                                           "http://192.168.113.11:3012",
                                           "http://10.1.1.205:3013")
                              .AllowAnyHeader()
                              .AllowAnyMethod()
@@ -267,20 +271,20 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("AuthApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.3.3.11/compauthapi/");
+        c.BaseAddress = new Uri("http://10.1.1.205/compauthapi/");
         // (optional) c.DefaultRequestHeaders.Add("Accept", "application/json");
       });
 
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.3.3.11:7070");
+        client.BaseAddress = new Uri("http://10.1.1.205:7070");
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
 
       services.AddHttpClient("KycApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.3.3.11");
+        c.BaseAddress = new Uri("http://10.1.1.205");
         c.DefaultRequestHeaders.Accept.Add(
           new MediaTypeWithQualityHeaderValue("application/json"));
       });

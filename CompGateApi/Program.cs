@@ -18,7 +18,28 @@ var env = app.Services.GetRequiredService<IHostEnvironment>();
 Console.WriteLine($"Environment: {env.EnvironmentName}");
 
 // to run data seeding use on terminal the command "dotnet run seeddata"
-if (args.Length == 1 && args[0].ToLower() == "seeddata") SeedData(app);
+if (args.Length == 1 && args[0].ToLower() == "seeddata")
+{
+    try
+    {
+        SeedData(app);
+        Console.WriteLine("Seeding completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Seeding error: {ex.Message}");
+        Exception? ie = ex.InnerException;
+        int depth = 0;
+        while (ie != null && depth < 5)
+        {
+            Console.WriteLine($"Inner[{depth}]: {ie.GetType().FullName}: {ie.Message}");
+            ie = ie.InnerException;
+            depth++;
+        }
+        Console.WriteLine(ex.ToString());
+    }
+    return;
+}
 
 app.ConfigureSwagger();
 app.ConfigureExceptionHandler();
