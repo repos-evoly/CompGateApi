@@ -42,8 +42,12 @@ namespace CompGateApi.Core.Dtos
         public string FromAccount { get; set; } = null!;
         public string ToAccount { get; set; } = null!;
         public decimal Amount { get; set; }
-
+        // Incoming currency from client as a 3-letter code (e.g., "LYD", "USD").
+        // Server will resolve this to CurrencyId and set the property below.
         [Required]
+        public string CurrencyDesc { get; set; } = null!;
+
+        // Not required from client anymore; set by server after resolving CurrencyDesc.
         public int CurrencyId { get; set; }
         public int EconomicSectorId { get; set; }
 
@@ -70,6 +74,8 @@ namespace CompGateApi.Core.Dtos
         public string? TransferType { get; set; } // (values: "B2B", "B2C", or null)
 
         public string? CompanyName { get; set; }
+        public string? AccountName { get; set; } // YBCD01SHNA
+        public string? Currency { get; set; }    // YBCD01CCY
         public string? BranchCode { get; set; }
         public string? BranchName { get; set; }
 
@@ -78,9 +84,11 @@ namespace CompGateApi.Core.Dtos
     // For /api/transfers/statement
     public class StatementEntryDto
     {
-        public DateTime PostingDate { get; set; }
+        // Formatted posting date (e.g., 2025-06-04)
+        public string PostingDate { get; set; } = string.Empty;
         public string DrCr { get; set; } = null!;
         public decimal Amount { get; set; }
+        public decimal Balance { get; set; }
         public List<string> Narratives { get; set; } = new();
     }
 

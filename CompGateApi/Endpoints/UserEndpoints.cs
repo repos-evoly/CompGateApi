@@ -121,7 +121,7 @@ namespace CompGateApi.Endpoints
 
             using var http = new HttpClient();
             var resp = await http.PostAsJsonAsync(
-                "http://10.1.1.205/compauthapi/api/auth/register",
+                "http://10.3.3.11/compauthapi/api/auth/register",
                 authPayload);
 
             if (!resp.IsSuccessStatusCode)
@@ -197,7 +197,7 @@ namespace CompGateApi.Endpoints
                 new AuthenticationHeaderValue("Bearer", token);
 
             var resp = await client.PostAsJsonAsync(
-                "http://10.1.1.205/compauthapi/api/auth/register",
+                "http://10.3.3.11/compauthapi/api/auth/register",
                 authPayload);
 
             if (!resp.IsSuccessStatusCode)

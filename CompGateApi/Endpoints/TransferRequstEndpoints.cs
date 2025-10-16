@@ -178,7 +178,25 @@ namespace CompGateApi.Endpoints
             if (me is null || !me.CompanyId.HasValue || me.ServicePackageId <= 0)
                 return Results.Unauthorized();
 
-            // 3) Call repo (use concrete type to access the new CreateAsync overload)
+            // 3) Resolve currency from incoming code (CurrencyDesc)
+            var code = dto.CurrencyDesc?.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(code))
+                return Results.BadRequest("CurrencyDesc is required.");
+
+            var currency = await db.Currencies
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => ((c.Code ?? string.Empty).Trim().ToUpper()) == code);
+            if (currency is null)
+            {
+                var available = await db.Currencies.AsNoTracking()
+                                   .Select(c => c.Code)
+                                   .ToListAsync();
+                return Results.BadRequest($"Unknown currency code '{dto.CurrencyDesc}'. Available: {string.Join(", ", available)}");
+            }
+
+            dto.CurrencyId = currency.Id;
+
+            // 4) Call repo (use concrete type to access the new CreateAsync overload)
             if (repo is not CompGateApi.Data.Repositories.TransferRequestRepository concreteRepo)
             {
                 log.LogError("TransferRequestRepository concrete implementation not available.");

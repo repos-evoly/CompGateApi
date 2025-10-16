@@ -13,7 +13,10 @@ namespace CompGateApi.Core.Validators
             RuleFor(x => x.FromAccount).NotEmpty().Length(1, 34);
             RuleFor(x => x.ToAccount).NotEmpty().Length(1, 34);
             RuleFor(x => x.Amount).GreaterThan(0);
-            RuleFor(x => x.CurrencyId).NotEmpty();
+            // We now receive currency by code (e.g., "LYD", "USD")
+            RuleFor(x => x.CurrencyDesc)
+                .NotEmpty()
+                .Matches("^[A-Za-z]{3}$").WithMessage("CurrencyDesc must be a 3-letter code.");
         }
     }
 

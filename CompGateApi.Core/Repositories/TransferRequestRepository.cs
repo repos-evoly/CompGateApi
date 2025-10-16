@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -245,7 +246,7 @@ namespace CompGateApi.Data.Repositories
                 _log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
 
                 var httpClient = _httpFactory.CreateClient();
-                var response = await httpClient.PostAsJsonAsync("http://10.1.1.205:7070/api/mobile/flexPostTransfer", payload, ct);
+                var response = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/flexPostTransfer", payload, ct);
                 var bankRaw = await response.Content.ReadAsStringAsync(ct);
 
                 _log.LogInformation("📥 Bank response: {Raw}", bankRaw);
@@ -434,6 +435,8 @@ namespace CompGateApi.Data.Repositories
                 return new AccountDto
                 {
                     AccountString = $"{a.YBCD01AB}{a.YBCD01AN}{a.YBCD01AS}".Trim(),
+                    AccountName = a.YBCD01SHNA?.Trim(),
+                    Currency = a.YBCD01CCY?.Trim(),
                     AvailableBalance = a.YBCD01CABL,
                     DebitBalance = a.YBCD01LDBL,
                     TransferType = transferType,
@@ -488,6 +491,11 @@ namespace CompGateApi.Data.Repositories
                 var date = el.GetProperty("YBCD04POD").GetString()?.Trim() ?? "";
                 var drcr = el.GetProperty("YBCD04DRCR").GetString() ?? "";
                 var amt = el.GetProperty("YBCD04AMA").GetDecimal();
+                decimal bal = 0m;
+                if (el.TryGetProperty("YBCD04BAL", out var balEl) && balEl.ValueKind == JsonValueKind.Number)
+                {
+                    bal = balEl.GetDecimal();
+                }
 
                 var narrs = new List<string>();
                 if (el.TryGetProperty("YBCD04NAR1", out var n1) && n1.GetString() is string s1 && s1.Trim() != "")
@@ -497,14 +505,36 @@ namespace CompGateApi.Data.Repositories
 
                 list.Add(new StatementEntryDto
                 {
-                    PostingDate = DateTime.TryParse(date, out var parsedDate) ? parsedDate : default,
+                    // Format posting date as yyyy-MM-dd for API consumers
+                    PostingDate = TryFormatDate(date),
                     DrCr = drcr,
                     Amount = amt,
+                    Balance = bal,
                     Narratives = narrs
                 });
             }
 
             return list;
+        }
+
+        private static string TryFormatDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+            // Try known bank format yyyyMMdd
+            if (DateTime.TryParseExact(raw.Trim(), "yyyyMMdd", CultureInfo.InvariantCulture,
+                                       DateTimeStyles.None, out var d1))
+            {
+                return d1.ToString("yyyy-MM-dd");
+            }
+
+            // Fallback: try general parse
+            if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var d2))
+            {
+                return d2.ToString("yyyy-MM-dd");
+            }
+
+            return raw.Trim();
         }
 
         public async Task<string?> GetStCodeByAccount(string account)
@@ -572,6 +602,8 @@ namespace CompGateApi.Data.Repositories
             public string? YBCD01AB { get; set; }
             public string? YBCD01AN { get; set; }
             public string? YBCD01AS { get; set; }
+            public string? YBCD01SHNA { get; set; }
+            public string? YBCD01CCY { get; set; }
             public decimal YBCD01CABL { get; set; }
             public decimal YBCD01LDBL { get; set; }
             public string? YBCD01CUN { get; set; }

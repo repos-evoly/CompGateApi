@@ -44,7 +44,9 @@ if (args.Length == 1 && args[0].ToLower() == "seeddata")
 app.ConfigureSwagger();
 app.ConfigureExceptionHandler();
 
-
+// Force 200 for any 4xx/5xx responses, wrapping payload
+// Place before auth so 401/403 are wrapped too
+app.UseAlways200ResponseWrapper();
 
 app.UseCors("AllowSpecificOrigins");
 app.ConfigureStaticFiles();

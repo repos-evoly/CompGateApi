@@ -364,7 +364,7 @@ namespace CompGateApi.Core.Repositories
                 .ToListAsync();
             var userPermissionNames = await _context.Permissions
                 .Where(p => userPermissionIds.Contains(p.Id))
-                .Select(p => p.NameAr)
+                .Select(p => p.NameEn)
                 .ToListAsync();
 
             // d) bank accounts — only if CompanyId is set
