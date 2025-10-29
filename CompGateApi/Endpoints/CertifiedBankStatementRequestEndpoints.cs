@@ -82,7 +82,8 @@ namespace CompGateApi.Endpoints
         }
 
         /// <summary>Bank core expects 13-digit account with leading zeros.</summary>
-        private static string NormalizeAcc13(long acc) => acc.ToString().PadLeft(13, '0');
+        private static string NormalizeAcc13(string acc)
+            => (acc ?? string.Empty).Trim().PadLeft(13, '0');
 
         /// <summary>Replace {BRANCH} with first 4 digits of the source account.</summary>
         private static string ResolveGlWithBranch(string gl1, string fromAccount)

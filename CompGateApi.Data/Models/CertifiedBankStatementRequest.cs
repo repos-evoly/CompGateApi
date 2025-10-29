@@ -44,7 +44,8 @@ namespace CompGateApi.Data.Models
         [Required, MaxLength(150)]
         public string AuthorizedOnTheAccountName { get; set; } = null!;
 
-        public long AccountNumber { get; set; }            // SOURCE account (will be debited)
+        [Required, MaxLength(30)]
+        public string AccountNumber { get; set; } = null!;           // SOURCE account (will be debited)
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
 

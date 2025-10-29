@@ -9,7 +9,10 @@ public class CertifiedBankStatementRequestCreateDtoValidator
     {
         RuleFor(x => x.AccountHolderName).NotEmpty();
         RuleFor(x => x.AuthorizedOnTheAccountName).NotEmpty();
-        RuleFor(x => x.AccountNumber).GreaterThan(0);
+        RuleFor(x => x.AccountNumber)
+            .NotEmpty()
+            .MaximumLength(30)
+            .Matches("^\\d{1,30}$").WithMessage("AccountNumber must be digits only (max 30).");
 
         // at least one section configured
         RuleFor(x => new { x.ServiceRequests, x.StatementRequest })

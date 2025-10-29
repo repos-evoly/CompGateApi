@@ -12,6 +12,7 @@ namespace CompGateApi.Data.Repositories
     public class CertifiedBankStatementRequestRepository : ICertifiedBankStatementRequestRepository
     {
         private readonly CompGateApiDbContext _context;
+
         public CertifiedBankStatementRequestRepository(CompGateApiDbContext context)
             => _context = context;
 
@@ -39,14 +40,14 @@ namespace CompGateApi.Data.Repositories
                         break;
 
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
+                        q = q.Where(r => r.AccountNumber != null && r.AccountNumber.ToLower().Contains(term));
                         break;
 
                     default:
                         q = q.Where(r =>
                             (r.AccountHolderName != null && r.AccountHolderName.ToLower().Contains(term)) ||
                             (r.AuthorizedOnTheAccountName != null && r.AuthorizedOnTheAccountName.ToLower().Contains(term)) ||
-                            r.AccountNumber.ToString().Contains(term));
+                            (r.AccountNumber != null && r.AccountNumber.ToLower().Contains(term)));
                         break;
                 }
             }
@@ -81,14 +82,14 @@ namespace CompGateApi.Data.Repositories
                         break;
 
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
+                        q = q.Where(r => r.AccountNumber != null && r.AccountNumber.ToLower().Contains(term));
                         break;
 
                     default:
                         q = q.Where(r =>
                             (r.AccountHolderName != null && r.AccountHolderName.ToLower().Contains(term)) ||
                             (r.AuthorizedOnTheAccountName != null && r.AuthorizedOnTheAccountName.ToLower().Contains(term)) ||
-                            r.AccountNumber.ToString().Contains(term));
+                            (r.AccountNumber != null && r.AccountNumber.ToLower().Contains(term)));
                         break;
                 }
             }
@@ -136,16 +137,15 @@ namespace CompGateApi.Data.Repositories
                         break;
 
                     case "account":
-                        // If AccountNumber is numeric, ToString may not translate for some providers.
-                        // If it doesn’t, consider storing a normalized searchable shadow column.
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
+                        q = q.Where(r => r.AccountNumber != null &&
+                                         EF.Functions.Like(r.AccountNumber.ToLower(), like));
                         break;
 
                     default:
                         q = q.Where(r =>
                             (r.AccountHolderName != null && EF.Functions.Like(r.AccountHolderName.ToLower(), like)) ||
                             (r.AuthorizedOnTheAccountName != null && EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like)) ||
-                            r.AccountNumber.ToString().Contains(term) ||
+                            (r.AccountNumber != null && EF.Functions.Like(r.AccountNumber.ToLower(), like)) ||
                             (r.Company != null && r.Company.Code != null && EF.Functions.Like(r.Company.Code.ToLower(), like)) ||
                             (r.Company != null && r.Company.Name != null && EF.Functions.Like(r.Company.Name.ToLower(), like)));
                         break;
@@ -197,14 +197,15 @@ namespace CompGateApi.Data.Repositories
                         break;
 
                     case "account":
-                        q = q.Where(r => r.AccountNumber.ToString().Contains(term));
+                        q = q.Where(r => r.AccountNumber != null &&
+                                         EF.Functions.Like(r.AccountNumber.ToLower(), like));
                         break;
 
                     default:
                         q = q.Where(r =>
                             (r.AccountHolderName != null && EF.Functions.Like(r.AccountHolderName.ToLower(), like)) ||
                             (r.AuthorizedOnTheAccountName != null && EF.Functions.Like(r.AuthorizedOnTheAccountName.ToLower(), like)) ||
-                            r.AccountNumber.ToString().Contains(term) ||
+                            (r.AccountNumber != null && EF.Functions.Like(r.AccountNumber.ToLower(), like)) ||
                             (r.Company != null && r.Company.Code != null && EF.Functions.Like(r.Company.Code.ToLower(), like)) ||
                             (r.Company != null && r.Company.Name != null && EF.Functions.Like(r.Company.Name.ToLower(), like)));
                         break;

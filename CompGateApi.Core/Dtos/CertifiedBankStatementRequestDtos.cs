@@ -31,7 +31,7 @@ namespace CompGateApi.Core.Dtos
 
         public string AccountHolderName { get; set; } = null!;
         public string AuthorizedOnTheAccountName { get; set; } = null!;
-        public long AccountNumber { get; set; }
+        public string AccountNumber { get; set; } = null!;
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
         public decimal TotalAmountLyd { get; set; }
@@ -51,7 +51,7 @@ namespace CompGateApi.Core.Dtos
     {
         public string AccountHolderName { get; set; } = null!;
         public string AuthorizedOnTheAccountName { get; set; } = null!;
-        public long AccountNumber { get; set; }
+        public string AccountNumber { get; set; } = null!;
         public long? OldAccountNumber { get; set; }
         public long? NewAccountNumber { get; set; }
         public decimal TotalAmountLyd { get; set; }
