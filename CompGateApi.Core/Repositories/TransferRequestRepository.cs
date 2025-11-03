@@ -246,7 +246,7 @@ namespace CompGateApi.Data.Repositories
                 _log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
 
                 var httpClient = _httpFactory.CreateClient();
-                var response = await httpClient.PostAsJsonAsync("http://10.3.3.11:7070/api/mobile/flexPostTransfer", payload, ct);
+                var response = await httpClient.PostAsJsonAsync("http://10.1.1.205:7070/api/mobile/flexPostTransfer", payload, ct);
                 var bankRaw = await response.Content.ReadAsStringAsync(ct);
 
                 _log.LogInformation("📥 Bank response: {Raw}", bankRaw);

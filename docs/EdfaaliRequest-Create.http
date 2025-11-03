@@ -1,0 +1,52 @@
+### Create Edfaali Request (multipart with multiple attachments)
+# @name CreateEdfaali
+POST {{baseUrl}}/api/edfaalirequests
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="Dto"
+Content-Type: application/json; charset=utf-8
+
+{
+  "representativeId": "123",
+  "nationalId": "1234567890123",
+  "identificationNumber": "A-987654",
+  "identificationType": "NationalID",
+  "companyEnglishName": "ACME Trading Ltd",
+  "workAddress": "Main Office, Tower 1",
+  "storeAddress": "Warehouse 12, Industrial Zone",
+  "city": "Tripoli",
+  "area": "Gargaresh",
+  "street": "1st Ring Rd",
+  "mobileNumber": "+218-91-0000000",
+  "servicePhoneNumber": "+218-91-1111111",
+  "bankAnnouncementPhoneNumber": "+218-91-2222222",
+  "email": "ops@acme.ly",
+  "accountNumber": "0123-123456-001"
+}
+
+--WebAppBoundary
+Content-Disposition: form-data; name="passport"; filename="passport.pdf"
+Content-Type: application/pdf
+
+< ./files/passport.pdf
+
+--WebAppBoundary
+Content-Disposition: form-data; name="birthStatement"; filename="birth-statement.pdf"
+Content-Type: application/pdf
+
+< ./files/birth-statement.pdf
+
+--WebAppBoundary
+Content-Disposition: form-data; name="activityLicense"; filename="activity-license.pdf"
+Content-Type: application/pdf
+
+< ./files/activity-license.pdf
+
+--WebAppBoundary--
+
+### Variables
+@baseUrl = http://localhost:5000
+@token = <paste JWT here>
+

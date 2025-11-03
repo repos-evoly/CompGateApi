@@ -45,6 +45,7 @@ namespace CompGateApi.Data.Context
               public DbSet<RtgsRequest> RtgsRequests => Set<RtgsRequest>();
               public DbSet<CreditFacilitiesOrLetterOfGuaranteeRequest> CreditFacilitiesOrLetterOfGuaranteeRequests => Set<CreditFacilitiesOrLetterOfGuaranteeRequest>();
               public DbSet<CertifiedBankStatementRequest> CertifiedBankStatementRequests => Set<CertifiedBankStatementRequest>();
+              public DbSet<EdfaaliRequest> EdfaaliRequests => Set<EdfaaliRequest>();
               public DbSet<Attachment> Attachments => Set<Attachment>();
               public DbSet<EconomicSector> EconomicSectors => Set<EconomicSector>();
               public DbSet<Representative> Representatives => Set<Representative>();

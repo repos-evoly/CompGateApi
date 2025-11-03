@@ -254,6 +254,8 @@ namespace CompGateApi.Core.Startup
       validators.AddScoped<IValidator<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto>, CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDtoValidator>();
       validators.AddScoped<IValidator<CertifiedBankStatementRequestCreateDto>, CertifiedBankStatementRequestCreateDtoValidator>();
       validators.AddScoped<IValidator<CertifiedBankStatementRequestStatusUpdateDto>, CertifiedBankStatementRequestStatusUpdateDtoValidator>();
+      validators.AddScoped<IValidator<EdfaaliRequestCreateDto>, EdfaaliRequestCreateDtoValidator>();
+      validators.AddScoped<IValidator<EdfaaliRequestStatusUpdateDto>, EdfaaliRequestStatusUpdateDtoValidator>();
 
 
       return validators;
@@ -271,20 +273,20 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("AuthApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.3.3.11/compauthapi/");
+        c.BaseAddress = new Uri("http://10.1.1.205/compauthapi/");
         // (optional) c.DefaultRequestHeaders.Add("Accept", "application/json");
       });
 
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.3.3.11:7070");
+        client.BaseAddress = new Uri("http://10.1.1.205:7070");
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
 
       services.AddHttpClient("KycApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.3.3.11");
+        c.BaseAddress = new Uri("http://10.1.1.205");
         c.DefaultRequestHeaders.Accept.Add(
           new MediaTypeWithQualityHeaderValue("application/json"));
       });
@@ -342,6 +344,7 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<ICreditFacilitiesOrLetterOfGuaranteeRequestRepository, CreditFacilitiesOrLetterOfGuaranteeRequestRepository>();
 
       services.AddScoped<ICertifiedBankStatementRequestRepository, CertifiedBankStatementRequestRepository>();
+      services.AddScoped<IEdfaaliRequestRepository, EdfaaliRequestRepository>();
       //economic sector
       services.AddScoped<IEconomicSectorRepository, EconomicSectorRepository>();
       //representatives
@@ -406,3 +409,5 @@ namespace CompGateApi.Core.Startup
     }
   }
 }
+
+

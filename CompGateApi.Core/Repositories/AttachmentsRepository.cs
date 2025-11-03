@@ -114,6 +114,16 @@ namespace CompGateApi.Data.Repositories
             await _db.SaveChangesAsync();
         }
 
+        public async Task LinkToEdfaaliRequestAsync(Guid attachmentId, int edfaaliRequestId)
+        {
+            var att = await _db.Attachments.FindAsync(attachmentId);
+            if (att == null)
+                throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+            att.EdfaaliRequestId = edfaaliRequestId;
+            await _db.SaveChangesAsync();
+        }
+
         public async Task<IEnumerable<AttachmentDto>> GetByVisa(int visaId)
         {
             var list = await _db.Attachments

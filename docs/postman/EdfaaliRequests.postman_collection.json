@@ -1,0 +1,80 @@
+{
+  "info": {
+    "name": "Edfaali Requests",
+    "_postman_id": "11111111-2222-3333-4444-555555555555",
+    "description": "Create EdfaaliRequest with multiple attachments (passport, birthStatement, activityLicense).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Edfaali Request",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "Dto",
+              "type": "text",
+              "value": "{\n  \"representativeId\": \"123\",\n  \"nationalId\": \"1234567890123\",\n  \"identificationNumber\": \"A-987654\",\n  \"identificationType\": \"NationalID\",\n  \"companyEnglishName\": \"ACME Trading Ltd\",\n  \"workAddress\": \"Main Office, Tower 1\",\n  \"storeAddress\": \"Warehouse 12, Industrial Zone\",\n  \"city\": \"Tripoli\",\n  \"area\": \"Gargaresh\",\n  \"street\": \"1st Ring Rd\",\n  \"mobileNumber\": \"+218-91-0000000\",\n  \"servicePhoneNumber\": \"+218-91-1111111\",\n  \"bankAnnouncementPhoneNumber\": \"+218-91-2222222\",\n  \"email\": \"ops@acme.ly\",\n  \"accountNumber\": \"0123-123456-001\"\n}"
+            },
+            {
+              "key": "passport",
+              "type": "file",
+              "src": [
+                "/absolute/path/to/passport.pdf"
+              ]
+            },
+            {
+              "key": "birthStatement",
+              "type": "file",
+              "src": [
+                "/absolute/path/to/birth-statement.pdf"
+              ]
+            },
+            {
+              "key": "activityLicense",
+              "type": "file",
+              "src": [
+                "/absolute/path/to/activity-license.pdf"
+              ]
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/edfaalirequests",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "edfaalirequests"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "token",
+      "value": "<paste JWT here>"
+    }
+  ]
+}
+

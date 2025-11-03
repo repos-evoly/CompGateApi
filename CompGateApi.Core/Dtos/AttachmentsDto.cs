@@ -26,6 +26,7 @@ namespace CompGateApi.Core.Dtos
 
     public int? CblRequestId { get; set; }
     public int? VisaRequestId { get; set; }
+    public int? EdfaaliRequestId { get; set; }
   }
 
   public class AttachmentUploadDto

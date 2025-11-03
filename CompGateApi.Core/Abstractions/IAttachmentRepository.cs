@@ -19,6 +19,7 @@ public interface IAttachmentRepository
   Task LinkToVisaRequestAsync(Guid attachmentId, int visaRequestId);
 
   Task LinkToCblRequestAsync(Guid attachmentId, int cblRequestId);
+  Task LinkToEdfaaliRequestAsync(Guid attachmentId, int edfaaliRequestId);
 
   Task<IEnumerable<AttachmentDto>> GetByVisa(int visaId);
   Task<AttachmentDto> UploadForVisa(IFormFile file, int visaId, string subject, string description, string createdBy);

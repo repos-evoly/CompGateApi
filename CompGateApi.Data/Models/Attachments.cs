@@ -42,5 +42,10 @@ namespace CompGateApi.Data.Models
     public int? VisaRequestId { get; set; }
     [ForeignKey(nameof(VisaRequestId))]
     public VisaRequest? VisaRequest { get; set; }
+
+    // Link to EdfaaliRequest (optional)
+    public int? EdfaaliRequestId { get; set; }
+    [ForeignKey(nameof(EdfaaliRequestId))]
+    public EdfaaliRequest? EdfaaliRequest { get; set; }
   }
 }
