@@ -42,13 +42,15 @@ namespace CompGateApi.Core.Startup
           var originalText = await new StreamReader(memStream, Encoding.UTF8).ReadToEndAsync();
           object? details = TryParseJson(originalText);
 
+          var computedMessage = ExtractMessage(originalText, details) 
+                                 ?? ReasonPhrases.GetReasonPhrase(status) 
+                                 ?? "Error";
+
           var payload = new
           {
             success = false,
             status,
-            message = !string.IsNullOrWhiteSpace(originalText)
-                        ? TrimForMessage(originalText)
-                        : ReasonPhrases.GetReasonPhrase(status) ?? "Error",
+            message = computedMessage,
             details = details ?? (!string.IsNullOrWhiteSpace(originalText) ? originalText : null)
           };
 
@@ -95,11 +97,61 @@ namespace CompGateApi.Core.Startup
 
     private static string TrimForMessage(string input)
     {
-      // simple single-line message extraction
       var msg = input.Trim();
-      var newline = msg.IndexOf('\n');
-      if (newline > 0) msg = msg.Substring(0, newline).Trim();
-      return msg;
+      var firstLine = msg.Replace("\r", string.Empty)
+                         .Split('\n')
+                         .FirstOrDefault()?.Trim();
+      return string.IsNullOrWhiteSpace(firstLine) ? msg : firstLine!;
+    }
+
+    private static string? ExtractMessage(string originalText, object? parsed)
+    {
+      if (parsed is JsonElement je)
+      {
+        // Common shapes: { message: "..." }, { error: "..." }, ProblemDetails { title: "..." }
+        if (je.ValueKind == JsonValueKind.Object)
+        {
+          if (je.TryGetProperty("message", out var messageProp) && messageProp.ValueKind == JsonValueKind.String)
+            return messageProp.GetString();
+          if (je.TryGetProperty("error", out var errorProp) && errorProp.ValueKind == JsonValueKind.String)
+            return errorProp.GetString();
+          if (je.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+            return titleProp.GetString();
+
+          // ASP.NET Core validation errors: { errors: { Field: ["msg1", "msg2"] } }
+          if (je.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
+          {
+            foreach (var field in errorsProp.EnumerateObject())
+            {
+              if (field.Value.ValueKind == JsonValueKind.Array)
+              {
+                foreach (var item in field.Value.EnumerateArray())
+                {
+                  if (item.ValueKind == JsonValueKind.String)
+                    return item.GetString();
+                }
+              }
+              else if (field.Value.ValueKind == JsonValueKind.String)
+              {
+                return field.Value.GetString();
+              }
+            }
+          }
+
+          // Fallback: compact the JSON as message
+          return JsonSerializer.Serialize(je);
+        }
+        if (je.ValueKind == JsonValueKind.String)
+        {
+          return je.GetString();
+        }
+      }
+
+      // Not JSON or couldn't extract: use first non-empty line of text
+      if (!string.IsNullOrWhiteSpace(originalText))
+        return TrimForMessage(originalText);
+
+      return null;
     }
   }
 
@@ -109,4 +161,3 @@ namespace CompGateApi.Core.Startup
       => app.UseMiddleware<Always200ResponseMiddleware>();
   }
 }
-

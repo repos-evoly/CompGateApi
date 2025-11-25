@@ -273,20 +273,20 @@ namespace CompGateApi.Core.Startup
 
       services.AddHttpClient("AuthApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.1.1.205/compauthapi/");
+        c.BaseAddress = new Uri("http://10.3.3.11/compauthapi/");
         // (optional) c.DefaultRequestHeaders.Add("Accept", "application/json");
       });
 
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.1.1.205:7070");
+        client.BaseAddress = new Uri("http://10.3.3.11:7070");
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
 
       services.AddHttpClient("KycApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.1.1.205");
+        c.BaseAddress = new Uri("http://10.3.3.11");
         c.DefaultRequestHeaders.Accept.Add(
           new MediaTypeWithQualityHeaderValue("application/json"));
       });

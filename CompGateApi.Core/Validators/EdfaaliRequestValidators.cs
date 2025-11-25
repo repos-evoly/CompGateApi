@@ -7,6 +7,9 @@ namespace CompGateApi.Core.Validators
     {
         public EdfaaliRequestCreateDtoValidator()
         {
+            RuleFor(x => x.RepresentativeId)
+                .GreaterThan(0).When(x => x.RepresentativeId.HasValue)
+                .WithMessage("RepresentativeId must be a positive integer.");
             RuleFor(x => x.CompanyEnglishName).MaximumLength(200);
             RuleFor(x => x.WorkAddress).MaximumLength(250);
             RuleFor(x => x.StoreAddress).MaximumLength(250);
@@ -34,4 +37,3 @@ namespace CompGateApi.Core.Validators
         }
     }
 }
-

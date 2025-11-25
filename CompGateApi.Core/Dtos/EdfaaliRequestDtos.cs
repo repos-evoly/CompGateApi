@@ -10,6 +10,7 @@ namespace CompGateApi.Core.Dtos
         public int CompanyId { get; set; }
 
         public int? RepresentativeId { get; set; }
+        public RepresentativeDto? Representative { get; set; }
         public string? NationalId { get; set; }
         public string? IdentificationNumber { get; set; }
         public string? IdentificationType { get; set; }
@@ -37,7 +38,7 @@ namespace CompGateApi.Core.Dtos
     // Incoming body (JSON inside multipart 'Dto' field), mirrors TEdfaaliFormValues
     public class EdfaaliRequestCreateDto
     {
-        public string? RepresentativeId { get; set; }
+        public int? RepresentativeId { get; set; }
         public string? NationalId { get; set; }
         public string? IdentificationNumber { get; set; }
         public string? IdentificationType { get; set; }
@@ -60,4 +61,3 @@ namespace CompGateApi.Core.Dtos
         public string? Reason { get; set; }
     }
 }
-

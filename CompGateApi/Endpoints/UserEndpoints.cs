@@ -99,6 +99,7 @@ namespace CompGateApi.Endpoints
     [FromBody] CompanyRegistrationDto dto,
     [FromServices] ICompanyRepository companyRepo,
     [FromServices] IUserRepository userRepo,
+    [FromServices] IHttpClientFactory httpFactory,
     ILogger<UserEndpoints> log)
         {
             // 0) Resolve or create the Company record
@@ -119,9 +120,9 @@ namespace CompGateApi.Endpoints
                 roleId = dto.RoleId
             };
 
-            using var http = new HttpClient();
+            var http = httpFactory.CreateClient("AuthApi");
             var resp = await http.PostAsJsonAsync(
-                "http://10.1.1.205/compauthapi/api/auth/register",
+                "api/auth/register",
                 authPayload);
 
             if (!resp.IsSuccessStatusCode)
@@ -192,12 +193,12 @@ namespace CompGateApi.Endpoints
             };
 
             // 3) Call Auth API
-            var client = httpFactory.CreateClient();
+            var client = httpFactory.CreateClient("AuthApi");
             client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
 
             var resp = await client.PostAsJsonAsync(
-                "http://10.1.1.205/compauthapi/api/auth/register",
+                "api/auth/register",
                 authPayload);
 
             if (!resp.IsSuccessStatusCode)

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
@@ -113,6 +114,7 @@ namespace CompGateApi.Endpoints
         public static async Task<IResult> GetCompanyRequests(
             HttpContext ctx,
             IEdfaaliRequestRepository repo,
+            IRepresentativeRepository repRepo,
             IUserRepository userRepo,
             ILogger<EdfaaliRequestEndpoints> log,
             [FromQuery] string? searchTerm,
@@ -130,7 +132,31 @@ namespace CompGateApi.Endpoints
 
                 var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy);
                 var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, searchBy, page, limit);
-                var dtos = list.Select(ToDto).ToList();
+                var dtos = new List<EdfaaliRequestDto>(list.Count);
+                foreach (var ent in list)
+                {
+                    var dto = ToDto(ent);
+                    if (ent.RepresentativeId.HasValue)
+                    {
+                        var rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
+                        if (rep != null)
+                        {
+                            dto.Representative = new RepresentativeDto
+                            {
+                                Id = rep.Id,
+                                Name = rep.Name,
+                                Number = rep.Number,
+                                PassportNumber = rep.PassportNumber,
+                                IsActive = rep.IsActive,
+                                IsDeleted = rep.IsDeleted,
+                                PhotoUrl = rep.PhotoUrl,
+                                CreatedAt = rep.CreatedAt,
+                                UpdatedAt = rep.UpdatedAt
+                            };
+                        }
+                    }
+                    dtos.Add(dto);
+                }
 
                 return Results.Ok(new PagedResult<EdfaaliRequestDto>
                 {
@@ -152,7 +178,8 @@ namespace CompGateApi.Endpoints
             int id,
             HttpContext ctx,
             IEdfaaliRequestRepository repo,
-            IUserRepository userRepo)
+            IUserRepository userRepo,
+            IRepresentativeRepository repRepo)
         {
             try
             {
@@ -166,7 +193,28 @@ namespace CompGateApi.Endpoints
                 if (ent == null || ent.CompanyId != me.CompanyId.Value)
                     return Results.NotFound();
 
-                return Results.Ok(ToDto(ent));
+                var dto = ToDto(ent);
+                if (ent.RepresentativeId.HasValue)
+                {
+                    var rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
+                    if (rep != null)
+                    {
+                        dto.Representative = new RepresentativeDto
+                        {
+                            Id = rep.Id,
+                            Name = rep.Name,
+                            Number = rep.Number,
+                            PassportNumber = rep.PassportNumber,
+                            IsActive = rep.IsActive,
+                            IsDeleted = rep.IsDeleted,
+                            PhotoUrl = rep.PhotoUrl,
+                            CreatedAt = rep.CreatedAt,
+                            UpdatedAt = rep.UpdatedAt
+                        };
+                    }
+                }
+
+                return Results.Ok(dto);
             }
             catch (UnauthorizedAccessException)
             {
@@ -180,6 +228,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             IEdfaaliRequestRepository repo,
             IAttachmentRepository attRepo,
+            IRepresentativeRepository repRepo,
             IUserRepository userRepo,
             ILogger<EdfaaliRequestEndpoints> log)
         {
@@ -202,22 +251,21 @@ namespace CompGateApi.Endpoints
             EdfaaliRequestCreateDto dto;
             try
             {
-                dto = JsonSerializer.Deserialize<EdfaaliRequestCreateDto>(dtoJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+                dto = JsonSerializer.Deserialize<EdfaaliRequestCreateDto>(dtoJson, new JsonSerializerOptions {
+                    PropertyNameCaseInsensitive = true,
+                    NumberHandling = JsonNumberHandling.AllowReadingFromString
+                })!;
             }
             catch (JsonException)
             {
                 return Results.BadRequest("Invalid JSON in 'Dto' field.");
             }
 
-            int? representativeId = null;
-            if (!string.IsNullOrWhiteSpace(dto.RepresentativeId) && int.TryParse(dto.RepresentativeId, out var rid))
-                representativeId = rid;
-
             var ent = new EdfaaliRequest
             {
                 UserId = me.UserId,
                 CompanyId = me.CompanyId.Value,
-                RepresentativeId = representativeId,
+                RepresentativeId = dto.RepresentativeId,
                 NationalId = dto.NationalId,
                 IdentificationNumber = dto.IdentificationNumber,
                 IdentificationType = dto.IdentificationType,
@@ -252,7 +300,27 @@ namespace CompGateApi.Endpoints
             }
 
             var fresh = await repo.GetByIdAsync(ent.Id);
-            return Results.Created($"/api/edfaalirequests/{ent.Id}", ToDto(fresh!));
+            var outDto = ToDto(fresh!);
+            if (fresh!.RepresentativeId.HasValue)
+            {
+                var rep = await repRepo.GetByIdAsync(fresh.RepresentativeId.Value);
+                if (rep != null)
+                {
+                    outDto.Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number,
+                        PassportNumber = rep.PassportNumber,
+                        IsActive = rep.IsActive,
+                        IsDeleted = rep.IsDeleted,
+                        PhotoUrl = rep.PhotoUrl,
+                        CreatedAt = rep.CreatedAt,
+                        UpdatedAt = rep.UpdatedAt
+                    };
+                }
+            }
+            return Results.Created($"/api/edfaalirequests/{ent.Id}", outDto);
         }
 
         // COMPANY: update (multipart)
@@ -262,6 +330,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             IEdfaaliRequestRepository repo,
             IAttachmentRepository attRepo,
+            IRepresentativeRepository repRepo,
             IUserRepository userRepo,
             ILogger<EdfaaliRequestEndpoints> log)
         {
@@ -290,14 +359,17 @@ namespace CompGateApi.Endpoints
             EdfaaliRequestCreateDto dto;
             try
             {
-                dto = JsonSerializer.Deserialize<EdfaaliRequestCreateDto>(dtoJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+                dto = JsonSerializer.Deserialize<EdfaaliRequestCreateDto>(dtoJson, new JsonSerializerOptions {
+                    PropertyNameCaseInsensitive = true,
+                    NumberHandling = JsonNumberHandling.AllowReadingFromString
+                })!;
             }
             catch (JsonException)
             {
                 return Results.BadRequest("Invalid JSON in 'Dto' field.");
             }
 
-            ent.RepresentativeId = (!string.IsNullOrWhiteSpace(dto.RepresentativeId) && int.TryParse(dto.RepresentativeId, out var rid)) ? rid : null;
+            ent.RepresentativeId = dto.RepresentativeId;
             ent.NationalId = dto.NationalId;
             ent.IdentificationNumber = dto.IdentificationNumber;
             ent.IdentificationType = dto.IdentificationType;
@@ -331,12 +403,33 @@ namespace CompGateApi.Endpoints
             }
 
             var fresh = await repo.GetByIdAsync(id);
-            return Results.Ok(ToDto(fresh!));
+            var outDto2 = ToDto(fresh!);
+            if (fresh!.RepresentativeId.HasValue)
+            {
+                var rep = await repRepo.GetByIdAsync(fresh.RepresentativeId.Value);
+                if (rep != null)
+                {
+                    outDto2.Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number,
+                        PassportNumber = rep.PassportNumber,
+                        IsActive = rep.IsActive,
+                        IsDeleted = rep.IsDeleted,
+                        PhotoUrl = rep.PhotoUrl,
+                        CreatedAt = rep.CreatedAt,
+                        UpdatedAt = rep.UpdatedAt
+                    };
+                }
+            }
+            return Results.Ok(outDto2);
         }
 
         // ADMIN: list all
         public static async Task<IResult> AdminGetAll(
             IEdfaaliRequestRepository repo,
+            IRepresentativeRepository repRepo,
             ILogger<EdfaaliRequestEndpoints> log,
             [FromQuery] string? searchTerm,
             [FromQuery] string? searchBy,
@@ -345,7 +438,31 @@ namespace CompGateApi.Endpoints
         {
             var total = await repo.GetCountAsync(searchTerm, searchBy);
             var list = await repo.GetAllAsync(searchTerm, searchBy, page, limit);
-            var dtos = list.Select(ToDto).ToList();
+            var dtos = new List<EdfaaliRequestDto>(list.Count);
+            foreach (var ent in list)
+            {
+                var dto = ToDto(ent);
+                if (ent.RepresentativeId.HasValue)
+                {
+                    var rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
+                    if (rep != null)
+                    {
+                        dto.Representative = new RepresentativeDto
+                        {
+                            Id = rep.Id,
+                            Name = rep.Name,
+                            Number = rep.Number,
+                            PassportNumber = rep.PassportNumber,
+                            IsActive = rep.IsActive,
+                            IsDeleted = rep.IsDeleted,
+                            PhotoUrl = rep.PhotoUrl,
+                            CreatedAt = rep.CreatedAt,
+                            UpdatedAt = rep.UpdatedAt
+                        };
+                    }
+                }
+                dtos.Add(dto);
+            }
             return Results.Ok(new PagedResult<EdfaaliRequestDto>
             {
                 Data = dtos,
@@ -360,12 +477,33 @@ namespace CompGateApi.Endpoints
         public static async Task<IResult> AdminGetById(
             int id,
             [FromServices] IEdfaaliRequestRepository repo,
+            [FromServices] IRepresentativeRepository repRepo,
             [FromServices] ILogger<EdfaaliRequestEndpoints> log)
         {
             var ent = await repo.GetByIdAsync(id);
             if (ent == null)
                 return Results.NotFound();
-            return Results.Ok(ToDto(ent));
+            var dto = ToDto(ent);
+            if (ent.RepresentativeId.HasValue)
+            {
+                var rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
+                if (rep != null)
+                {
+                    dto.Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number,
+                        PassportNumber = rep.PassportNumber,
+                        IsActive = rep.IsActive,
+                        IsDeleted = rep.IsDeleted,
+                        PhotoUrl = rep.PhotoUrl,
+                        CreatedAt = rep.CreatedAt,
+                        UpdatedAt = rep.UpdatedAt
+                    };
+                }
+            }
+            return Results.Ok(dto);
         }
 
         // ADMIN: update status
@@ -373,6 +511,7 @@ namespace CompGateApi.Endpoints
             int id,
             [FromBody] EdfaaliRequestStatusUpdateDto dto,
             [FromServices] IEdfaaliRequestRepository repo,
+            [FromServices] IRepresentativeRepository repRepo,
             [FromServices] ILogger<EdfaaliRequestEndpoints> log)
         {
             var ent = await repo.GetByIdAsync(id);
@@ -383,8 +522,28 @@ namespace CompGateApi.Endpoints
             ent.Reason = dto.Reason;
             await repo.UpdateAsync(ent);
 
-            return Results.Ok(ToDto(ent));
+            var outDto = ToDto(ent);
+            if (ent.RepresentativeId.HasValue)
+            {
+                var rep = await repRepo.GetByIdAsync(ent.RepresentativeId.Value);
+                if (rep != null)
+                {
+                    outDto.Representative = new RepresentativeDto
+                    {
+                        Id = rep.Id,
+                        Name = rep.Name,
+                        Number = rep.Number,
+                        PassportNumber = rep.PassportNumber,
+                        IsActive = rep.IsActive,
+                        IsDeleted = rep.IsDeleted,
+                        PhotoUrl = rep.PhotoUrl,
+                        CreatedAt = rep.CreatedAt,
+                        UpdatedAt = rep.UpdatedAt
+                    };
+                }
+            }
+
+            return Results.Ok(outDto);
         }
     }
 }
-
