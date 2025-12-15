@@ -48,6 +48,11 @@ namespace CompGateApi.Endpoints
          .WithName("DeleteCompanyAttachment")
          .Produces<AttachmentDto>(StatusCodes.Status200OK)
          .Produces(StatusCodes.Status404NotFound);
+
+      // POST alias for delete
+      grp.MapPost("/{id:guid}/delete", Delete)
+         .Produces<AttachmentDto>(StatusCodes.Status200OK)
+         .Produces(StatusCodes.Status404NotFound);
     }
 
     public static async Task<IResult> GetByCompany(

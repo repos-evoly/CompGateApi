@@ -56,6 +56,13 @@ namespace CompGateApi.Endpoints
                    .Produces(400)
                    .Produces(404);
 
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateCompanyRequest)
+                   .Accepts<CheckRequestCreateDto>("application/json")
+                   .Produces<CheckRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
+
             // ── ADMIN PORTAL ───────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/checkrequests")
@@ -74,6 +81,12 @@ namespace CompGateApi.Endpoints
 
             admin.MapPut("/{id:int}/status", AdminUpdateStatus)
                  .WithName("AdminUpdateCheckRequestStatus")
+                 .Accepts<CheckRequestStatusUpdateDto>("application/json")
+                 .Produces<CheckRequestDto>(200)
+                 .Produces(400)
+                 .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", AdminUpdateStatus)
                  .Accepts<CheckRequestStatusUpdateDto>("application/json")
                  .Produces<CheckRequestDto>(200)
                  .Produces(400)

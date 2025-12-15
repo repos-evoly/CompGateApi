@@ -43,6 +43,12 @@ namespace CompGateApi.Endpoints
                    .Produces<VisaRequestDto>(200)
                    .Produces(400)
                    .Produces(404);
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateMyRequest)
+                   .Accepts<IFormFile>("multipart/form-data")
+                   .Produces<VisaRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
             var admin = app
                 .MapGroup("/api/admin/visarequests")
                 .WithTags("VisaRequests")
@@ -54,6 +60,11 @@ namespace CompGateApi.Endpoints
 
             // Admin approves = DEBIT; rejects = REFUND (if already debited)
             admin.MapPut("/{id:int}/status", UpdateStatus)
+                 .Accepts<VisaRequestStatusUpdateDto>("application/json")
+                 .Produces<VisaRequestDto>(200)
+                 .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<VisaRequestStatusUpdateDto>("application/json")
                  .Produces<VisaRequestDto>(200)
                  .Produces(404);

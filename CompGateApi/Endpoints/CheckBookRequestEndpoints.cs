@@ -50,6 +50,13 @@ namespace CompGateApi.Endpoints
                     .Produces(400)
                     .Produces(404);
 
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateMyRequest)
+                    .Accepts<CheckBookRequestCreateDto>("application/json")
+                    .Produces<CheckBookRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/checkbookrequests")
@@ -64,6 +71,11 @@ namespace CompGateApi.Endpoints
 
             admin.MapPut("/{id:int}/status", UpdateStatus)
                  .WithName("AdminUpdateCheckBookRequestStatus")
+                 .Accepts<CheckBookRequestStatusUpdateDto>("application/json")
+                 .Produces<CheckBookRequestDto>(200)
+                 .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<CheckBookRequestStatusUpdateDto>("application/json")
                  .Produces<CheckBookRequestDto>(200)
                  .Produces(404);

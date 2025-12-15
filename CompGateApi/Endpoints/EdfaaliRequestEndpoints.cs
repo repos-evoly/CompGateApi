@@ -41,6 +41,12 @@ namespace CompGateApi.Endpoints
                    .Produces<EdfaaliRequestDto>(200)
                    .Produces(400)
                    .Produces(404);
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateCompanyRequest)
+                   .Accepts<IFormFile>("multipart/form-data")
+                   .Produces<EdfaaliRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
 
             var admin = app
                 .MapGroup("/api/admin/edfaalirequests")
@@ -55,6 +61,12 @@ namespace CompGateApi.Endpoints
                  .Produces(404);
 
             admin.MapPut("/{id:int}/status", AdminUpdateStatus)
+                 .Accepts<EdfaaliRequestStatusUpdateDto>("application/json")
+                 .Produces<EdfaaliRequestDto>(200)
+                 .Produces(400)
+                 .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", AdminUpdateStatus)
                  .Accepts<EdfaaliRequestStatusUpdateDto>("application/json")
                  .Produces<EdfaaliRequestDto>(200)
                  .Produces(400)

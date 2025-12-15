@@ -44,6 +44,12 @@ namespace CompGateApi.Endpoints
                     .Produces<RtgsRequestDto>(200)
                     .Produces(400)
                     .Produces(404);
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateMyRequest)
+                    .Accepts<RtgsRequestCreateDto>("application/json")
+                    .Produces<RtgsRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
 
 
             // ── ADMIN routes ─────────────────────────────────────────
@@ -57,6 +63,11 @@ namespace CompGateApi.Endpoints
                  .Produces<PagedResult<RtgsRequestDto>>(200);
 
             admin.MapPut("/{id:int}/status", UpdateStatus)
+                 .Accepts<RtgsRequestStatusUpdateDto>("application/json")
+                 .Produces<RtgsRequestDto>(200)
+                 .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<RtgsRequestStatusUpdateDto>("application/json")
                  .Produces<RtgsRequestDto>(200)
                  .Produces(404);

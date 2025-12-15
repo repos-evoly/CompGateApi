@@ -44,6 +44,13 @@ namespace CompGateApi.Endpoints
                     .Produces(400)
                     .Produces(404);
 
+            // POST alias for update
+            userGroup.MapPost("/{id:int}/update", UpdateMyRequest)
+                     .Accepts<ForeignTransferCreateDto>("application/json")
+                     .Produces<ForeignTransferDto>(200)
+                     .Produces(400)
+                     .Produces(404);
+
 
             // Admin portal
             var admin = app.MapGroup("/api/admin/foreigntransfers")
@@ -54,6 +61,13 @@ namespace CompGateApi.Endpoints
                  .Produces<PagedResult<ForeignTransferDto>>(200);
 
             admin.MapPut("/{id:int}/status", UpdateStatus)
+                 .Accepts<ForeignTransferStatusUpdateDto>("application/json")
+                 .Produces<ForeignTransferDto>(200)
+                 .Produces(400)
+                 .Produces(404);
+
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<ForeignTransferStatusUpdateDto>("application/json")
                  .Produces<ForeignTransferDto>(200)
                  .Produces(400)

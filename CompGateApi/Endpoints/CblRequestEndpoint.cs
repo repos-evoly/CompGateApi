@@ -45,6 +45,13 @@ namespace CompGateApi.Endpoints
                     .Produces(400)
                     .Produces(404);
 
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateMyRequest)
+                    .Accepts<IFormFile>("multipart/form-data")
+                    .Produces<CblRequestDto>(200)
+                    .Produces(400)
+                    .Produces(404);
+
 
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
@@ -57,6 +64,12 @@ namespace CompGateApi.Endpoints
                  .Produces<PagedResult<CblRequestDto>>(200);
 
             admin.MapPut("/{id:int}/status", UpdateStatus)
+                 .Accepts<CblRequestStatusUpdateDto>("application/json")
+                 .Produces<CblRequestDto>(200)
+                 .Produces(404);
+
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<CblRequestStatusUpdateDto>("application/json")
                  .Produces<CblRequestDto>(200)
                  .Produces(404);

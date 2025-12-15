@@ -42,9 +42,17 @@ namespace CompGateApi.Endpoints
                  .WithName("EditUser")
                  .Produces<string>(200)      // your “User updated successfully.” message
                  .Produces(400);
+            // POST alias for edit
+            users.MapPost("/edit/{userId:int}/update", EditUser)
+                 .Produces<string>(200)
+                 .Produces(400);
 
             users.MapPut("/edit-permissions/{userId:int}", EditUserRolePermissions)
                  .WithName("EditUserPermissions")
+                 .Produces<string>(200)
+                 .Produces(400);
+            // POST alias for edit-permissions
+            users.MapPost("/edit-permissions/{userId:int}/update", EditUserRolePermissions)
                  .Produces<string>(200)
                  .Produces(400);
 

@@ -42,6 +42,14 @@ namespace CompGateApi.Endpoints
                  .RequireAuthorization("AdminAccess")
                .Produces(400)
                .Produces(404);
+            // POST alias for category detail update
+            grp.MapPost("/{id:int}/categories/{categoryId:int}/update", UpdateCategoryDetail)
+               .Accepts<ServicePackageCategoryUpdateDto>("application/json")
+               .Produces<ServicePackageCategoryDto>(200)
+               .RequireAuthorization("RequireAdminUser")
+               .RequireAuthorization("AdminAccess")
+               .Produces(400)
+               .Produces(404);
 
             grp.MapPost("/", Create)
                .Accepts<ServicePackageCreateDto>("application/json")
@@ -57,10 +65,24 @@ namespace CompGateApi.Endpoints
                .Produces<ServicePackageListDto>(200)
                .Produces(400)
                .Produces(404);
+            // POST alias for update
+            grp.MapPost("/{id:int}/update", Update)
+               .Accepts<ServicePackageUpdateDto>("application/json")
+               .RequireAuthorization("RequireAdminUser")
+               .RequireAuthorization("AdminAccess")
+               .Produces<ServicePackageListDto>(200)
+               .Produces(400)
+               .Produces(404);
 
             grp.MapDelete("/{id:int}", Delete)
               .RequireAuthorization("RequireAdminUser")
               .RequireAuthorization("AdminAccess")
+               .Produces(204)
+               .Produces(404);
+            // POST alias for delete
+            grp.MapPost("/{id:int}/delete", Delete)
+               .RequireAuthorization("RequireAdminUser")
+               .RequireAuthorization("AdminAccess")
                .Produces(204)
                .Produces(404);
         }

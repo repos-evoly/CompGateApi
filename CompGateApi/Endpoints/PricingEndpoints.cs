@@ -33,8 +33,18 @@ namespace CompGateApi.Endpoints
                .Produces<PricingDto>(200)
                .Produces(404)
                .Produces(400);
+            // POST alias for update
+            grp.MapPost("/{id:int}/update", Update)
+               .Accepts<PricingUpdateDto>("application/json")
+               .Produces<PricingDto>(200)
+               .Produces(404)
+               .Produces(400);
 
             grp.MapDelete("/{id:int}", Delete)
+               .Produces(204)
+               .Produces(404);
+            // POST alias for delete
+            grp.MapPost("/{id:int}/delete", Delete)
                .Produces(204)
                .Produces(404);
         }

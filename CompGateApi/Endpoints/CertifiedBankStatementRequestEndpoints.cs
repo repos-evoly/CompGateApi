@@ -48,6 +48,13 @@ namespace CompGateApi.Endpoints
                    .Produces(400)
                    .Produces(404);
 
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateCompanyRequest)
+                   .Accepts<CertifiedBankStatementRequestCreateDto>("application/json")
+                   .Produces<CertifiedBankStatementRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
+
             // ── ADMIN ROUTES ──────────────────────────────────────────────────
             var admin = app
                 .MapGroup("/api/admin/certifiedbankstatementrequests")
@@ -59,6 +66,13 @@ namespace CompGateApi.Endpoints
                  .Produces<PagedResult<CertifiedBankStatementRequestDto>>(200);
 
             admin.MapPut("/{id:int}/status", AdminUpdateStatus)
+                 .Accepts<CertifiedBankStatementRequestStatusUpdateDto>("application/json")
+                 .Produces<CertifiedBankStatementRequestDto>(200)
+                 .Produces(400)
+                 .Produces(404);
+
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", AdminUpdateStatus)
                  .Accepts<CertifiedBankStatementRequestStatusUpdateDto>("application/json")
                  .Produces<CertifiedBankStatementRequestDto>(200)
                  .Produces(400)

@@ -35,8 +35,17 @@ namespace CompGateApi.Endpoints
                .Accepts<VisaUpdateDto>("application/json")
                .Produces<VisaDto>(200)
                .Produces(404);
+            // POST alias for update
+            grp.MapPost("/{id:int}/update", Update)
+               .Accepts<VisaUpdateDto>("application/json")
+               .Produces<VisaDto>(200)
+               .Produces(404);
 
             grp.MapDelete("/{id:int}", Delete)
+               .Produces(204)
+               .Produces(404);
+            // POST alias for delete
+            grp.MapPost("/{id:int}/delete", Delete)
                .Produces(204)
                .Produces(404);
 

@@ -134,6 +134,15 @@ namespace CompGateApi.Data.Repositories
                 if (currency == null)
                     return Fail("Invalid currency");
 
+                // Map currency code early to drive precision/rounding
+                string currencyCode = currency.Id switch
+                {
+                    1 => "LYD",
+                    2 => "USD",
+                    3 => "EUR",
+                    _ => "LYD"
+                };
+
                 decimal rate = currency.Rate;
                 decimal amountInBase = dto.Amount * rate;
 
@@ -141,7 +150,8 @@ namespace CompGateApi.Data.Repositories
                 if (settings == null)
                     return Fail("System settings missing");
 
-                if (amountInBase > settings.GlobalLimit)
+                // Treat 0 as no global limit
+                if (settings.GlobalLimit > 0 && amountInBase > settings.GlobalLimit)
                     return Fail("Global limit exceeded");
 
                 var detail = await _db.ServicePackageDetails
@@ -156,7 +166,7 @@ namespace CompGateApi.Data.Repositories
                 // decimal? txnLimit = isB2B ? detail.B2BTransactionLimit : detail.B2CTransactionLimit;
                 // if (txnLimit.HasValue && amountInBase > txnLimit.Value)
                 //     return Fail("Transaction limit exceeded");
-
+                
                 var today = DateTime.UtcNow.Date;
                 var monthStart = new DateTime(today.Year, today.Month, 1);
 
@@ -174,28 +184,27 @@ namespace CompGateApi.Data.Repositories
                 if (pkg is null)
                     return Fail("Service package missing");
 
-                if (todayTotal + amountInBase > pkg.DailyLimit)
+                // Treat 0 as no daily/monthly limit
+                if (pkg.DailyLimit > 0 && todayTotal + amountInBase > pkg.DailyLimit)
                     return Fail("Daily limit exceeded");
-                if (monthTotal + amountInBase > pkg.MonthlyLimit)
+                if (pkg.MonthlyLimit > 0 && monthTotal + amountInBase > pkg.MonthlyLimit)
                     return Fail("Monthly limit exceeded");
 
                 decimal fixedFee = isB2B ? detail.B2BFixedFee ?? 0 : detail.B2CFixedFee ?? 0;
                 decimal pct = isB2B ? detail.B2BCommissionPct ?? 0 : detail.B2CCommissionPct ?? 0;
                 decimal pctFee = dto.Amount * (pct / 100m);
-                decimal commission = Math.Round(Math.Max(fixedFee, pctFee), 3);
+                // Round commission according to currency precision (LYD=3, USD/EUR=2)
+                int commissionDecimals = currencyCode == "LYD" ? 3 : 2;
+                decimal commission = Math.Round(Math.Max(fixedFee, pctFee), commissionDecimals);
 
-                string currencyCode = currency.Id switch
-                {
-                    1 => "LYD",
-                    2 => "USD",
-                    3 => "EUR",
-                    _ => "LYD"
-                };
-
-                const int DECIMALS = 3;
-                decimal scale = (decimal)Math.Pow(10, DECIMALS);
-                string amountStr = ((long)(dto.Amount * scale)).ToString("D15");
-                string commStr = ((long)(commission * scale)).ToString("D15");
+                // Amount formatting: LYD -> 3 decimals, USD/EUR -> 2 decimals
+                int decimals = currencyCode == "LYD" ? 3 : 2;
+                decimal scale = (decimal)Math.Pow(10, decimals);
+                // Round amounts to the selected precision before scaling
+                var amtRounded = Math.Round(dto.Amount, decimals);
+                var commRounded = Math.Round(commission, decimals);
+                string amountStr = ((long)(amtRounded * scale)).ToString("D15");
+                string commStr = ((long)(commRounded * scale)).ToString("D15");
 
                 var company = await _db.Companies.FindAsync(new object?[] { companyId }, ct);
                 if (company == null)

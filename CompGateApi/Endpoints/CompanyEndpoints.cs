@@ -51,6 +51,12 @@ namespace CompGateApi.Endpoints
                         .Produces(StatusCodes.Status204NoContent)
                         .Produces(StatusCodes.Status404NotFound);
 
+            // POST alias for public user edit
+            companies.MapPost("/public/users/{userId}/update", PublicEditUser)
+                     .Accepts<PublicEditUserDto>("application/json")
+                     .Produces(StatusCodes.Status204NoContent)
+                     .Produces(StatusCodes.Status404NotFound);
+
             companies.MapGet("/{code}/dashboard", GetCompanyDashboard)
                     .WithName("GetCompanyDashboard")
                     .Produces(200)
@@ -73,6 +79,11 @@ namespace CompGateApi.Endpoints
                  .Accepts<CompanyStatusUpdateDto>("application/json")
                  .Produces(200)
                  .Produces(404);
+            // POST alias for company status update
+            admin.MapPost("/{code}/status/update", UpdateCompanyStatus)
+                 .Accepts<CompanyStatusUpdateDto>("application/json")
+                 .Produces(200)
+                 .Produces(404);
             admin.MapGet("/{code}", GetCompanyByCode)
             .WithName("GetCompanyByCode")
             .Produces<CompanyListDto>(200)
@@ -83,6 +94,11 @@ namespace CompGateApi.Endpoints
                 .Accepts<CompanyUpdateDto>("application/json")
                 .Produces(204)
                 .Produces(404);
+            // POST alias for company update
+            admin.MapPost("/{code}/update", UpdateCompany)
+                 .Accepts<CompanyUpdateDto>("application/json")
+                 .Produces(204)
+                 .Produces(404);
 
             admin.MapGet("/dashboard", GetAdminDashboardStats)
                 .WithName("GetAdminDashboardStats")
@@ -117,6 +133,15 @@ namespace CompGateApi.Endpoints
             companyAdmin
               .MapPut("/{userId:int}", EditCompanyUser)
               .WithName("EditCompanyUser")
+              .Accepts<EditUserDto>("application/json")
+              .Produces(204)
+              .Produces(400)
+              .Produces(401)
+              .Produces(404);
+
+            // POST alias for editing company user
+            companyAdmin
+              .MapPost("/{userId:int}/update", EditCompanyUser)
               .Accepts<EditUserDto>("application/json")
               .Produces(204)
               .Produces(400)

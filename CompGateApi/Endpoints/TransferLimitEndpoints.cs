@@ -42,9 +42,19 @@ namespace CompGateApi.Endpoints
                  .Produces<TransferLimitDto>(200)
                  .Produces(404)
                  .Produces(400);
+            // POST alias for update
+            group.MapPost("/{id:int}/update", Update)
+                 .Accepts<TransferLimitUpdateDto>("application/json")
+                 .Produces<TransferLimitDto>(200)
+                 .Produces(404)
+                 .Produces(400);
 
             group.MapDelete("/{id:int}", Delete)
                  .WithName("DeleteTransferLimit")
+                 .Produces(204)
+                 .Produces(404);
+            // POST alias for delete
+            group.MapPost("/{id:int}/delete", Delete)
                  .Produces(204)
                  .Produces(404);
         }

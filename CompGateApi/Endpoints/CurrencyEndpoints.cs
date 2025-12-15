@@ -40,8 +40,20 @@ namespace CompGateApi.Endpoints
                 .Produces(400)
                 .Produces(404);
 
+            // POST alias for update (same behavior)
+            currencies.MapPost("/{id:int}/update", UpdateCurrency)
+                .Accepts<CurrencyUpdateDto>("application/json")
+                .Produces<CurrencyDto>(200)
+                .Produces(400)
+                .Produces(404);
+
             currencies.MapDelete("/{id:int}", DeleteCurrency)
                 .WithName("DeleteCurrency")
+                .Produces(200)
+                .Produces(404);
+
+            // POST alias for delete (same behavior)
+            currencies.MapPost("/{id:int}/delete", DeleteCurrency)
                 .Produces(200)
                 .Produces(404);
         }

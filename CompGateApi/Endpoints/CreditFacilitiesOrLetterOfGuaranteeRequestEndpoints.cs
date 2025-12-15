@@ -43,6 +43,13 @@ namespace CompGateApi.Endpoints
                 .Produces(400)
                 .Produces(404);
 
+            // POST alias for update
+            company.MapPost("/{id:int}/update", UpdateRequest)
+                   .Accepts<CreditFacilitiesOrLetterOfGuaranteeRequestCreateDto>("application/json")
+                   .Produces<CreditFacilitiesOrLetterOfGuaranteeRequestDto>(200)
+                   .Produces(400)
+                   .Produces(404);
+
             var admin = app
                 .MapGroup("/api/admin/creditfacilities")
                 .WithTags("CreditFacilities")
@@ -56,6 +63,13 @@ namespace CompGateApi.Endpoints
                  .Produces(404);
 
             admin.MapPut("/{id:int}/status", UpdateStatus)
+                 .Accepts<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto>("application/json")
+                 .Produces<CreditFacilitiesOrLetterOfGuaranteeRequestDto>(200)
+                 .Produces(404)
+                 .Produces(400);
+
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
                  .Accepts<CreditFacilitiesOrLetterOfGuaranteeRequestStatusUpdateDto>("application/json")
                  .Produces<CreditFacilitiesOrLetterOfGuaranteeRequestDto>(200)
                  .Produces(404)

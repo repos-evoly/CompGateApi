@@ -33,6 +33,11 @@ namespace CompGateApi.Endpoints
             company.MapDelete("/{id:int}", DeleteCompanyBeneficiary)
                    .Produces(204)
                    .Produces(404);
+
+            // POST alias for delete
+            company.MapPost("/{id:int}/delete", DeleteCompanyBeneficiary)
+                   .Produces(204)
+                   .Produces(404);
         }
 
         static int GetAuthUserId(HttpContext ctx)

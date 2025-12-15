@@ -18,7 +18,9 @@ namespace CompGateApi.Endpoints
             group.MapGet("/{id:int}", GetById);
             group.MapPost("/", Create);
             group.MapPut("/{id:int}", Update);
+            group.MapPost("/{id:int}/update", Update); // POST alias
             group.MapDelete("/{id:int}", Delete);
+            group.MapPost("/{id:int}/delete", Delete); // POST alias
         }
 
         public static async Task<IResult> GetAll(

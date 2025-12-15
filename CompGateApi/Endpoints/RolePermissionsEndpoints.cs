@@ -42,9 +42,19 @@ namespace CompGateApi.Endpoints
                  .Produces<RoleDto>(200)
                  .Produces(400)
                  .Produces(404);
+            // POST alias for role update
+            users.MapPost("/roles/{roleId:int}/update", UpdateRole)
+                 .Accepts<RoleUpdateDto>("application/json")
+                 .Produces<RoleDto>(200)
+                 .Produces(400)
+                 .Produces(404);
 
             users.MapDelete("/roles/{roleId:int}", DeleteRole)
                  .WithName("DeleteRole")
+                 .Produces(204)
+                 .Produces(404);
+            // POST alias for role delete
+            users.MapPost("/roles/{roleId:int}/delete", DeleteRole)
                  .Produces(204)
                  .Produces(404);
 
@@ -55,6 +65,11 @@ namespace CompGateApi.Endpoints
 
             users.MapPut("/roles/{roleId:int}/permissions", AssignPermissionsToRole)
                  .WithName("AssignPermissionsToRole")
+                 .Accepts<AssignRolePermissionsDto>("application/json")
+                 .Produces(200)
+                 .Produces(400);
+            // POST alias for assign permissions
+            users.MapPost("/roles/{roleId:int}/permissions/update", AssignPermissionsToRole)
                  .Accepts<AssignRolePermissionsDto>("application/json")
                  .Produces(200)
                  .Produces(400);
@@ -80,9 +95,19 @@ namespace CompGateApi.Endpoints
                  .Produces<PermissionDto>(200)
                  .Produces(400)
                  .Produces(404);
+            // POST alias for permission update
+            users.MapPost("/permissions/{permissionId:int}/update", UpdatePermission)
+                 .Accepts<PermissionUpdateDto>("application/json")
+                 .Produces<PermissionDto>(200)
+                 .Produces(400)
+                 .Produces(404);
 
             users.MapDelete("/permissions/{permissionId:int}", DeletePermission)
                  .WithName("DeletePermission")
+                 .Produces(204)
+                 .Produces(404);
+            // POST alias for permission delete
+            users.MapPost("/permissions/{permissionId:int}/delete", DeletePermission)
                  .Produces(204)
                  .Produces(404);
         }

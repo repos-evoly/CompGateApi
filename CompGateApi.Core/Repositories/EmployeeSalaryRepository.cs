@@ -318,7 +318,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             : feePricing.NR2;
 
         // 5) Build EMPLOYEE-ONLY payload (no fee lines here)
-        const int SCALE = 1000; // 3 decimals
+        // LYD uses 3 decimals, otherwise 2
+        int SCALE = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 1000 : 100;
         const int PAD = 15;
 
         var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmm");
@@ -336,7 +337,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             if (amount < fee)
                 throw new PayrollException($"Salary {amount:0.###} LYD is less than the fixed fee {fee:0.###} LYD (employee #{e.EmployeeId}).");
 
-            var employeeCredit = amount - fee;  // net to employee
+            // Gross credit to employee; fee will be handled in a separate per-employee debit
+            var employeeCredit = amount;  // GROSS to employee
             var didEmp = baseId + $"GT{i:00}"; i++;
 
             groupAccountsEmp.Add(new Dictionary<string, string>
@@ -344,9 +346,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 ["YBCD06DID"] = didEmp,
                 ["YBCD06DACC"] = debitAcc13,
                 ["YBCD06CACC"] = e.Employee!.AccountNumber!,
-                ["YBCD06AMT"] = ((long)(employeeCredit * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06AMT"] = ((long)(Math.Round(employeeCredit, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
                 ["YBCD06CCY"] = cycle.Currency,
-                ["YBCD06AMTC"] = ((long)(employeeCredit * SCALE)).ToString($"D{PAD}"),
+                ["YBCD06AMTC"] = ((long)(Math.Round(employeeCredit, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
                 ["YBCD06COMA"] = "000000000000000",
                 ["YBCD06CNR3"] = "",
                 ["YBCD06DNR2"] = "",
@@ -450,65 +452,80 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         // Update cycle totals to ONLY successful gross
         cycle.TotalAmount = successGrossTotal;
 
-        // 8) Fee settlement as a second (single-line) transfer for successes only
-        var totalFeeForSuccess = successCount * fixedFee.Value;
-        if (totalFeeForSuccess > 0m)
+        // 8) Per-employee fee settlement: debit employee, credit fee GL (separate transactions)
+        if (successCount > 0)
         {
+            var feeLogs = new List<object>();
             var baseIdFee = DateTime.UtcNow.ToString("yyyyMMddHHmm");
-            var hidFee = baseIdFee + "GF00";     // 16 chars; separate reference for fee settlement
-            cycle.BankFeeReference = hidFee;
+            int j = 1;
 
-            var didFee = baseIdFee + "GF01";
-
-            var groupAccountsFee = new List<Dictionary<string, string>>
-        {
-            new()
+            foreach (var e in eligibleEntries)
             {
-                ["YBCD06DID"] = didFee,
-                ["YBCD06DACC"] = debitAcc13,
-                ["YBCD06CACC"] = feeGl,
-                ["YBCD06AMT"]  = ((long)(totalFeeForSuccess * SCALE)).ToString($"D{PAD}"),
-                ["YBCD06CCY"]  = cycle.Currency,
-                ["YBCD06AMTC"] = ((long)(totalFeeForSuccess * SCALE)).ToString($"D{PAD}"),
-                ["YBCD06COMA"] = "000000000000000",
-                ["YBCD06CNR3"] = "",
-                ["YBCD06DNR2"] = feeNarration,
-                ["YBCD06RESP"] = "",
-                ["YBCD06RESPD"] = ""
+                if (!successAccounts.Contains(e.Employee!.AccountNumber!))
+                    continue;
+
+                var empAcc13 = NormalizeAcc13(e.Employee!.AccountNumber!);
+                var employeeCustomer = empAcc13.Substring(4, 6);
+
+                var hidFee = baseIdFee + $"GF{j:00}"; // unique reference per fee debit
+                var didFee = baseIdFee + $"GF{j:00}"; j++;
+
+                var groupAccountsFee = new List<Dictionary<string, string>>
+                {
+                    new()
+                    {
+                        ["YBCD06DID"] = didFee,
+                        ["YBCD06DACC"] = empAcc13,
+                        ["YBCD06CACC"] = feeGl,
+                        ["YBCD06AMT"]  = ((long)(Math.Round(fixedFee.Value, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
+                        ["YBCD06CCY"]  = cycle.Currency,
+                        ["YBCD06AMTC"] = ((long)(Math.Round(fixedFee.Value, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
+                        ["YBCD06COMA"] = "000000000000000",
+                        ["YBCD06CNR3"] = "",
+                        ["YBCD06DNR2"] = feeNarration,
+                        ["YBCD06RESP"] = "",
+                        ["YBCD06RESPD"] = ""
+                    }
+                };
+
+                var payloadFee = new
+                {
+                    Header = new
+                    {
+                        system = "MOBILE",
+                        referenceId = hidFee,
+                        userName = "TEDMOB",
+                        customerNumber = employeeCustomer,
+                        requestTime = DateTime.UtcNow.ToString("o"),
+                        language = "AR"
+                    },
+                    Details = new Dictionary<string, object>
+                    {
+                        ["@HID"] = hidFee,
+                        ["@APPLY"] = "Y",
+                        ["@APPLYALL"] = "N",
+                        ["GroupAccounts"] = groupAccountsFee
+                    }
+                };
+
+                var bankResFee = await bankCli.PostAsJsonAsync(requestUri, payloadFee);
+                var rawFee = await bankResFee.Content.ReadAsStringAsync();
+
+                feeLogs.Add(new { account = empAcc13, reference = hidFee, response = rawFee, http = (int)bankResFee.StatusCode });
+
+                // Track fee amount on entry for auditing
+                e.CommissionAmount = fixedFee.Value;
+
+                // Do not fail the cycle if a fee debit fails; behavior mirrors previous policy
             }
-        };
 
-            var payloadFee = new
-            {
-                Header = new
-                {
-                    system = "MOBILE",
-                    referenceId = hidFee,
-                    userName = "TEDMOB",
-                    customerNumber = customerNumber,
-                    requestTime = DateTime.UtcNow.ToString("o"),
-                    language = "AR"
-                },
-                Details = new Dictionary<string, object>
-                {
-                    ["@HID"] = hidFee,
-                    ["@APPLY"] = "Y",
-                    ["@APPLYALL"] = "N",
-                    ["GroupAccounts"] = groupAccountsFee
-                }
-            };
+            cycle.BankFeeReference = "MULTI";
+            cycle.BankFeeResponseRaw = System.Text.Json.JsonSerializer.Serialize(
+                feeLogs,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
 
-            var bankResFee = await bankCli.PostAsJsonAsync(requestUri, payloadFee);
-            var rawFee = await bankResFee.Content.ReadAsStringAsync();
-            cycle.BankFeeResponseRaw = rawFee;
-
-            // We persist response regardless of outcome
             await _db.SaveChangesAsync();
-
-            // Optional policy: do not fail the whole cycle if fee settlement fails.
-            // If you want to fail instead, uncomment the next lines:
-            // if (!bankResFee.IsSuccessStatusCode)
-            //     throw new PayrollException($"Fee settlement failed HTTP {(int)bankResFee.StatusCode}: {rawFee}");
         }
 
         // 9) Mark cycle posted

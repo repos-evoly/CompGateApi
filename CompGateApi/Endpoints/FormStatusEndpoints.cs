@@ -41,9 +41,18 @@ namespace CompGateApi.Endpoints
                     .Accepts<FormStatusUpdateDto>("application/json")
                     .Produces<FormStatusDto>(200)
                     .Produces(404);
+            // POST alias for update
+            statuses.MapPost("/{id:int}/update", UpdateFormStatus)
+                    .Accepts<FormStatusUpdateDto>("application/json")
+                    .Produces<FormStatusDto>(200)
+                    .Produces(404);
 
             statuses.MapDelete("/{id:int}", DeleteFormStatus)
                     .WithName("DeleteFormStatus")
+                    .Produces(200)
+                    .Produces(404);
+            // POST alias for delete
+            statuses.MapPost("/{id:int}/delete", DeleteFormStatus)
                     .Produces(200)
                     .Produces(404);
         }

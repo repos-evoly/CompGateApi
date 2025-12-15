@@ -23,8 +23,11 @@ namespace CompGateApi.Endpoints
             group.MapGet("/", GetAllEmployees);
             group.MapPost("/", CreateEmployee);
             group.MapPut("/{id:int}", UpdateEmployee);
+            group.MapPost("/{id:int}/update", UpdateEmployee); // POST alias
             group.MapDelete("/{id:int}", DeleteEmployee);
+            group.MapPost("/{id:int}/delete", DeleteEmployee); // POST alias
             group.MapPut("/batch", BatchUpdateEmployees);
+            group.MapPost("/batch/update", BatchUpdateEmployees); // POST alias
             group.MapGet("/{id:int}", GetEmployeeById);                         // <-- NEW
             group.MapGet("/salarycycles/{id:int}", GetSalaryCycleById);         // <-- NEW
             group.MapGet("/salarycycles/{cycleId:int}/entries/{entryId:int}",   // <-- NEW
@@ -35,6 +38,7 @@ namespace CompGateApi.Endpoints
             group.MapPost("/salarycycles/{id:int}/post", PostSalaryCycle);
             // in RegisterEndpoints
             group.MapPut("/salarycycles/{id:int}", SaveSalaryCycle);
+            group.MapPost("/salarycycles/{id:int}/update", SaveSalaryCycle); // POST alias
 
 
             var admin = app.MapGroup("/api/admin/salarycycles")

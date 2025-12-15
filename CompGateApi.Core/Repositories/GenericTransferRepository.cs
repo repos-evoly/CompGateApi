@@ -66,10 +66,11 @@ namespace CompGateApi.Data.Repositories
                 if (string.IsNullOrWhiteSpace(currencyCode))
                     currencyCode = "LYD";
 
-                // Amount formatting: 15 digits, 3 decimals
-                const int DECIMALS = 3;
-                var scale = (decimal)Math.Pow(10, DECIMALS);
-                string amountStr = ((long)(amount * scale)).ToString("D15");
+                // Amount formatting: LYD -> 3 decimals, USD/EUR -> 2 decimals
+                int decimals = string.Equals(currencyCode, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+                var scale = (decimal)Math.Pow(10, decimals);
+                var amtRounded = Math.Round(amount, decimals);
+                string amountStr = ((long)(amtRounded * scale)).ToString("D15");
 
                 // Banking reference we generate and also persist
                 var referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
@@ -188,9 +189,11 @@ namespace CompGateApi.Data.Repositories
                 string note,
                 CancellationToken ct = default)
         {
-            const int DECIMALS = 3;
-            decimal scale = (decimal)Math.Pow(10, DECIMALS);
-            string amountStr = ((long)(amount * scale)).ToString("D15");
+            // Amount formatting: LYD -> 3 decimals, USD/EUR -> 2 decimals
+            int decimals = string.Equals(currencyCode, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+            decimal scale = (decimal)Math.Pow(10, decimals);
+            var amtRounded = Math.Round(amount, decimals);
+            string amountStr = ((long)(amtRounded * scale)).ToString("D15");
 
             var payload = new
             {

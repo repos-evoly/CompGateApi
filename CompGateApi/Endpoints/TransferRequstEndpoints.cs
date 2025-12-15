@@ -58,6 +58,12 @@ namespace CompGateApi.Endpoints
                  .Produces<TransferRequestDto>(200)
                  .Produces(400)
                  .Produces(404);
+            // POST alias for status update
+            admin.MapPost("/{id:int}/status/update", UpdateStatus)
+                 .Accepts<TransferRequestStatusUpdateDto>("application/json")
+                 .Produces<TransferRequestDto>(200)
+                 .Produces(400)
+                 .Produces(404);
 
             admin.MapGet("/{id:int}", GetAdminTransferById)
                  .Produces<TransferRequestDto>(200)

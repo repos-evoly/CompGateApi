@@ -42,8 +42,19 @@ namespace CompGateApi.Endpoints
                 .Produces(400)
                 .Produces(404)
                 .Produces(401);
+            // POST alias for update
+            reps.MapPost("/{id:int}/update", UpdateRepresentative)
+                .Produces<RepresentativeDto>(200)
+                .Produces(400)
+                .Produces(404)
+                .Produces(401);
 
             reps.MapDelete("/{id:int}", DeleteRepresentative)
+                .Produces(200)
+                .Produces(404)
+                .Produces(401);
+            // POST alias for delete
+            reps.MapPost("/{id:int}/delete", DeleteRepresentative)
                 .Produces(200)
                 .Produces(404)
                 .Produces(401);
