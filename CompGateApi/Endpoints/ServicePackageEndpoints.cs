@@ -117,6 +117,8 @@ namespace CompGateApi.Endpoints
                         B2CTransactionLimit = d.B2CTransactionLimit,
                         B2BFixedFee = d.B2BFixedFee,
                         B2CFixedFee = d.B2CFixedFee,
+                        B2BFixedFeeForeign = d.B2BFixedFeeForeign,
+                        B2CFixedFeeForeign = d.B2CFixedFeeForeign,
                         B2BMinPercentage = d.B2BMinPercentage,
                         B2CMinPercentage = d.B2CMinPercentage,
                         B2BMaxAmount = d.B2BMaxAmount,
@@ -178,6 +180,8 @@ namespace CompGateApi.Endpoints
                     B2CTransactionLimit = d.B2CTransactionLimit,
                     B2BFixedFee = d.B2BFixedFee,
                     B2CFixedFee = d.B2CFixedFee,
+                    B2BFixedFeeForeign = d.B2BFixedFeeForeign,
+                    B2CFixedFeeForeign = d.B2CFixedFeeForeign,
                     B2BMinPercentage = d.B2BMinPercentage,
                     B2CMinPercentage = d.B2CMinPercentage,
                     B2BMaxAmount = d.B2BMaxAmount,
@@ -304,6 +308,8 @@ namespace CompGateApi.Endpoints
                 B2CTransactionLimit = d.B2CTransactionLimit,
                 B2BFixedFee = d.B2BFixedFee,
                 B2CFixedFee = d.B2CFixedFee,
+                B2BFixedFeeForeign = d.B2BFixedFeeForeign,
+                B2CFixedFeeForeign = d.B2CFixedFeeForeign,
                 B2BMinPercentage = d.B2BMinPercentage,
                 B2CMinPercentage = d.B2CMinPercentage,
                 B2BMaxAmount = d.B2BMaxAmount,
@@ -338,6 +344,8 @@ namespace CompGateApi.Endpoints
             d.B2CTransactionLimit = dto.B2CTransactionLimit;
             d.B2BFixedFee = dto.B2BFixedFee;
             d.B2CFixedFee = dto.B2CFixedFee;
+            d.B2BFixedFeeForeign = dto.B2BFixedFeeForeign;
+            d.B2CFixedFeeForeign = dto.B2CFixedFeeForeign;
             d.B2BMinPercentage = dto.B2BMinPercentage;
             d.B2CMinPercentage = dto.B2CMinPercentage;
             d.B2BMaxAmount = dto.B2BMaxAmount;
@@ -359,6 +367,8 @@ namespace CompGateApi.Endpoints
                 B2CTransactionLimit = d.B2CTransactionLimit,
                 B2BFixedFee = d.B2BFixedFee,
                 B2CFixedFee = d.B2CFixedFee,
+                B2BFixedFeeForeign = d.B2BFixedFeeForeign,
+                B2CFixedFeeForeign = d.B2CFixedFeeForeign,
                 B2BMinPercentage = d.B2BMinPercentage,
                 B2CMinPercentage = d.B2CMinPercentage,
                 B2BMaxAmount = d.B2BMaxAmount,

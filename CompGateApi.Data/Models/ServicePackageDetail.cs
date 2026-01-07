@@ -27,6 +27,9 @@ namespace CompGateApi.Data.Models
         public decimal? B2CTransactionLimit { get; set; }
         public decimal? B2BFixedFee { get; set; }
         public decimal? B2CFixedFee { get; set; }
+        // Minimum commission override for foreign currencies (e.g., USD/EUR)
+        public decimal? B2BFixedFeeForeign { get; set; }
+        public decimal? B2CFixedFeeForeign { get; set; }
         public decimal? B2BMinPercentage { get; set; }
         public decimal? B2CMinPercentage { get; set; }
         public decimal? B2BMaxAmount { get; set; }

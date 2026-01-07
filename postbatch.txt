@@ -1,0 +1,116 @@
+curl -X 'POST' \
+  'http://10.3.3.11:7070/api/mobile/PostBatchApply' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "Header": {
+    "system": "MOBILE",
+    "referenceId": "202512221234BA03",
+    "userName": "TEDMOB",
+    "customerNumber": "100303",
+    "language": "AR"
+  },
+  "Details": {
+    "@UNIT": "LIV",
+    "@HID": "202512221234BA03",          
+    "@TYPE": "C",                          
+    "@FORCPAY": "N",                       
+    "@ACCOUNT": "0123838815435",           
+    "@TRFAMT": "000000000003500",         
+    "@TRFCCY": "LYD",
+    "@DTCD": "037",
+    "@CTCD": "537",
+    "@TRFREF": "202512221234BA03",        
+    "@NR1": "Batch Apply - One Credit",
+    "@NR2": "Settlement",
+    "@NR3": "NR3 MAIN",
+    "@NR4": "NR4 MAIN",
+    "JournalEntries": [
+      { "YBCD10DID": "202512221234B001-01", "YBCD10ACC": "0012430126001", "YBCD10AMT": "000000000001000", "YBCD10CCY": "LYD", "YBCD10NR1": "ديسمبر", "YBCD10NR2": "ديسمبر 2", "YBCD10NR3": "NR3", "YBCD10NR4": "NR4" },
+      { "YBCD10DID": "202512221234B001-02", "YBCD10ACC": "0011100300001", "YBCD10AMT": "000000000002000", "YBCD10CCY": "LYD" , "YBCD10NR1": "ديسمبر", "YBCD10NR2": "ديسمبر 2", "YBCD10NR3": "NR3", "YBCD10NR4": "NR4"},
+      { "YBCD10DID": "202512221234B001-03", "YBCD10ACC": "0015798000001", "YBCD10AMT": "000000000000500", "YBCD10CCY": "LYD" , "YBCD10NR1": "ديسمبر", "YBCD10NR2": "ديسمبر 2", "YBCD10NR3": "NR3", "YBCD10NR4": "NR4"}
+    ]
+  }
+}'
+
+
+RESPONSE: 
+
+{
+  "Header": {
+    "System": "MOBILE",
+    "ReferenceId": "202512221234BA03",
+    "Middleware": "",
+    "SentTime": "23/12/2025 09:34:48 ص",
+    "ReturnCode": "Success",
+    "ReturnMessageCode": "F000",
+    "ReturnMessage": "Success RefId: 202512221234BA03",
+    "CurCode": "",
+    "CurDescrip": ""
+  },
+  "Details": {
+    "OutParams": {
+      "@UNIT": "LIV",
+      "@HID": "202512221234BA03",
+      "@TYPE": "C",
+      "@FORCPAY": "N",
+      "@ACCOUNT": "0123838815435",
+      "@TRFAMT": "000000000003500",
+      "@TRFCCY": "LYD",
+      "@DTCD": "037",
+      "@CTCD": "537",
+      "@TRFREF": "202512221234BA03",
+      "@NR1": "Batch Apply - One Credit",
+      "@NR2": "Settlement",
+      "@NR3": "NR3 MAIN",
+      "@NR4": "NR4 MAIN",
+      "@RESP": "S",
+      "RESPC": "RC00000000",
+      "RESPD": ""
+    },
+    "Lines": [
+      {
+        "YBCD10DID": "202512221234B001",
+        "YBCD10ACC": "0012430126001",
+        "YBCD10AMT": "000000000001000",
+        "YBCD10CCY": "LYD",
+        "YBCD10NR1": "ديسمبر                             ",
+        "YBCD10NR2": "2 ديسمبر                           ",
+        "YBCD10NR3": "NR3                                ",
+        "YBCD10NR4": "NR4                                ",
+        "YBCD10RESP": "S",
+        "YBCD10RESC": "RC00000000",
+        "YBCD10RESD": "                                                                                                                                                                                                                                                                                                            ",
+        "Success": true
+      },
+      {
+        "YBCD10DID": "202512221234B001",
+        "YBCD10ACC": "0011100300001",
+        "YBCD10AMT": "000000000002000",
+        "YBCD10CCY": "LYD",
+        "YBCD10NR1": "ديسمبر                             ",
+        "YBCD10NR2": "2 ديسمبر                           ",
+        "YBCD10NR3": "NR3                                ",
+        "YBCD10NR4": "NR4                                ",
+        "YBCD10RESP": "S",
+        "YBCD10RESC": "RC00000000",
+        "YBCD10RESD": "                                                                                                                                                                                                                                                                                                            ",
+        "Success": true
+      },
+      {
+        "YBCD10DID": "202512221234B001",
+        "YBCD10ACC": "0015798000001",
+        "YBCD10AMT": "000000000000500",
+        "YBCD10CCY": "LYD",
+        "YBCD10NR1": "ديسمبر                             ",
+        "YBCD10NR2": "2 ديسمبر                           ",
+        "YBCD10NR3": "NR3                                ",
+        "YBCD10NR4": "NR4                                ",
+        "YBCD10RESP": "S",
+        "YBCD10RESC": "RC00000000",
+        "YBCD10RESD": "                                                                                                                                                                                                                                                                                                            ",
+        "Success": true
+      }
+    ]
+  }
+}

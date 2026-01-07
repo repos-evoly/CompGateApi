@@ -1,0 +1,47 @@
+            {
+                log.LogError("TransferRequestRepository concrete implementation not available.");
+                return Results.StatusCode(500);
+            }
+
+            var result = await concreteRepo.CreateAsync(
+                userId: me.UserId,
+                companyId: me.CompanyId.Value,
+                servicePackageId: me.ServicePackageId,
+                dto: dto,
+                bearer: bearer,
+                ct: ctx.RequestAborted);
+
+            if (!result.Success)
+                return Results.BadRequest(result.Error);
+
+            var dtoResult = mapper.Map<TransferRequestDto>(result.Entity!);
+
+            return Results.Ok(new
+            {
+                message = "✅ Transfer successful",
+                transfer = dtoResult,
+                totalTakenFromSender = result.SenderTotal,
+                totalReceivedByRecipient = result.ReceiverTotal,
+                commission = result.Commission.ToString("0.000"),
+                limits = new
+                {
+                    globalLimit = result.GlobalLimit,
+                    dailyLimit = result.DailyLimit,
+                    usedToday = result.UsedToday.ToString("0.000"),
+                    monthlyLimit = result.MonthlyLimit,
+                    usedThisMonth = result.UsedThisMonth.ToString("0.000")
+                }
+            });
+        }
+
+        // ── Lookups ─────────────────────────────────────────────────────────────
+
+        public static async Task<IResult> LookupAccounts(
+            [FromQuery] string account,
+            ITransferRequestRepository repo)
+        {
+            if (account.Length != 6 && account.Length != 13)
+                return Results.BadRequest("Account must be 13 digit.");
+
+            var all = await repo.GetAccountsAsync(account);
+            if (account.Length == 6)

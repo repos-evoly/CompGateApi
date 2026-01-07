@@ -32,6 +32,8 @@ public class ServicePackageCategoryDto
     public decimal? B2CTransactionLimit { get; set; }
     public decimal? B2BFixedFee { get; set; }
     public decimal? B2CFixedFee { get; set; }
+    public decimal? B2BFixedFeeForeign { get; set; }
+    public decimal? B2CFixedFeeForeign { get; set; }
     public decimal? B2BMinPercentage { get; set; }
     public decimal? B2CMinPercentage { get; set; }
 

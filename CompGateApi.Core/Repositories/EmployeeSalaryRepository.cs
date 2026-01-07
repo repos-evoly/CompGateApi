@@ -82,6 +82,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Date = dto.Date,
             AccountNumber = dto.AccountNumber,
             AccountType = dto.AccountType,
+            EvoWallet = dto.EvoWallet,
+            BcdWallet = dto.BcdWallet,
             SendSalary = dto.SendSalary,
             CanPost = dto.CanPost
         };
@@ -99,6 +101,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Date = e.Date,
             AccountNumber = e.AccountNumber,
             AccountType = e.AccountType,
+            EvoWallet = e.EvoWallet,
+            BcdWallet = e.BcdWallet,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost
         };
@@ -116,6 +120,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         e.Date = dto.Date;
         e.AccountNumber = dto.AccountNumber;
         e.AccountType = dto.AccountType;
+        e.EvoWallet = dto.EvoWallet;
+        e.BcdWallet = dto.BcdWallet;
         e.SendSalary = dto.SendSalary;
         e.CanPost = dto.CanPost;
 
@@ -131,6 +137,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Date = e.Date,
             AccountNumber = e.AccountNumber,
             AccountType = e.AccountType,
+            EvoWallet = e.EvoWallet,
+            BcdWallet = e.BcdWallet,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost
         };
@@ -166,7 +174,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     {
         var query = _db.SalaryCycles
             .Where(s => s.CompanyId == companyId)
-            .OrderByDescending(s => s.SalaryMonth)
+            .OrderByDescending(s => s.CreatedAt)
             .Include(s => s.Entries).ThenInclude(e => e.Employee);
 
         var total = await query.CountAsync();
@@ -182,6 +190,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 Id = s.Id,
                 SalaryMonth = s.SalaryMonth,
+                AdditionalMonth = s.AdditionalMonth,
                 DebitAccount = s.DebitAccount,
                 Currency = s.Currency,
                 CreatedAt = s.CreatedAt,
@@ -189,6 +198,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 CreatedByUserId = s.CreatedByUserId,
                 PostedByUserId = s.PostedByUserId,
                 TotalAmount = s.TotalAmount,
+                BankReference = s.BankReference,
+                BankResponseRaw = s.BankResponseRaw,
+                BankBatchHistoryJson = s.BankBatchHistoryJson,
                 Entries = s.Entries.Select(e => new SalaryEntryDto
                 {
                     Id = e.Id,
@@ -204,7 +216,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                     CanPost = e.Employee.CanPost,
 
                     /* payroll-specific */
-                    IsTransferred = e.IsTransferred
+                    IsTransferred = e.IsTransferred,
+                    TransferResultCode = e.TransferResultCode,
+                    TransferResultReason = e.TransferResultReason,
+                    TransferredAt = e.TransferredAt
                 }).ToList()
             }).ToList()
         };
@@ -240,10 +255,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         }
 
         var total = list.Sum(x => x.amount);
+        // normalize additionalMonth: only keep if between 13 and 24 (inclusive)
+        string? additionalMonthStr = null;
+        if (dto.AdditionalMonth.HasValue && dto.AdditionalMonth.Value >= 13 && dto.AdditionalMonth.Value <= 24)
+            additionalMonthStr = dto.AdditionalMonth.Value.ToString();
+
         var cycle = new SalaryCycle
         {
             CompanyId = companyId,
             SalaryMonth = dto.SalaryMonth,
+            AdditionalMonth = additionalMonthStr,
             DebitAccount = dto.DebitAccount,
             Currency = dto.Currency,
             CreatedByUserId = createdByUserId,
@@ -317,18 +338,21 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             ? "Salary receiver-paid fixed fee"
             : feePricing.NR2;
 
-        // 5) Build EMPLOYEE-ONLY payload (no fee lines here)
+        // 5) Build EMPLOYEE credits using PostBatchApply (ONE DEBIT -> MANY CREDITS)
         // LYD uses 3 decimals, otherwise 2
         int SCALE = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 1000 : 100;
         const int PAD = 15;
 
         var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmm");
-        var hidEmp = baseId + "GT00";           // 16 chars
+        var hidEmp = baseId + "BA00";           // batch apply ref
         cycle.BankReference = hidEmp;           // save immediately
         await _db.SaveChangesAsync();
 
-        var groupAccountsEmp = new List<Dictionary<string, string>>();
+        var journalEntriesEmp = new List<Dictionary<string, string>>();
         int i = 1;
+
+        var salaryMonthText = cycle.SalaryMonth ?? string.Empty;
+        var addMonthText = string.IsNullOrWhiteSpace(cycle.AdditionalMonth) ? null : cycle.AdditionalMonth;
 
         foreach (var e in eligibleEntries)
         {
@@ -337,27 +361,46 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             if (amount < fee)
                 throw new PayrollException($"Salary {amount:0.###} LYD is less than the fixed fee {fee:0.###} LYD (employee #{e.EmployeeId}).");
 
-            // Gross credit to employee; fee will be handled in a separate per-employee debit
             var employeeCredit = amount;  // GROSS to employee
-            var didEmp = baseId + $"GT{i:00}"; i++;
+            var didEmp = baseId + $"B{i:00}"; i++;
 
-            groupAccountsEmp.Add(new Dictionary<string, string>
+            var je = new Dictionary<string, string>
             {
-                ["YBCD06DID"] = didEmp,
-                ["YBCD06DACC"] = debitAcc13,
-                ["YBCD06CACC"] = e.Employee!.AccountNumber!,
-                ["YBCD06AMT"] = ((long)(Math.Round(employeeCredit, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
-                ["YBCD06CCY"] = cycle.Currency,
-                ["YBCD06AMTC"] = ((long)(Math.Round(employeeCredit, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
-                ["YBCD06COMA"] = "000000000000000",
-                ["YBCD06CNR3"] = "",
-                ["YBCD06DNR2"] = "",
-                ["YBCD06RESP"] = "",
-                ["YBCD06RESPD"] = ""
-            });
+                ["YBCD10DID"] = didEmp,
+                ["YBCD10ACC"] = NormalizeAcc13(e.Employee!.AccountNumber!),
+                ["YBCD10AMT"] = ((long)(Math.Round(employeeCredit, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"مرتبات {salaryMonthText}",
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            };
+            if (addMonthText != null)
+                je["YBCD10NR2"] = $"مرتب اضافي {salaryMonthText} {addMonthText}";
+            journalEntriesEmp.Add(je);
         }
 
         var customerNumber = debitAcc13.Substring(4, 6);
+        var totalEmployeesAmount = journalEntriesEmp.Sum(j => long.Parse(j["YBCD10AMT"]));
+        var detailsEmp = new Dictionary<string, object>
+        {
+            ["@UNIT"] = "LIV",
+            ["@HID"] = hidEmp,
+            ["@TYPE"] = "D",                // one DEBIT (company) -> many credits (employees)
+            ["@FORCPAY"] = "N",
+            ["@ACCOUNT"] = debitAcc13,
+            ["@TRFAMT"] = totalEmployeesAmount.ToString($"D{PAD}"),
+            ["@TRFCCY"] = cycle.Currency,
+            ["@DTCD"] = "037",
+            ["@CTCD"] = "537",
+            ["@TRFREF"] = hidEmp,
+            ["@NR1"] = $"Salaries {salaryMonthText}",
+            ["@NR3"] = string.Empty,
+            ["@NR4"] = string.Empty,
+            ["JournalEntries"] = journalEntriesEmp
+        };
+        // include @NR2 key always (empty when no additional month)
+        detailsEmp["@NR2"] = addMonthText != null ? $"Extra Salary {salaryMonthText} + {addMonthText}" : string.Empty;
+
         var payloadEmp = new
         {
             Header = new
@@ -366,21 +409,14 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 referenceId = hidEmp,
                 userName = "TEDMOB",
                 customerNumber = customerNumber,
-                requestTime = DateTime.UtcNow.ToString("o"),
                 language = "AR"
             },
-            Details = new Dictionary<string, object>
-            {
-                ["@HID"] = hidEmp,
-                ["@APPLY"] = "Y",
-                ["@APPLYALL"] = "N",
-                ["GroupAccounts"] = groupAccountsEmp
-            }
+            Details = detailsEmp
         };
 
-        // 6) Call bank for EMPLOYEES transfer
+        // 6) Call bank for EMPLOYEES batch apply
         var bankCli = _http.CreateClient("BankApi");
-        var requestUri = new Uri(bankCli.BaseAddress!, "api/mobile/PostGroupTransfer");
+        var requestUri = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply");
         var bankResEmp = await bankCli.PostAsJsonAsync(requestUri, payloadEmp);
         var rawEmp = await bankResEmp.Content.ReadAsStringAsync();
 
@@ -390,24 +426,32 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         if (!bankResEmp.IsSuccessStatusCode)
             throw new PayrollException($"Bank HTTP {(int)bankResEmp.StatusCode} at {requestUri}: {rawEmp}");
 
-        // 7) Parse success accounts for employees
+        // 7) Parse success accounts for employees from BatchApply response
         var successAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var perAccountOutcome = new Dictionary<string, (string? Code, string? Reason, string Raw)>(StringComparer.OrdinalIgnoreCase);
         try
         {
             using var jdoc = System.Text.Json.JsonDocument.Parse(rawEmp);
             if (jdoc.RootElement.TryGetProperty("Details", out var d1) &&
-                d1.TryGetProperty("Details", out var d2) &&
-                d2.TryGetProperty("GroupAccounts", out var arr) &&
+                d1.TryGetProperty("Lines", out var arr) &&
                 arr.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 foreach (var item in arr.EnumerateArray())
                 {
-                    var resp = item.TryGetProperty("YBCD06RESP", out var rEl) ? rEl.GetString() : null;
-                    var cacc = item.TryGetProperty("YBCD06CACC", out var cEl) ? cEl.GetString() : null;
+                    var resp = item.TryGetProperty("YBCD10RESP", out var rEl) ? rEl.GetString() : null;
+                    var cacc = item.TryGetProperty("YBCD10ACC", out var cEl) ? cEl.GetString() : null;
+                    var reason = item.TryGetProperty("YBCD10REAS", out var reasEl) ? reasEl.GetString() :
+                                 item.TryGetProperty("REASON", out var reas2) ? reas2.GetString() :
+                                 item.TryGetProperty("MESSAGE", out var reas3) ? reas3.GetString() : null;
+                    var rawItem = item.GetRawText();
                     if (string.Equals(resp, "S", StringComparison.OrdinalIgnoreCase) &&
                         !string.IsNullOrWhiteSpace(cacc))
                     {
                         successAccounts.Add(cacc.Trim());
+                    }
+                    if (!string.IsNullOrWhiteSpace(cacc))
+                    {
+                        perAccountOutcome[cacc.Trim()] = (resp, reason, rawItem);
                     }
                 }
             }
@@ -435,95 +479,115 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         foreach (var e in eligibleEntries)
         {
+            var acc = NormalizeAcc13(e.Employee!.AccountNumber!);
             if (successAccounts.Contains(e.Employee!.AccountNumber!))
             {
                 e.IsTransferred = true;
                 e.TransferredAt = DateTime.UtcNow;
                 e.PostedByUserId = postedBy;
+                e.TransferResultCode = "S";
+                e.TransferResultReason = null;
+                if (perAccountOutcome.TryGetValue(e.Employee.AccountNumber!, out var oc1))
+                    e.BankLineResponseRaw = oc1.Raw;
                 successGrossTotal += e.Amount; // GROSS salary
                 successCount++;
                 anySuccess = true;
             }
+            else
+            {
+                // not successful: record code/reason/raw if present
+                if (perAccountOutcome.TryGetValue(e.Employee.AccountNumber!, out var oc))
+                {
+                    e.TransferResultCode = oc.Code;
+                    e.TransferResultReason = oc.Reason;
+                    e.BankLineResponseRaw = oc.Raw;
+                }
+            }
         }
 
         if (!anySuccess)
-            throw new PayrollException("Bank rejected all employee transfers.");
+        {
+            // Persist per-entry failure reasons so caller can inspect; do not throw.
+            // This lets the API return 200 with cycle + reasons, and keep cycle unposted.
+            await _db.SaveChangesAsync();
+            return _mapper.Map<SalaryCycleDto>(cycle);
+        }
 
         // Update cycle totals to ONLY successful gross
         cycle.TotalAmount = successGrossTotal;
 
-        // 8) Per-employee fee settlement: debit employee, credit fee GL (separate transactions)
+        // 8) Commission settlement using PostBatchApply (MANY DEBITS -> ONE CREDIT)
         if (successCount > 0)
         {
-            var feeLogs = new List<object>();
+            var successfulEmployees = eligibleEntries
+                .Where(e => successAccounts.Contains(e.Employee!.AccountNumber!))
+                .ToList();
+
             var baseIdFee = DateTime.UtcNow.ToString("yyyyMMddHHmm");
+            var hidFee = baseIdFee + "BF00";
+
+            var journalEntriesFee = new List<Dictionary<string, string>>();
             int j = 1;
-
-            foreach (var e in eligibleEntries)
+            foreach (var e in successfulEmployees)
             {
-                if (!successAccounts.Contains(e.Employee!.AccountNumber!))
-                    continue;
-
                 var empAcc13 = NormalizeAcc13(e.Employee!.AccountNumber!);
-                var employeeCustomer = empAcc13.Substring(4, 6);
-
-                var hidFee = baseIdFee + $"GF{j:00}"; // unique reference per fee debit
-                var didFee = baseIdFee + $"GF{j:00}"; j++;
-
-                var groupAccountsFee = new List<Dictionary<string, string>>
+                var did = baseIdFee + $"B{j:00}"; j++;
+                var line = new Dictionary<string, string>
                 {
-                    new()
-                    {
-                        ["YBCD06DID"] = didFee,
-                        ["YBCD06DACC"] = empAcc13,
-                        ["YBCD06CACC"] = feeGl,
-                        ["YBCD06AMT"]  = ((long)(Math.Round(fixedFee.Value, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
-                        ["YBCD06CCY"]  = cycle.Currency,
-                        ["YBCD06AMTC"] = ((long)(Math.Round(fixedFee.Value, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
-                        ["YBCD06COMA"] = "000000000000000",
-                        ["YBCD06CNR3"] = "",
-                        ["YBCD06DNR2"] = feeNarration,
-                        ["YBCD06RESP"] = "",
-                        ["YBCD06RESPD"] = ""
-                    }
+                    ["YBCD10DID"] = did,
+                    ["YBCD10ACC"] = empAcc13,
+                    ["YBCD10AMT"] = ((long)(Math.Round(fixedFee.Value, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
+                    ["YBCD10CCY"] = cycle.Currency,
+                    ["YBCD10NR1"] = $"عمولة مرتبات {salaryMonthText}",
+                    ["YBCD10NR3"] = string.Empty,
+                    ["YBCD10NR4"] = string.Empty
                 };
-
-                var payloadFee = new
-                {
-                    Header = new
-                    {
-                        system = "MOBILE",
-                        referenceId = hidFee,
-                        userName = "TEDMOB",
-                        customerNumber = employeeCustomer,
-                        requestTime = DateTime.UtcNow.ToString("o"),
-                        language = "AR"
-                    },
-                    Details = new Dictionary<string, object>
-                    {
-                        ["@HID"] = hidFee,
-                        ["@APPLY"] = "Y",
-                        ["@APPLYALL"] = "N",
-                        ["GroupAccounts"] = groupAccountsFee
-                    }
-                };
-
-                var bankResFee = await bankCli.PostAsJsonAsync(requestUri, payloadFee);
-                var rawFee = await bankResFee.Content.ReadAsStringAsync();
-
-                feeLogs.Add(new { account = empAcc13, reference = hidFee, response = rawFee, http = (int)bankResFee.StatusCode });
-
+                if (addMonthText != null)
+                    line["YBCD10NR2"] = $"شهر اضافي {addMonthText}";
+                journalEntriesFee.Add(line);
                 // Track fee amount on entry for auditing
                 e.CommissionAmount = fixedFee.Value;
-
-                // Do not fail the cycle if a fee debit fails; behavior mirrors previous policy
             }
 
-            cycle.BankFeeReference = "MULTI";
-            cycle.BankFeeResponseRaw = System.Text.Json.JsonSerializer.Serialize(
-                feeLogs,
-                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var totalFeeAmt = journalEntriesFee.Sum(x => long.Parse(x["YBCD10AMT"]));
+            var detailsFee = new Dictionary<string, object>
+            {
+                ["@UNIT"] = "LIV",
+                ["@HID"] = hidFee,
+                ["@TYPE"] = "C",            // many debits (employees) -> ONE CREDIT (fee GL)
+                ["@FORCPAY"] = "N",
+                ["@ACCOUNT"] = feeGl,
+                ["@TRFAMT"] = totalFeeAmt.ToString($"D{PAD}"),
+                ["@TRFCCY"] = cycle.Currency,
+                ["@DTCD"] = "037",
+                ["@CTCD"] = "537",
+                ["@TRFREF"] = hidFee,
+                ["@NR1"] = $"عمولة مرتبات {salaryMonthText}",
+                ["@NR3"] = string.Empty,
+                ["@NR4"] = string.Empty,
+                ["JournalEntries"] = journalEntriesFee
+            };
+            detailsFee["@NR2"] = addMonthText != null ? $"Extra {addMonthText}" : string.Empty;
+
+            var payloadFee = new
+            {
+                Header = new
+                {
+                    system = "MOBILE",
+                    referenceId = hidFee,
+                    userName = "TEDMOB",
+                    customerNumber = customerNumber, // using company context
+                    language = "AR"
+                },
+                Details = detailsFee
+            };
+
+            var requestUriFee = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply");
+            var bankResFee = await bankCli.PostAsJsonAsync(requestUriFee, payloadFee);
+            var rawFee = await bankResFee.Content.ReadAsStringAsync();
+
+            cycle.BankFeeReference = hidFee;
+            cycle.BankFeeResponseRaw = rawFee;
 
             await _db.SaveChangesAsync();
         }
@@ -571,6 +635,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         {
             Id = s.Id,
             SalaryMonth = s.SalaryMonth,
+            AdditionalMonth = s.AdditionalMonth,
             DebitAccount = s.DebitAccount,
             Currency = s.Currency,
             CreatedAt = s.CreatedAt,
@@ -578,6 +643,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             CreatedByUserId = s.CreatedByUserId,
             PostedByUserId = s.PostedByUserId,
             TotalAmount = s.TotalAmount,
+            BankReference = s.BankReference,
+            BankResponseRaw = s.BankResponseRaw,
+            BankBatchHistoryJson = s.BankBatchHistoryJson,
             Entries = s.Entries.Select(en => new SalaryEntryDto
             {
                 Id = en.Id,
@@ -593,7 +661,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 SendSalary = en.Employee.SendSalary,
                 CanPost = en.Employee.CanPost,
                 /* payroll-specific */
-                IsTransferred = en.IsTransferred
+                IsTransferred = en.IsTransferred,
+                TransferResultCode = en.TransferResultCode,
+                TransferResultReason = en.TransferResultReason,
+                TransferredAt = en.TransferredAt
             }).ToList()
         };
     }
@@ -624,8 +695,253 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             SendSalary = en.Employee.SendSalary,
             CanPost = en.Employee.CanPost,
             /* payroll-specific */
-            IsTransferred = en.IsTransferred
+            IsTransferred = en.IsTransferred,
+            TransferResultCode = en.TransferResultCode,
+            TransferResultReason = en.TransferResultReason,
+            TransferredAt = en.TransferredAt
         };
+    }
+
+    public async Task<List<SalaryEntryDto>> GetFailedEntriesAsync(int companyId, int cycleId)
+    {
+        var list = await _db.SalaryEntries
+            .Include(e => e.Employee)
+            .Include(e => e.SalaryCycle)
+            .Where(e => e.SalaryCycle.CompanyId == companyId && e.SalaryCycleId == cycleId && !e.IsTransferred)
+            .AsNoTracking()
+            .ToListAsync();
+
+        return list.Select(en => new SalaryEntryDto
+        {
+            Id = en.Id,
+            EmployeeId = en.EmployeeId,
+            Name = en.Employee.Name,
+            Email = en.Employee.Email,
+            Phone = en.Employee.Phone,
+            Salary = en.Amount,
+            Date = en.Employee.Date,
+            AccountNumber = en.Employee.AccountNumber,
+            AccountType = en.Employee.AccountType,
+            SendSalary = en.Employee.SendSalary,
+            CanPost = en.Employee.CanPost,
+            IsTransferred = en.IsTransferred,
+            TransferResultCode = en.TransferResultCode,
+            TransferResultReason = en.TransferResultReason,
+            TransferredAt = en.TransferredAt
+        }).ToList();
+    }
+
+    public async Task<SalaryEntryDto?> EditEntryAndEmployeeAsync(int companyId, int cycleId, int entryId, SalaryEntryEditDto dto)
+    {
+        var en = await _db.SalaryEntries
+            .Include(e => e.Employee)
+            .Include(e => e.SalaryCycle)
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.SalaryCycleId == cycleId && e.SalaryCycle.CompanyId == companyId);
+
+        if (en == null) return null;
+        if (en.IsTransferred) throw new PayrollException("Cannot edit an entry that has already been transferred.");
+
+        if (dto.Amount.HasValue) en.Amount = dto.Amount.Value;
+        if (!string.IsNullOrWhiteSpace(dto.AccountNumber)) en.Employee.AccountNumber = dto.AccountNumber!;
+        if (!string.IsNullOrWhiteSpace(dto.AccountType)) en.Employee.AccountType = dto.AccountType!;
+        if (!string.IsNullOrWhiteSpace(dto.EvoWallet)) en.Employee.EvoWallet = dto.EvoWallet!;
+        if (!string.IsNullOrWhiteSpace(dto.BcdWallet)) en.Employee.BcdWallet = dto.BcdWallet!;
+
+        await _db.SaveChangesAsync();
+
+        return new SalaryEntryDto
+        {
+            Id = en.Id,
+            EmployeeId = en.EmployeeId,
+            Name = en.Employee.Name,
+            Email = en.Employee.Email,
+            Phone = en.Employee.Phone,
+            Salary = en.Amount,
+            Date = en.Employee.Date,
+            AccountNumber = en.Employee.AccountNumber,
+            AccountType = en.Employee.AccountType,
+            SendSalary = en.Employee.SendSalary,
+            CanPost = en.Employee.CanPost,
+            IsTransferred = en.IsTransferred,
+            TransferResultCode = en.TransferResultCode,
+            TransferResultReason = en.TransferResultReason,
+            TransferredAt = en.TransferredAt
+        };
+    }
+
+    public async Task<SalaryCycleDto?> RepostFailedEntriesAsync(int companyId, int cycleId, int postedBy, SalaryRepostIdsRequestDto dto)
+    {
+        var cycle = await _db.SalaryCycles
+            .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Company).ThenInclude(c => c.ServicePackage)
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
+
+        if (cycle is null) return null;
+
+        var pkgId = cycle.Company.ServicePackageId;
+        var detail = await _db.ServicePackageDetails
+            .Include(d => d.TransactionCategory)
+            .FirstOrDefaultAsync(d => d.ServicePackageId == pkgId && d.TransactionCategory.Name == "Salary Payment");
+        if (detail is null || !detail.IsEnabledForPackage)
+            throw new PayrollException("Salary payments are not enabled for your service package.");
+
+        const int TRXCAT_SALARY_FIXED_FEE = 17;
+        var feePricing = await _db.Pricings.AsNoTracking().FirstOrDefaultAsync(p => p.TrxCatId == TRXCAT_SALARY_FIXED_FEE && p.Unit == 1);
+        if (feePricing == null) throw new PayrollException("Pricing for salary fixed fee is not configured.");
+        var fixedFee = feePricing.Price ?? 0m;
+        if (fixedFee <= 0m) throw new PayrollException("Invalid pricing: fixed fee must be greater than zero.");
+
+        var debitAcc13 = NormalizeAcc13(cycle.DebitAccount);
+        if (debitAcc13.Length != 13) throw new PayrollException("Debit account must be 13 digits.");
+        var feeGl = !string.IsNullOrWhiteSpace(feePricing.GL1) ? NormalizeAcc13(feePricing.GL1) : BuildCommissionGlFromSender(debitAcc13);
+        if (feeGl.Length != 13) throw new PayrollException("Configured fee GL (GL1) must be a 13-digit account.");
+
+        int SCALE = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 1000 : 100;
+        const int PAD = 15;
+
+        var entryIds = new HashSet<int>((dto.EntryIds ?? new List<int>()));
+        var employeeIds = new HashSet<int>((dto.EmployeeIds ?? new List<int>()));
+        var toRepost = cycle.Entries
+            .Where(e => !e.IsTransferred &&
+                        (entryIds.Contains(e.Id) || (employeeIds.Count > 0 && employeeIds.Contains(e.EmployeeId))))
+            .ToList();
+        if (toRepost.Count == 0) throw new PayrollException("No failed entries to repost were provided (check entryIds/employeeIds).");
+
+        foreach (var e in toRepost)
+        {
+            e.TransferResultCode = null; e.TransferResultReason = null; e.BankLineResponseRaw = null;
+        }
+        await _db.SaveChangesAsync();
+
+        var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var hidEmp = baseId + "RA00";
+        var salaryMonthText = cycle.SalaryMonth ?? string.Empty;
+        var addMonthText = string.IsNullOrWhiteSpace(cycle.AdditionalMonth) ? null : cycle.AdditionalMonth;
+
+        var journalEntriesEmp = new List<Dictionary<string, string>>(); int i = 1;
+        foreach (var e in toRepost)
+        {
+            var acct = NormalizeAcc13(e.Employee.AccountNumber!);
+            if (acct.Length != 13) throw new PayrollException($"Employee #{e.EmployeeId} account must be 13 digits.");
+            var did = baseId + $"R{i:00}"; i++;
+            var line = new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = did,
+                ["YBCD10ACC"] = acct,
+                ["YBCD10AMT"] = ((long)(Math.Round(e.Amount, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"Salaries {salaryMonthText}",
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            };
+            if (addMonthText != null) line["YBCD10NR2"] = $"Extra Salary {salaryMonthText} + {addMonthText}";
+            journalEntriesEmp.Add(line);
+        }
+
+        var customerNumber = debitAcc13.Substring(4, 6);
+        var totalEmployeesAmount = journalEntriesEmp.Sum(j => long.Parse(j["YBCD10AMT"]));
+        var detailsEmp = new Dictionary<string, object>
+        {
+            ["@UNIT"] = "LIV",
+            ["@HID"] = hidEmp,
+            ["@TYPE"] = "D",
+            ["@FORCPAY"] = "N",
+            ["@ACCOUNT"] = debitAcc13,
+            ["@TRFAMT"] = totalEmployeesAmount.ToString($"D{PAD}"),
+            ["@TRFCCY"] = cycle.Currency,
+            ["@DTCD"] = "037",
+            ["@CTCD"] = "537",
+            ["@TRFREF"] = hidEmp,
+            ["@NR1"] = $"Salaries {salaryMonthText}",
+            ["@NR3"] = string.Empty,
+            ["@NR4"] = string.Empty,
+            ["JournalEntries"] = journalEntriesEmp
+        };
+        detailsEmp["@NR2"] = addMonthText != null ? $"Extra Salary {salaryMonthText} + {addMonthText}" : string.Empty;
+
+        var payloadEmp = new { Header = new { system = "MOBILE", referenceId = hidEmp, userName = "TEDMOB", customerNumber = customerNumber, language = "AR" }, Details = detailsEmp };
+        var bankCli = _http.CreateClient("BankApi");
+        var requestUri = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply");
+        var bankResEmp = await bankCli.PostAsJsonAsync(requestUri, payloadEmp);
+        var rawEmp = await bankResEmp.Content.ReadAsStringAsync();
+        cycle.BankResponseRaw = rawEmp; cycle.BankReference = hidEmp; await _db.SaveChangesAsync();
+        if (!bankResEmp.IsSuccessStatusCode) throw new PayrollException($"Bank HTTP {(int)bankResEmp.StatusCode} at {requestUri}: {rawEmp}");
+
+        var successAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var perAccountOutcome = new Dictionary<string, (string? Code, string? Reason, string Raw)>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var jdoc = System.Text.Json.JsonDocument.Parse(rawEmp);
+            if (jdoc.RootElement.TryGetProperty("Details", out var d1) && d1.TryGetProperty("Lines", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    var resp = item.TryGetProperty("YBCD10RESP", out var rEl) ? rEl.GetString() : null;
+                    var cacc = item.TryGetProperty("YBCD10ACC", out var cEl) ? cEl.GetString() : null;
+                    var reason = item.TryGetProperty("YBCD10REAS", out var reasEl) ? reasEl.GetString() : item.TryGetProperty("REASON", out var reas2) ? reas2.GetString() : item.TryGetProperty("MESSAGE", out var reas3) ? reas3.GetString() : null;
+                    var rawItem = item.GetRawText();
+                    if (!string.IsNullOrWhiteSpace(cacc)) perAccountOutcome[cacc.Trim()] = (resp, reason, rawItem);
+                    if (string.Equals(resp, "S", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(cacc)) successAccounts.Add(cacc.Trim());
+                }
+            }
+        }
+        catch { }
+
+        int successCount = 0; decimal newSuccessGrossTotal = 0m; foreach (var e in toRepost)
+        {
+            var acct = NormalizeAcc13(e.Employee.AccountNumber!);
+            if (successAccounts.Contains(acct) || successAccounts.Contains(e.Employee.AccountNumber!))
+            { e.IsTransferred = true; e.TransferredAt = DateTime.UtcNow; e.PostedByUserId = postedBy; e.TransferResultCode = "S"; e.TransferResultReason = null; if (perAccountOutcome.TryGetValue(acct, out var oc1)) e.BankLineResponseRaw = oc1.Raw; successCount++; newSuccessGrossTotal += e.Amount; }
+            else { if (perAccountOutcome.TryGetValue(acct, out var oc)) { e.TransferResultCode = oc.Code; e.TransferResultReason = oc.Reason; e.BankLineResponseRaw = oc.Raw; } }
+        }
+
+        // Accumulate newly successful gross amounts into cycle total
+        if (successCount > 0)
+        {
+            cycle.TotalAmount += newSuccessGrossTotal;
+        }
+
+        string? hidFee = null; string? rawFee = null; if (successCount > 0)
+        {
+            var baseIdFee = DateTime.UtcNow.ToString("yyyyMMddHHmmss"); hidFee = baseIdFee + "RF00";
+            var journalEntriesFee = new List<Dictionary<string, string>>(); int j = 1;
+            foreach (var e in toRepost.Where(x => x.IsTransferred))
+            {
+                var acct = NormalizeAcc13(e.Employee.AccountNumber!);
+                var did = baseIdFee + $"R{j:00}"; j++;
+                journalEntriesFee.Add(new Dictionary<string, string> { ["YBCD10DID"] = did, ["YBCD10ACC"] = acct, ["YBCD10AMT"] = ((long)(Math.Round(fixedFee, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"), ["YBCD10CCY"] = cycle.Currency, ["YBCD10NR1"] = $"Salary fee {salaryMonthText}", ["YBCD10NR3"] = string.Empty, ["YBCD10NR4"] = string.Empty });
+                e.CommissionAmount = fixedFee;
+            }
+            var totalFeeAmt = journalEntriesFee.Sum(x => long.Parse(x["YBCD10AMT"]));
+            var detailsFee = new Dictionary<string, object> { ["@UNIT"] = "LIV", ["@HID"] = hidFee, ["@TYPE"] = "C", ["@FORCPAY"] = "N", ["@ACCOUNT"] = feeGl, ["@TRFAMT"] = totalFeeAmt.ToString($"D{PAD}"), ["@TRFCCY"] = cycle.Currency, ["@DTCD"] = "037", ["@CTCD"] = "537", ["@TRFREF"] = hidFee, ["@NR1"] = $"Salary fee {salaryMonthText}", ["@NR3"] = string.Empty, ["@NR4"] = string.Empty, ["JournalEntries"] = journalEntriesFee };
+            detailsFee["@NR2"] = addMonthText != null ? $"Extra {addMonthText}" : string.Empty;
+            var payloadFee = new { Header = new { system = "MOBILE", referenceId = hidFee, userName = "TEDMOB", customerNumber = customerNumber, language = "AR" }, Details = detailsFee };
+            var requestUriFee = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply"); var bankResFee = await bankCli.PostAsJsonAsync(requestUriFee, payloadFee); rawFee = await bankResFee.Content.ReadAsStringAsync();
+            cycle.BankFeeReference = hidFee; cycle.BankFeeResponseRaw = rawFee;
+        }
+
+        try
+        {
+            var history = new List<System.Text.Json.Nodes.JsonObject>();
+            if (!string.IsNullOrWhiteSpace(cycle.BankBatchHistoryJson))
+            {
+                var arr = System.Text.Json.Nodes.JsonNode.Parse(cycle.BankBatchHistoryJson) as System.Text.Json.Nodes.JsonArray;
+                if (arr != null) foreach (var n in arr) if (n is System.Text.Json.Nodes.JsonObject o) history.Add(o);
+            }
+            var obj = new System.Text.Json.Nodes.JsonObject
+            {
+                ["attemptAtUtc"] = DateTime.UtcNow.ToString("o"),
+                ["entryIds"] = new System.Text.Json.Nodes.JsonArray(toRepost.Select(e => (System.Text.Json.Nodes.JsonNode?)e.Id).ToArray()),
+                ["salaryRef"] = hidEmp,
+                ["feeRef"] = hidFee
+            };
+            var arrOut = new System.Text.Json.Nodes.JsonArray(history.Concat(new[] { obj }).ToArray());
+            cycle.BankBatchHistoryJson = arrOut.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+        }
+        catch { }
+
+        await _db.SaveChangesAsync();
+        return await GetSalaryCycleAsync(companyId, cycleId);
     }
     public async Task<SalaryCycleDto?> SaveSalaryCycleAsync(
        int companyId,
@@ -640,7 +956,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         if (cycle == null || cycle.PostedAt != null)
             return null;
 
-        if (dto.SalaryMonth is not null) cycle.SalaryMonth = dto.SalaryMonth.Value;
+        if (dto.SalaryMonth is not null) cycle.SalaryMonth = dto.SalaryMonth;
+        if (dto.AdditionalMonth is not null) cycle.AdditionalMonth = dto.AdditionalMonth.Value.ToString();
         if (dto.DebitAccount is not null) cycle.DebitAccount = dto.DebitAccount;
         if (dto.Currency is not null) cycle.Currency = dto.Currency;
 
@@ -699,12 +1016,15 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             q = q.Where(s => s.Company.Code.Contains(companyCode));
 
         if (from.HasValue)
-            q = q.Where(s => s.SalaryMonth >= from.Value.Date);
+        {
+            var fromDt = new DateTimeOffset(from.Value.Date, TimeSpan.Zero);
+            q = q.Where(s => s.CreatedAt >= fromDt);
+        }
 
         if (to.HasValue)
         {
-            var end = to.Value.Date.AddDays(1);
-            q = q.Where(s => s.SalaryMonth < end);
+            var end = new DateTimeOffset(to.Value.Date.AddDays(1), TimeSpan.Zero);
+            q = q.Where(s => s.CreatedAt < end);
         }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -759,12 +1079,15 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             q = q.Where(s => s.Company.Code.Contains(companyCode));
 
         if (from.HasValue)
-            q = q.Where(s => s.SalaryMonth >= from.Value.Date);
+        {
+            var fromDt = new DateTimeOffset(from.Value.Date, TimeSpan.Zero);
+            q = q.Where(s => s.CreatedAt >= fromDt);
+        }
 
         if (to.HasValue)
         {
-            var end = to.Value.Date.AddDays(1);
-            q = q.Where(s => s.SalaryMonth < end);
+            var end = new DateTimeOffset(to.Value.Date.AddDays(1), TimeSpan.Zero);
+            q = q.Where(s => s.CreatedAt < end);
         }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -810,6 +1133,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 CompanyCode = s.Company.Code,
                 CompanyName = s.Company.Name,
                 SalaryMonth = s.SalaryMonth,
+                AdditionalMonth = s.AdditionalMonth,
                 DebitAccount = s.DebitAccount,
                 Currency = s.Currency,
                 CreatedAt = s.CreatedAt,
@@ -817,7 +1141,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 CreatedByUserId = s.CreatedByUserId,
                 PostedByUserId = s.PostedByUserId,
                 TotalAmount = s.TotalAmount,
-                BankReference = s.BankReference
+                BankReference = s.BankReference,
+                BankBatchHistoryJson = s.BankBatchHistoryJson
             })
             .ToListAsync();
 
@@ -848,6 +1173,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             CompanyCode = s.Company.Code,
             CompanyName = s.Company.Name,
             SalaryMonth = s.SalaryMonth,
+            AdditionalMonth = s.AdditionalMonth,
             DebitAccount = s.DebitAccount,
             Currency = s.Currency,
             CreatedAt = s.CreatedAt,
@@ -857,6 +1183,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             TotalAmount = s.TotalAmount,
             BankReference = s.BankReference,
             BankResponseRaw = s.BankResponseRaw,
+            BankFeeReference = s.BankFeeReference,
+            BankFeeResponseRaw = s.BankFeeResponseRaw,
+            BankBatchHistoryJson = s.BankBatchHistoryJson,
             Entries = s.Entries.Select(e => new SalaryEntryDto
             {
                 Id = e.Id,
@@ -870,7 +1199,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 AccountType = e.Employee.AccountType,
                 SendSalary = e.Employee.SendSalary,
                 CanPost = e.Employee.CanPost,
-                IsTransferred = e.IsTransferred
+                IsTransferred = e.IsTransferred,
+                TransferResultCode = e.TransferResultCode,
+                TransferResultReason = e.TransferResultReason,
+                TransferredAt = e.TransferredAt
             }).ToList()
         };
     }
@@ -879,3 +1211,4 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
 
 }
+

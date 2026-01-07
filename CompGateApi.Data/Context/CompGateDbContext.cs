@@ -594,7 +594,8 @@ namespace CompGateApi.Data.Context
                      {
                             b.ToTable("SalaryCycles");
                             b.HasKey(s => s.Id);
-                            b.Property(s => s.SalaryMonth);
+                            b.Property(s => s.SalaryMonth).HasMaxLength(20).IsRequired();
+                            b.Property(s => s.AdditionalMonth).HasMaxLength(10);
                             b.Property(s => s.TotalAmount).HasPrecision(18, 2);
                             b.Property(s => s.CreatedAt);
                             b.Property(s => s.PostedAt);

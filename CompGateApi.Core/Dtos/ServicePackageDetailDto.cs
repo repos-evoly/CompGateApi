@@ -11,6 +11,8 @@ namespace CompGateApi.Core.Dtos
         public decimal B2CTransactionLimit { get; set; }
         public decimal B2BFixedFee { get; set; }
         public decimal B2CFixedFee { get; set; }
+        public decimal B2BFixedFeeForeign { get; set; }
+        public decimal B2CFixedFeeForeign { get; set; }
         public decimal B2BMinPercentage { get; set; }
         public decimal B2CMinPercentage { get; set; }
         public decimal B2BMaxAmount { get; set; }
@@ -27,6 +29,8 @@ namespace CompGateApi.Core.Dtos
         public decimal B2CTransactionLimit { get; set; }
         public decimal B2BFixedFee { get; set; }
         public decimal B2CFixedFee { get; set; }
+        public decimal B2BFixedFeeForeign { get; set; }
+        public decimal B2CFixedFeeForeign { get; set; }
         public decimal B2BMinPercentage { get; set; }
         public decimal B2CMinPercentage { get; set; }
         public decimal B2BCommissionPct { get; set; }

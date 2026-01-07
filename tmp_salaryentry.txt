@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 public class SalaryEntry:Auditable
 {
@@ -19,15 +18,5 @@ public class SalaryEntry:Auditable
     public bool IsTransferred { get; set; }
     public DateTime? TransferredAt { get; set; }
     public int? PostedByUserId { get; set; }
-
-    // Per-entry bank response details
-    [MaxLength(32)]
-    public string? TransferResultCode { get; set; }
-    [MaxLength(1024)]
-    public string? TransferResultReason { get; set; }
-    [Column(TypeName = "nvarchar(max)")]
-    public string? BankLineResponseRaw { get; set; }
-
-    // No per-entry override fields; edits are applied to Employee
 
 }

@@ -30,6 +30,12 @@ public class Employee
     [MaxLength(20)]
     public string AccountType { get; set; } = "account"; // or "wallet"
 
+    // Optional wallets
+    [MaxLength(34)]
+    public string? EvoWallet { get; set; }
+    [MaxLength(34)]
+    public string? BcdWallet { get; set; }
+
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
 

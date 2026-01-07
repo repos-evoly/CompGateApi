@@ -202,7 +202,7 @@ namespace CompGateApi.Data.Repositories
                     system = "MOBILE",
                     referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant(),
                     userName = "TEDMOB",
-                    customerNumber = srcAcc?.Length >= 13 ? srcAcc.Substring(4, 6) : "",
+                    customerNumber = srcAcc!.Length >= 13 ? srcAcc.Substring(4, 6) : "",
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
                 },

@@ -78,7 +78,10 @@ namespace CompGateApi
                 .ForMember(d => d.AccountNumber, c => c.MapFrom(s => s.Employee.AccountNumber))
                 .ForMember(d => d.AccountType, c => c.MapFrom(s => s.Employee.AccountType))
                 .ForMember(d => d.SendSalary, c => c.MapFrom(s => s.Employee.SendSalary))
-                .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost));
+                .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost))
+                .ForMember(d => d.TransferResultCode, c => c.MapFrom(s => s.TransferResultCode))
+                .ForMember(d => d.TransferResultReason, c => c.MapFrom(s => s.TransferResultReason))
+                .ForMember(d => d.TransferredAt, c => c.MapFrom(s => s.TransferredAt));
 
             // map SalaryCycle -> SalaryCycleDto
             CreateMap<SalaryCycle, SalaryCycleDto>()

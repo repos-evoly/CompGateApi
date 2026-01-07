@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -33,6 +34,10 @@ namespace CompGateApi.Core.Dtos
         public decimal Rate { get; set; }
         public string TransferMode { get; set; } = string.Empty;
         public DateTime RequestedAt { get; set; }
+
+        public string? CreatedByName { get; set; }
+        public string? ExecutedByName { get; set; }
+        public DateTime? ExecutedAt { get; set; }
     }
 
     // What the client posts to create a transfer
@@ -90,6 +95,9 @@ namespace CompGateApi.Core.Dtos
         public decimal Amount { get; set; }
         public decimal Balance { get; set; }
         public List<string> Narratives { get; set; } = new();
+        // Bank transaction code (YBCD04TCD) exposed to clients
+        [JsonPropertyName("TrxCode")] // keep exact casing as requested
+        public string? TrxCode { get; set; }
     }
 
     public class BankResponseDto

@@ -24,6 +24,7 @@ using CompGateApi.Core.Validators;
 using System.Net.Http.Headers;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 
 
 
@@ -72,7 +73,7 @@ namespace CompGateApi.Core.Startup
 
       // Optionally, add your NotificationService to DI:
 
-      builder.Services.RegisterRepos();
+      builder.Services.RegisterRepos(builder.Configuration, builder.Environment);
       return builder;
     }
 
@@ -261,7 +262,7 @@ namespace CompGateApi.Core.Startup
       return validators;
     }
 
-    public static IServiceCollection RegisterRepos(this IServiceCollection services)
+    public static IServiceCollection RegisterRepos(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
     {
       services.AddEndpointsApiExplorer();
 
@@ -271,22 +272,28 @@ namespace CompGateApi.Core.Startup
       // --- Add this typed‐client registration back in FIRST ---
       services.AddHttpClient<IUserRepository, UserRepository>();
 
+      var apisSection = env.IsDevelopment() ? "ExternalApisDev"
+                       : env.IsStaging() ? "ExternalApisStaging"
+                       : "ExternalApisProd";
+      var authBase = config[$"{apisSection}:AuthApiBase"] ?? "http://10.3.3.11/compauthapi/";
       services.AddHttpClient("AuthApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.1.1.205/compauthapi/");
+        c.BaseAddress = new Uri(authBase);
         // (optional) c.DefaultRequestHeaders.Add("Accept", "application/json");
       });
 
+      var bankBase = config[$"{apisSection}:BankApiBase"] ?? "http://10.3.3.11:7070";
       services.AddHttpClient("BankApi", client =>
       {
-        client.BaseAddress = new Uri("http://10.1.1.205:7070");
+        client.BaseAddress = new Uri(bankBase);
         client.DefaultRequestHeaders.Accept.Add(
               new MediaTypeWithQualityHeaderValue("application/json"));
       });
 
+      var kycBase = config[$"{apisSection}:KycApiBase"] ?? "http://10.3.3.11";
       services.AddHttpClient("KycApi", c =>
       {
-        c.BaseAddress = new Uri("http://10.1.1.205");
+        c.BaseAddress = new Uri(kycBase);
         c.DefaultRequestHeaders.Accept.Add(
           new MediaTypeWithQualityHeaderValue("application/json"));
       });
@@ -361,6 +368,9 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<IVisaRepository, VisaRepository>();
 
       services.AddScoped<IGenericTransferRepository, GenericTransferRepository>();
+
+      // Dashboard
+      services.AddScoped<IDashboardRepository, DashboardRepository>();
 
       return services;
     }

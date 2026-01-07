@@ -7,7 +7,12 @@ public class SalaryCycle : Auditable
     public int CompanyId { get; set; }
     public Company Company { get; set; } = null!;
 
-    public DateTime SalaryMonth { get; set; }
+    [MaxLength(20)]
+    public string SalaryMonth { get; set; } = string.Empty;
+
+    // Stores numeric month as string (per requirements)
+    [MaxLength(10)]
+    public string? AdditionalMonth { get; set; }
     public int CreatedByUserId { get; set; }
 
     /* NEW ↓ */
@@ -28,6 +33,11 @@ public class SalaryCycle : Auditable
 
     [MaxLength(32)] public string? BankFeeReference { get; set; }
     public string? BankFeeResponseRaw { get; set; }
+
+    // Accumulates repost attempts with salary + fee references
+    // JSON array of objects: [{"attemptAtUtc": "...", "entryIds": [..], "salaryRef": "...", "feeRef": "..."}, ...]
+    [Column(TypeName = "nvarchar(max)")]
+    public string? BankBatchHistoryJson { get; set; }
 
     public ICollection<SalaryEntry> Entries { get; set; } = new List<SalaryEntry>();
 }

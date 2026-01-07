@@ -275,7 +275,7 @@ namespace CompGateApi.Endpoints
                 string toAccount;
                 try
                 {
-                    toAccount = ResolveGlWithBranch(pricing.GL1, srcAcc13);
+                    toAccount = ResolveGlWithBranch(pricing.GL1!, srcAcc13);
                 }
                 catch (Exception ex)
                 {

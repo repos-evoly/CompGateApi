@@ -36,6 +36,12 @@ namespace CompGateApi.Endpoints
                      .Produces(400)
                      .Produces(401);
 
+            transfers.MapPost("/{id:int}/post", ExecuteTransfer)
+                     .Produces(200)
+                     .Produces(400)
+                     .Produces(401)
+                     .Produces(404);
+
             transfers.MapGet("/accounts", LookupAccounts)
                      .WithName("LookupAccounts")
                      .Produces<List<AccountDto>>(200)
@@ -94,7 +100,9 @@ namespace CompGateApi.Endpoints
             if (!TryGetAuthUserId(ctx, out var authId))
                 return Results.Unauthorized();
 
-            var me = await userRepo.GetUserByAuthId(authId, ctx.Request.Headers["Authorization"]);
+            var me = await userRepo.GetUserByAuthId(
+                authId,
+                ctx.Request.Headers["Authorization"].FirstOrDefault() ?? string.Empty);
             if (me == null || !me.CompanyId.HasValue)
                 return Results.Unauthorized();
 
@@ -202,14 +210,8 @@ namespace CompGateApi.Endpoints
 
             dto.CurrencyId = currency.Id;
 
-            // 4) Call repo (use concrete type to access the new CreateAsync overload)
-            if (repo is not CompGateApi.Data.Repositories.TransferRequestRepository concreteRepo)
-            {
-                log.LogError("TransferRequestRepository concrete implementation not available.");
-                return Results.StatusCode(500);
-            }
-
-            var result = await concreteRepo.CreateAsync(
+            // 4) Create draft transfer only (no posting to core bank yet)
+            var result = await repo.CreateDraftAsync(
                 userId: me.UserId,
                 companyId: me.CompanyId.Value,
                 servicePackageId: me.ServicePackageId,
@@ -224,7 +226,7 @@ namespace CompGateApi.Endpoints
 
             return Results.Ok(new
             {
-                message = "✅ Transfer successful",
+                message = "Transfer created and saved (pending).",
                 transfer = dtoResult,
                 totalTakenFromSender = result.SenderTotal,
                 totalReceivedByRecipient = result.ReceiverTotal,
@@ -314,5 +316,42 @@ namespace CompGateApi.Endpoints
             await repo.UpdateAsync(ent);
             return Results.Ok(mapper.Map<TransferRequestDto>(ent));
         }
+
+        // Step 2: post a saved transfer to core bank by ID
+        public static async Task<IResult> ExecuteTransfer(
+            int id,
+            HttpContext ctx,
+            ITransferRequestRepository repo,
+            IUserRepository userRepo,
+            IMapper mapper)
+        {
+            if (!TryGetAuthUserId(ctx, out var authId))
+                return Results.Unauthorized();
+
+            var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? string.Empty;
+            var me = await userRepo.GetUserByAuthId(authId, token);
+            if (me == null || !me.CompanyId.HasValue)
+                return Results.Unauthorized();
+
+            var ent = await repo.GetByIdAsync(id);
+            if (ent == null || ent.CompanyId != me.CompanyId.Value)
+                return Results.NotFound();
+
+            var exec = await repo.ExecuteAsync(id, me.UserId, me.CompanyId.Value, token, ctx.RequestAborted);
+            if (!exec.Success)
+                return Results.BadRequest(exec.Error);
+
+            var dto = mapper.Map<TransferRequestDto>(exec.Entity!);
+            return Results.Ok(new
+            {
+                message = "Transfer posted successfully",
+                transfer = dto,
+                totalTakenFromSender = exec.SenderTotal,
+                totalReceivedByRecipient = exec.ReceiverTotal
+            });
+        }
     }
 }
+
+
+

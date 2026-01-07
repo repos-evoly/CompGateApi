@@ -69,6 +69,15 @@ namespace CompGateApi.Data.Models
 
        public string? BankReference  { get; set; }
 
+        // Audit of human names for draft creator and executor
+        [MaxLength(150)]
+        public string? CreatedByName { get; set; }
+
+        [MaxLength(150)]
+        public string? ExecutedByName { get; set; }
+
+        public DateTime? ExecutedAt { get; set; }
+
 
     }
 }

@@ -36,6 +36,9 @@ namespace CompGateApi.Endpoints
             group.MapGet("/salarycycles", GetSalaryCycles);
             group.MapPost("/salarycycles", CreateSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/post", PostSalaryCycle);
+            group.MapPost("/salarycycles/{id:int}/repost", RepostFailedEntries);
+            group.MapGet("/salarycycles/{id:int}/entries/failed", GetFailedEntries);
+            group.MapPost("/salarycycles/{cycleId:int}/entries/{entryId:int}/edit", EditEntryAndEmployee);
             // in RegisterEndpoints
             group.MapPut("/salarycycles/{id:int}", SaveSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/update", SaveSalaryCycle); // POST alias
@@ -265,11 +268,101 @@ namespace CompGateApi.Endpoints
             catch (PayrollException ex)
             {
                 log.LogWarning(ex, "PostSalaryCycle business-rule failure");
-                return Results.BadRequest(new { error = ex.Message });
+                // Include cycle with per-entry reasons so caller sees what failed
+                try
+                {
+                    var authId2 = GetAuthUserId(ctx);
+                    var token2 = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+                    var user2 = await userRepo.GetUserByAuthId(authId2, token2);
+                    var cycleDto = user2?.CompanyId != null ? await repo.GetSalaryCycleAsync(user2.CompanyId.Value, id) : null;
+                    return Results.BadRequest(new { error = ex.Message, cycle = cycleDto });
+                }
+                catch
+                {
+                    return Results.BadRequest(new { error = ex.Message });
+                }
             }
             catch (Exception ex)
             {
                 log.LogError(ex, "Unhandled error in PostSalaryCycle");
+                return Results.StatusCode(500);
+            }
+        }
+
+        public static async Task<IResult> RepostFailedEntries(
+            int id,
+            [FromBody] SalaryRepostIdsRequestDto dto,
+            HttpContext ctx,
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromServices] IUserRepository userRepo,
+            ILogger<EmployeeSalaryEndpoints> log)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+
+            try
+            {
+                var result = await repo.RepostFailedEntriesAsync(user.CompanyId.Value, id, user.UserId, dto);
+                if (result is null) return Results.NotFound();
+                return Results.Ok(result);
+            }
+            catch (PayrollException ex)
+            {
+                log.LogWarning(ex, "RepostFailedEntries business-rule failure");
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Unhandled error in RepostFailedEntries");
+                return Results.StatusCode(500);
+            }
+        }
+
+        public static async Task<IResult> GetFailedEntries(
+            int id,
+            HttpContext ctx,
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromServices] IUserRepository userRepo)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+
+            var list = await repo.GetFailedEntriesAsync(user.CompanyId.Value, id);
+            return Results.Ok(list);
+        }
+
+        public static async Task<IResult> EditEntryAndEmployee(
+            int cycleId,
+            int entryId,
+            [FromBody] SalaryEntryEditDto dto,
+            HttpContext ctx,
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromServices] IUserRepository userRepo,
+            ILogger<EmployeeSalaryEndpoints> log)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+
+            try
+            {
+                var updated = await repo.EditEntryAndEmployeeAsync(user.CompanyId.Value, cycleId, entryId, dto);
+                if (updated is null) return Results.NotFound();
+                return Results.Ok(updated);
+            }
+            catch (PayrollException ex)
+            {
+                log.LogWarning(ex, "EditEntryAndEmployee failure");
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Unhandled error in EditEntryAndEmployee");
                 return Results.StatusCode(500);
             }
         }
@@ -284,8 +377,17 @@ namespace CompGateApi.Endpoints
             var me = await userRepo.GetUserByAuthId(authId, token);
             if (me?.CompanyId == null) return Results.Unauthorized();
 
+            // Provide clear feedback: does cycle exist? is it already posted?
+            var existing = await repo.GetSalaryCycleAsync(me.CompanyId.Value, id);
+            if (existing == null)
+                return Results.NotFound(new { error = "Salary cycle not found for this company.", cycleId = id });
+            if (existing.PostedAt != null)
+                return Results.BadRequest(new { error = "Salary cycle is already posted and cannot be edited.", cycleId = id });
+
             var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
-            return saved == null ? Results.NotFound() : Results.Ok(saved);
+            if (saved == null)
+                return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
+            return Results.Ok(saved);
         }
 
 

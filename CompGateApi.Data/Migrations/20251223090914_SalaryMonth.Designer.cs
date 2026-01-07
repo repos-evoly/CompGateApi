@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251223090914_SalaryMonth")]
+    partial class SalaryMonth
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2135,10 +2138,6 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("BcdWallet")
-                        .HasMaxLength(34)
-                        .HasColumnType("nvarchar(34)");
-
                     b.Property<bool>("CanPost")
                         .HasColumnType("bit");
 
@@ -2152,10 +2151,6 @@ namespace CompGateApi.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("EvoWallet")
-                        .HasMaxLength(34)
-                        .HasColumnType("nvarchar(34)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2192,9 +2187,6 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("AdditionalMonth")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
-
-                    b.Property<string>("BankBatchHistoryJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("BankFeeReference")
                         .HasMaxLength(32)
@@ -2266,9 +2258,6 @@ namespace CompGateApi.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("BankLineResponseRaw")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<decimal>("CommissionAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -2286,14 +2275,6 @@ namespace CompGateApi.Data.Migrations
 
                     b.Property<int>("SalaryCycleId")
                         .HasColumnType("int");
-
-                    b.Property<string>("TransferResultCode")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.Property<string>("TransferResultReason")
-                        .HasMaxLength(1024)
-                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<DateTime?>("TransferredAt")
                         .HasColumnType("datetime2");
