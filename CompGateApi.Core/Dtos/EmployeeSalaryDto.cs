@@ -94,6 +94,11 @@ public class SalaryCycleSaveDto
     public List<SalaryEntryUpsertDto> Entries { get; set; } = new();
 }
 
+public class SalaryCycleAddEntriesDto
+{
+    public List<SalaryEntryUpsertDto> Entries { get; set; } = new();
+}
+
 public class SalaryRepostItemDto
 {
     public int EntryId { get; set; }

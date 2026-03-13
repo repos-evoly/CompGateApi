@@ -1,4 +1,4 @@
-// CompGateApi.Infrastructure/Repositories/EmployeeSalaryRepository.cs
+﻿// CompGateApi.Infrastructure/Repositories/EmployeeSalaryRepository.cs
 using System.Net.Http.Json;
 using AutoMapper;
 using CompGateApi.Core.Abstractions;
@@ -254,7 +254,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             list = employees.Select(e => (e, e.Salary)).ToList();
         }
 
-        var total = list.Sum(x => x.amount);
+        // Round per-currency: LYD -> 3dp, others -> 2dp
+        var decimals = string.Equals(dto.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+        list = list.Select(x => (emp: x.emp, amount: Math.Round(x.amount, decimals))).ToList();
+        var total = Math.Round(list.Sum(x => x.amount), decimals);
         // normalize additionalMonth: only keep if between 13 and 24 (inclusive)
         string? additionalMonthStr = null;
         if (dto.AdditionalMonth.HasValue && dto.AdditionalMonth.Value >= 13 && dto.AdditionalMonth.Value <= 24)
@@ -272,7 +275,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Entries = list.Select(x => new SalaryEntry
             {
                 EmployeeId = x.emp.Id,
-                Amount = x.amount
+                Amount = Math.Round(x.amount, decimals)
             }).ToList()
         };
 
@@ -375,7 +378,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 ["YBCD10NR4"] = string.Empty
             };
             if (addMonthText != null)
-                je["YBCD10NR2"] = $"مرتب اضافي {salaryMonthText} {addMonthText}";
+                je["YBCD10NR2"] = $"Ù…Ø±ØªØ¨ Ø§Ø¶Ø§ÙÙŠ {salaryMonthText} {addMonthText}";
             journalEntriesEmp.Add(je);
         }
 
@@ -390,10 +393,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             ["@ACCOUNT"] = debitAcc13,
             ["@TRFAMT"] = totalEmployeesAmount.ToString($"D{PAD}"),
             ["@TRFCCY"] = cycle.Currency,
-            ["@DTCD"] = "037",
-            ["@CTCD"] = "537",
+            ["@DTCD"] = "021",
+            ["@CTCD"] = "521",
             ["@TRFREF"] = hidEmp,
-            ["@NR1"] = $"Salaries {salaryMonthText}",
+            ["@NR1"] = $"مرتبات {salaryMonthText}",
             ["@NR3"] = string.Empty,
             ["@NR4"] = string.Empty,
             ["JournalEntries"] = journalEntriesEmp
@@ -405,9 +408,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         {
             Header = new
             {
-                system = "MOBILE",
+                system = "CompanyGateway",
                 referenceId = hidEmp,
-                userName = "TEDMOB",
+                userName = "CompanyGateway",
                 customerNumber = customerNumber,
                 language = "AR"
             },
@@ -543,7 +546,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                     ["YBCD10NR4"] = string.Empty
                 };
                 if (addMonthText != null)
-                    line["YBCD10NR2"] = $"شهر اضافي {addMonthText}";
+                    line["YBCD10NR2"] = $"Ø´Ù‡Ø± Ø§Ø¶Ø§ÙÙŠ {addMonthText}";
                 journalEntriesFee.Add(line);
                 // Track fee amount on entry for auditing
                 e.CommissionAmount = fixedFee.Value;
@@ -559,8 +562,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 ["@ACCOUNT"] = feeGl,
                 ["@TRFAMT"] = totalFeeAmt.ToString($"D{PAD}"),
                 ["@TRFCCY"] = cycle.Currency,
-                ["@DTCD"] = "037",
-                ["@CTCD"] = "537",
+                ["@DTCD"] = "021",
+                ["@CTCD"] = "521",
                 ["@TRFREF"] = hidFee,
                 ["@NR1"] = $"عمولة مرتبات {salaryMonthText}",
                 ["@NR3"] = string.Empty,
@@ -573,9 +576,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 Header = new
                 {
-                    system = "MOBILE",
+                    system = "CompanyGateway",
                     referenceId = hidFee,
-                    userName = "TEDMOB",
+                    userName = "CompanyGateway",
                     customerNumber = customerNumber, // using company context
                     language = "AR"
                 },
@@ -741,7 +744,12 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         if (en == null) return null;
         if (en.IsTransferred) throw new PayrollException("Cannot edit an entry that has already been transferred.");
 
-        if (dto.Amount.HasValue) en.Amount = dto.Amount.Value;
+        if (dto.Amount.HasValue)
+        {
+            var cycle = await _db.SalaryCycles.AsNoTracking().FirstOrDefaultAsync(c => c.Id == en.SalaryCycleId);
+            var decimals = (cycle != null && string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase)) ? 3 : 2;
+            en.Amount = Math.Round(dto.Amount.Value, decimals);
+        }
         if (!string.IsNullOrWhiteSpace(dto.AccountNumber)) en.Employee.AccountNumber = dto.AccountNumber!;
         if (!string.IsNullOrWhiteSpace(dto.AccountType)) en.Employee.AccountType = dto.AccountType!;
         if (!string.IsNullOrWhiteSpace(dto.EvoWallet)) en.Employee.EvoWallet = dto.EvoWallet!;
@@ -830,7 +838,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 ["YBCD10ACC"] = acct,
                 ["YBCD10AMT"] = ((long)(Math.Round(e.Amount, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"),
                 ["YBCD10CCY"] = cycle.Currency,
-                ["YBCD10NR1"] = $"Salaries {salaryMonthText}",
+                ["YBCD10NR1"] = $"مرتبات {salaryMonthText}",
                 ["YBCD10NR3"] = string.Empty,
                 ["YBCD10NR4"] = string.Empty
             };
@@ -849,17 +857,17 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             ["@ACCOUNT"] = debitAcc13,
             ["@TRFAMT"] = totalEmployeesAmount.ToString($"D{PAD}"),
             ["@TRFCCY"] = cycle.Currency,
-            ["@DTCD"] = "037",
-            ["@CTCD"] = "537",
+            ["@DTCD"] = "021",
+            ["@CTCD"] = "521",
             ["@TRFREF"] = hidEmp,
-            ["@NR1"] = $"Salaries {salaryMonthText}",
+            ["@NR1"] = $"مرتبات {salaryMonthText}",
             ["@NR3"] = string.Empty,
             ["@NR4"] = string.Empty,
             ["JournalEntries"] = journalEntriesEmp
         };
         detailsEmp["@NR2"] = addMonthText != null ? $"Extra Salary {salaryMonthText} + {addMonthText}" : string.Empty;
 
-        var payloadEmp = new { Header = new { system = "MOBILE", referenceId = hidEmp, userName = "TEDMOB", customerNumber = customerNumber, language = "AR" }, Details = detailsEmp };
+        var payloadEmp = new { Header = new { system = "CompanyGateway", referenceId = hidEmp, userName = "CompanyGateway", customerNumber = customerNumber, language = "AR" }, Details = detailsEmp };
         var bankCli = _http.CreateClient("BankApi");
         var requestUri = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply");
         var bankResEmp = await bankCli.PostAsJsonAsync(requestUri, payloadEmp);
@@ -909,13 +917,13 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 var acct = NormalizeAcc13(e.Employee.AccountNumber!);
                 var did = baseIdFee + $"R{j:00}"; j++;
-                journalEntriesFee.Add(new Dictionary<string, string> { ["YBCD10DID"] = did, ["YBCD10ACC"] = acct, ["YBCD10AMT"] = ((long)(Math.Round(fixedFee, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"), ["YBCD10CCY"] = cycle.Currency, ["YBCD10NR1"] = $"Salary fee {salaryMonthText}", ["YBCD10NR3"] = string.Empty, ["YBCD10NR4"] = string.Empty });
+                journalEntriesFee.Add(new Dictionary<string, string> { ["YBCD10DID"] = did, ["YBCD10ACC"] = acct, ["YBCD10AMT"] = ((long)(Math.Round(fixedFee, SCALE == 1000 ? 3 : 2) * SCALE)).ToString($"D{PAD}"), ["YBCD10CCY"] = cycle.Currency, ["YBCD10NR1"] = $"عمولة مرتبات {salaryMonthText}", ["YBCD10NR3"] = string.Empty, ["YBCD10NR4"] = string.Empty });
                 e.CommissionAmount = fixedFee;
             }
             var totalFeeAmt = journalEntriesFee.Sum(x => long.Parse(x["YBCD10AMT"]));
-            var detailsFee = new Dictionary<string, object> { ["@UNIT"] = "LIV", ["@HID"] = hidFee, ["@TYPE"] = "C", ["@FORCPAY"] = "N", ["@ACCOUNT"] = feeGl, ["@TRFAMT"] = totalFeeAmt.ToString($"D{PAD}"), ["@TRFCCY"] = cycle.Currency, ["@DTCD"] = "037", ["@CTCD"] = "537", ["@TRFREF"] = hidFee, ["@NR1"] = $"Salary fee {salaryMonthText}", ["@NR3"] = string.Empty, ["@NR4"] = string.Empty, ["JournalEntries"] = journalEntriesFee };
+            var detailsFee = new Dictionary<string, object> { ["@UNIT"] = "LIV", ["@HID"] = hidFee, ["@TYPE"] = "C", ["@FORCPAY"] = "N", ["@ACCOUNT"] = feeGl, ["@TRFAMT"] = totalFeeAmt.ToString($"D{PAD}"), ["@TRFCCY"] = cycle.Currency, ["@DTCD"] = "021", ["@CTCD"] = "521", ["@TRFREF"] = hidFee, ["@NR1"] = $"عمولة مرتبات {salaryMonthText}", ["@NR3"] = string.Empty, ["@NR4"] = string.Empty, ["JournalEntries"] = journalEntriesFee };
             detailsFee["@NR2"] = addMonthText != null ? $"Extra {addMonthText}" : string.Empty;
-            var payloadFee = new { Header = new { system = "MOBILE", referenceId = hidFee, userName = "TEDMOB", customerNumber = customerNumber, language = "AR" }, Details = detailsFee };
+            var payloadFee = new { Header = new { system = "CompanyGateway", referenceId = hidFee, userName = "CompanyGateway", customerNumber = customerNumber, language = "AR" }, Details = detailsFee };
             var requestUriFee = new Uri(bankCli.BaseAddress!, "api/mobile/PostBatchApply"); var bankResFee = await bankCli.PostAsJsonAsync(requestUriFee, payloadFee); rawFee = await bankResFee.Content.ReadAsStringAsync();
             cycle.BankFeeReference = hidFee; cycle.BankFeeResponseRaw = rawFee;
         }
@@ -969,7 +977,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         {
             if (incoming.TryGetValue(existing.EmployeeId, out var inc))
             {
-                existing.Amount = inc.Salary;
+                // Round per cycle currency precision (LYD=3dp, others=2dp)
+                var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+                existing.Amount = Math.Round(inc.Salary, decimals);
                 incoming.Remove(existing.EmployeeId);
             }
             else
@@ -986,17 +996,89 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                                    e.CompanyId == companyId);
             if (emp == null) continue;
 
+            var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
             cycle.Entries.Add(new SalaryEntry
             {
                 EmployeeId = emp.Id,
-                Amount = inc.Salary
+                Amount = Math.Round(inc.Salary, decimals)
             });
         }
 
-        cycle.TotalAmount = cycle.Entries.Sum(e => e.Amount);
+        {
+            var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+            cycle.TotalAmount = Math.Round(cycle.Entries.Sum(e => e.Amount), decimals);
+        }
 
         await _db.SaveChangesAsync();
         return _mapper.Map<SalaryCycleDto>(cycle);
+    }
+
+    public async Task<SalaryCycleDto?> AddEntriesToPostedCycleAsync(int companyId, int cycleId, SalaryCycleAddEntriesDto dto)
+    {
+        var cycle = await _db.SalaryCycles
+            .Include(c => c.Entries)
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
+
+        if (cycle == null) return null;
+        if (cycle.PostedAt == null)
+            throw new PayrollException("Salary cycle is not posted. Use the save endpoint before posting.");
+
+        if (dto.Entries == null || dto.Entries.Count == 0)
+            throw new PayrollException("At least one entry is required.");
+
+        var duplicateRequestIds = dto.Entries
+            .GroupBy(e => e.EmployeeId)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .OrderBy(x => x)
+            .ToList();
+        if (duplicateRequestIds.Count > 0)
+            throw new PayrollException($"Duplicate employee IDs in request: {string.Join(", ", duplicateRequestIds)}.");
+
+        var existingEmployeeIds = cycle.Entries
+            .Select(e => e.EmployeeId)
+            .ToHashSet();
+
+        var alreadyInCycle = dto.Entries
+            .Select(e => e.EmployeeId)
+            .Where(existingEmployeeIds.Contains)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+        if (alreadyInCycle.Count > 0)
+            throw new PayrollException($"Employee(s) already exist in this salary cycle: {string.Join(", ", alreadyInCycle)}.");
+
+        var requestedEmployeeIds = dto.Entries
+            .Select(e => e.EmployeeId)
+            .Distinct()
+            .ToList();
+
+        var companyEmployeeIds = await _db.Employees
+            .Where(e => e.CompanyId == companyId && requestedEmployeeIds.Contains(e.Id))
+            .Select(e => e.Id)
+            .ToListAsync();
+
+        var companyEmployeeSet = companyEmployeeIds.ToHashSet();
+        var missingEmployeeIds = requestedEmployeeIds
+            .Where(id => !companyEmployeeSet.Contains(id))
+            .OrderBy(x => x)
+            .ToList();
+        if (missingEmployeeIds.Count > 0)
+            throw new PayrollException($"Employee(s) not found for this company: {string.Join(", ", missingEmployeeIds)}.");
+
+        var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+
+        foreach (var inc in dto.Entries)
+        {
+            cycle.Entries.Add(new SalaryEntry
+            {
+                EmployeeId = inc.EmployeeId,
+                Amount = Math.Round(inc.Salary, decimals)
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        return await GetSalaryCycleAsync(companyId, cycleId);
     }
 
     #region ADMIN-SALARYCYCLES
@@ -1211,4 +1293,5 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
 
 }
+
 

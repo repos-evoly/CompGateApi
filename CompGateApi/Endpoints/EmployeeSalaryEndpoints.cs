@@ -39,6 +39,7 @@ namespace CompGateApi.Endpoints
             group.MapPost("/salarycycles/{id:int}/repost", RepostFailedEntries);
             group.MapGet("/salarycycles/{id:int}/entries/failed", GetFailedEntries);
             group.MapPost("/salarycycles/{cycleId:int}/entries/{entryId:int}/edit", EditEntryAndEmployee);
+            group.MapPost("/salarycycles/{id:int}/entries/add", AddEntriesToPostedSalaryCycle);
             // in RegisterEndpoints
             group.MapPut("/salarycycles/{id:int}", SaveSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/update", SaveSalaryCycle); // POST alias
@@ -392,6 +393,38 @@ namespace CompGateApi.Endpoints
 
 
         // ── ADMIN HANDLERS ────────────────────────────────────────────────────────────────
+        public static async Task<IResult> AddEntriesToPostedSalaryCycle(
+            int id,
+            SalaryCycleAddEntriesDto dto,
+            HttpContext ctx,
+            IEmployeeSalaryRepository repo,
+            IUserRepository userRepo,
+            ILogger<EmployeeSalaryEndpoints> log)
+        {
+            var authId = GetAuthUserId(ctx);
+            var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var me = await userRepo.GetUserByAuthId(authId, token);
+            if (me?.CompanyId == null) return Results.Unauthorized();
+
+            try
+            {
+                var updated = await repo.AddEntriesToPostedCycleAsync(me.CompanyId.Value, id, dto);
+                if (updated == null)
+                    return Results.NotFound(new { error = "Salary cycle not found for this company.", cycleId = id });
+                return Results.Ok(updated);
+            }
+            catch (PayrollException ex)
+            {
+                log.LogWarning(ex, "AddEntriesToPostedSalaryCycle business-rule failure");
+                return Results.BadRequest(new { error = ex.Message, cycleId = id });
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Unhandled error in AddEntriesToPostedSalaryCycle");
+                return Results.StatusCode(500);
+            }
+        }
+
         public static async Task<IResult> AdminGetSalaryCycles(
             [FromServices] IEmployeeSalaryRepository repo,
             [FromQuery] string? companyCode,

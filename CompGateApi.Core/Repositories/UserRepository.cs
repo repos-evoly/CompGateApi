@@ -1,4 +1,4 @@
-using CompGateApi.Core.Abstractions;
+﻿using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
@@ -188,13 +188,13 @@ namespace CompGateApi.Core.Repositories
                     AuthUserId = authUser?.Id ?? 0,
                     Username = authUser?.Username,
                     CompanyId = user.CompanyId,
-                    IsCompanyAdmin = user.IsCompanyAdmin,   // ← set it here
+                    IsCompanyAdmin = user.IsCompanyAdmin,   // â† set it here
                     CompanyCode = user.Company?.Code,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     Email = user.Email,
                     Phone = user.Phone,
-                    IsActive = user.IsActive,  // ← set it here
+                    IsActive = user.IsActive,  // â† set it here
                     Role = new RoleDto
                     {
                         Id = user.Role?.Id ?? 0,
@@ -350,7 +350,7 @@ namespace CompGateApi.Core.Repositories
             // a) local lookup
             var user = await _context.Users
             .Include(u => u.Role)
-            .Include(u => u.Company)      // ← pull in the Company entity
+            .Include(u => u.Company)      // â† pull in the Company entity
             .FirstOrDefaultAsync(u => u.AuthUserId == authId);
             if (user == null) return null;
 
@@ -367,20 +367,20 @@ namespace CompGateApi.Core.Repositories
                 .Select(p => p.NameEn)
                 .ToListAsync();
 
-            // d) bank accounts — only if CompanyId is set
+            // d) bank accounts â€” only if CompanyId is set
             var accounts = new List<string>();
             if (user.CompanyId != null)
             {
-                var companyCode = user.Company!.Code;   // ← the 6-digit code
+                var companyCode = user.Company!.Code;   // â† the 6-digit code
                 var bankClient = _httpFactory.CreateClient("BankApi");
-                // optional: bankClient.DefaultRequestHeaders.Authorization = …
+                // optional: bankClient.DefaultRequestHeaders.Authorization = â€¦
                 var payload = new
                 {
                     Header = new
                     {
-                        system = "MOBILE",
+                        system = "CompanyGateway",
                         referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
-                        userName = "TEDMOB",
+                        userName = "CompanyGateway",
                         customerNumber = companyCode,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
@@ -576,3 +576,4 @@ namespace CompGateApi.Core.Repositories
         }
     }
 }
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -86,9 +86,9 @@ namespace CompGateApi.Data.Repositories
                 {
                     Header = new
                     {
-                        system = "MOBILE",
+                        system = "CompanyGateway",
                         referenceId = referenceId,
-                        userName = "TEDMOB",
+                        userName = "CompanyGateway",
                         customerNumber = (fromAccount.Length >= 13 ? fromAccount.Substring(4, 6) : ""),
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
@@ -112,14 +112,14 @@ namespace CompGateApi.Data.Repositories
                     }
                 };
 
-                _log.LogInformation("📤 CompanyGatewayPostTransfer payload: {Payload}",
+                _log.LogInformation("ðŸ“¤ CompanyGatewayPostTransfer payload: {Payload}",
                     JsonSerializer.Serialize(payload));
 
                 var httpClient = _httpFactory.CreateClient("BankApi");
                 var resp = await httpClient.PostAsJsonAsync("/api/mobile/postTransfer", payload, ct);
                 var raw = await resp.Content.ReadAsStringAsync(ct);
 
-                _log.LogInformation("📥 CompanyGatewayPostTransfer response: {Raw}", raw);
+                _log.LogInformation("ðŸ“¥ CompanyGatewayPostTransfer response: {Raw}", raw);
 
                 if (!resp.IsSuccessStatusCode)
                     return Fail("Bank error: " + resp.StatusCode);
@@ -199,9 +199,9 @@ namespace CompGateApi.Data.Repositories
             {
                 Header = new
                 {
-                    system = "MOBILE",
+                    system = "CompanyGateway",
                     referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant(),
-                    userName = "TEDMOB",
+                    userName = "CompanyGateway",
                     customerNumber = srcAcc!.Length >= 13 ? srcAcc.Substring(4, 6) : "",
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
@@ -210,8 +210,8 @@ namespace CompGateApi.Data.Repositories
                 {
                     ["@TRFREFORG"] = originalBankRef,
                     ["@TRFCCY"] = string.IsNullOrWhiteSpace(currencyCode) ? "LYD" : currencyCode,
-                    ["@SRCACC"] = srcAcc,   // original DST (fees) → now debited
-                    ["@DSTACC"] = dstAcc,   // original SRC (customer) → now credited
+                    ["@SRCACC"] = srcAcc,   // original DST (fees) â†’ now debited
+                    ["@DSTACC"] = dstAcc,   // original SRC (customer) â†’ now credited
                     ["@SRCACC2"] = srcAcc,
                     ["@DSTACC2"] = dstAcc,
                     ["@TRFAMT"] = amountStr,
@@ -225,8 +225,8 @@ namespace CompGateApi.Data.Repositories
             var resp = await http.PostAsJsonAsync("/api/mobile/postTransfer", payload, ct);
             var raw = await resp.Content.ReadAsStringAsync(ct);
 
-            _log.LogInformation("🔄 Reverse payload: {Payload}", JsonSerializer.Serialize(payload));
-            _log.LogInformation("🔄 Reverse response: {Raw}", raw);
+            _log.LogInformation("ðŸ”„ Reverse payload: {Payload}", JsonSerializer.Serialize(payload));
+            _log.LogInformation("ðŸ”„ Reverse response: {Raw}", raw);
 
             if (!resp.IsSuccessStatusCode)
                 return (false, $"Bank error: {resp.StatusCode}");
@@ -251,3 +251,4 @@ namespace CompGateApi.Data.Repositories
         }
     }
 }
+

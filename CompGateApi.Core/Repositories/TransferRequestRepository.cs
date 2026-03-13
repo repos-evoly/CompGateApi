@@ -1,4 +1,4 @@
-using CompGateApi.Core.Abstractions;
+﻿using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
@@ -282,9 +282,9 @@ namespace CompGateApi.Data.Repositories
                 {
                     Header = new
                     {
-                        system = "MOBILE",
+                        system = "CompanyGateway",
                         referenceId = referenceId,
-                        userName = "TEDMOB",
+                        userName = "CompanyGateway",
                         customerNumber = ent.ToAccount,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
@@ -479,9 +479,9 @@ namespace CompGateApi.Data.Repositories
                 {
                     Header = new
                     {
-                        system = "MOBILE",
+                        system = "CompanyGateway",
                         referenceId = referenceId,
-                        userName = "TEDMOB",
+                        userName = "CompanyGateway",
                         customerNumber = dto.ToAccount,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
@@ -500,13 +500,13 @@ namespace CompGateApi.Data.Repositories
                     }
                 };
 
-                _log.LogInformation("📤 Bank payload: {Payload}", JsonSerializer.Serialize(payload));
+                _log.LogInformation("ðŸ“¤ Bank payload: {Payload}", JsonSerializer.Serialize(payload));
 
                 var httpClient = _httpFactory.CreateClient("BankApi");
                 var response = await httpClient.PostAsJsonAsync("/api/mobile/flexPostTransfer", payload, ct);
                 var bankRaw = await response.Content.ReadAsStringAsync(ct);
 
-                _log.LogInformation("📥 Bank response: {Raw}", bankRaw);
+                _log.LogInformation("ðŸ“¥ Bank response: {Raw}", bankRaw);
 
                 if (!response.IsSuccessStatusCode)
                     return Fail("Bank error: " + response.StatusCode);
@@ -546,7 +546,7 @@ namespace CompGateApi.Data.Repositories
                     CommissionOnRecipient = commissionOnRecipient,
                     Rate = rate,
                     TransferMode = transferMode,
-                    BankReference = referenceId // ← NEW
+                    BankReference = referenceId // â† NEW
                 };
 
                 _db.TransferRequests.Add(entity);
@@ -592,9 +592,9 @@ namespace CompGateApi.Data.Repositories
             {
                 Header = new
                 {
-                    system = "MOBILE",
+                    system = "CompanyGateway",
                     referenceId = header(),
-                    userName = "TEDMOB",
+                    userName = "CompanyGateway",
                     customerNumber = code,
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
@@ -609,9 +609,9 @@ namespace CompGateApi.Data.Repositories
             {
                 Header = new
                 {
-                    system = "MOBILE",
+                    system = "CompanyGateway",
                     referenceId = header(),
-                    userName = "TEDMOB",
+                    userName = "CompanyGateway",
                     customerNumber = code,
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
@@ -621,7 +621,7 @@ namespace CompGateApi.Data.Repositories
         }
             });
 
-            // Branches (KYC) – we’ll map CABBN (branch number) -> CABRN (branch name)
+            // Branches (KYC) â€“ weâ€™ll map CABBN (branch number) -> CABRN (branch name)
             var branchesTask = kycClient.GetAsync("kycapi/api/core/getActiveBranches");
 
             await Task.WhenAll(accountsTask, stcodTask, branchesTask);
@@ -683,7 +683,7 @@ namespace CompGateApi.Data.Repositories
                 catch { /* ignore branches parsing errors; we'll just omit branch names */ }
             }
 
-            // Map accounts → AccountDto (with company name & branch info)
+            // Map accounts â†’ AccountDto (with company name & branch info)
             var result = bankDto.Details.Accounts.Select(a =>
             {
                 var ab = a.YBCD01AB?.Trim(); // branch number from accounts API (e.g., "0015")
@@ -698,8 +698,8 @@ namespace CompGateApi.Data.Repositories
                     DebitBalance = a.YBCD01LDBL,
                     TransferType = transferType,
 
-                    CompanyName = a.YBCD01CUN?.Trim(), // ← company name from accounts API
-                    BranchCode = ab,                  // ← YBCD01AB
+                    CompanyName = a.YBCD01CUN?.Trim(), // â† company name from accounts API
+                    BranchCode = ab,                  // â† YBCD01AB
                     BranchName = string.IsNullOrWhiteSpace(branchName) ? null : branchName
                 };
             }).ToList();
@@ -715,9 +715,9 @@ namespace CompGateApi.Data.Repositories
             {
                 Header = new
                 {
-                    system = "MOBILE",
+                    system = "CompanyGateway",
                     referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
-                    userName = "TEDMOB",
+                    userName = "CompanyGateway",
                     customerNumber = account,
                     requestTime = DateTime.UtcNow.ToString("o"),
                     language = "AR"
@@ -811,9 +811,9 @@ namespace CompGateApi.Data.Repositories
                 {
                     Header = new
                     {
-                        system = "MOBILE",
+                        system = "CompanyGateway",
                         referenceId = Guid.NewGuid().ToString("N").Substring(0, 16),
-                        userName = "TEDMOB",
+                        userName = "CompanyGateway",
                         customerNumber = account,
                         requestTime = DateTime.UtcNow.ToString("o"),
                         language = "AR"
@@ -902,3 +902,4 @@ namespace CompGateApi.Data.Repositories
         }
     }
 }
+

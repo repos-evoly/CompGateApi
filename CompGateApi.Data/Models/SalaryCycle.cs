@@ -22,7 +22,7 @@ public class SalaryCycle : Auditable
     public int? PostedByUserId { get; set; }
     public DateTime? PostedAt { get; set; }
 
-    [Column(TypeName = "decimal(18,2)")]
+    [Column(TypeName = "decimal(18,3)")]
     public decimal TotalAmount { get; set; }
 
     [MaxLength(32)]

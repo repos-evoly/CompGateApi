@@ -19,7 +19,7 @@ public class Employee
     [MaxLength(20)]
     public string Phone { get; set; } = null!;
 
-    [Column(TypeName = "decimal(18,2)")]
+    [Column(TypeName = "decimal(18,3)")]
     public decimal Salary { get; set; }
 
     public DateTime Date { get; set; }

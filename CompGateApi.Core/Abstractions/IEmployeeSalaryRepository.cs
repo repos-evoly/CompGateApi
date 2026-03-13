@@ -24,6 +24,7 @@ public interface IEmployeeSalaryRepository
     Task<SalaryEntryDto?> EditEntryAndEmployeeAsync(int companyId, int cycleId, int entryId, SalaryEntryEditDto dto);
 
     Task<SalaryCycleDto?> SaveSalaryCycleAsync(int companyId, int cycleId, SalaryCycleSaveDto dto);
+    Task<SalaryCycleDto?> AddEntriesToPostedCycleAsync(int companyId, int cycleId, SalaryCycleAddEntriesDto dto);
 
     Task<int> AdminGetSalaryCyclesCountAsync(
          string? companyCode,
