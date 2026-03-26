@@ -276,6 +276,7 @@ namespace CompGateApi.Data.Repositories
                 var commRounded = Math.Round(ent.CommissionAmount, decimals);
                 string amountStr = ((long)(amtRounded * scale)).ToString("D15");
                 string commStr = ((long)(commRounded * scale)).ToString("D15");
+                string applyTrn2 = commRounded > 0m ? "Y" : "N";
 
                 var referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
                 var payload = new
@@ -297,7 +298,7 @@ namespace CompGateApi.Data.Repositories
                         ["@DSTACC"] = ent.ToAccount,
                         ["@DSTACC2"] = commissionAccount,
                         ["@TRFAMT"] = amountStr,
-                        ["@APLYTRN2"] = "Y",
+                        ["@APLYTRN2"] = applyTrn2,
                         ["@TRFAMT2"] = commStr,
                         ["@NR2"] = ent.Description ?? ""
                     }
@@ -453,6 +454,7 @@ namespace CompGateApi.Data.Repositories
                 var commRounded = Math.Round(commission, decimals);
                 string amountStr = ((long)(amtRounded * scale)).ToString("D15");
                 string commStr = ((long)(commRounded * scale)).ToString("D15");
+                string applyTrn2 = commRounded > 0m ? "Y" : "N";
 
                 var company = await _db.Companies.FindAsync(new object?[] { companyId }, ct);
                 if (company == null)
@@ -494,7 +496,7 @@ namespace CompGateApi.Data.Repositories
                         ["@DSTACC"] = dto.ToAccount,
                         ["@DSTACC2"] = commissionAccount,
                         ["@TRFAMT"] = amountStr,
-                        ["@APLYTRN2"] = "Y",
+                        ["@APLYTRN2"] = applyTrn2,
                         ["@TRFAMT2"] = commStr,
                         ["@NR2"] = dto.Description ?? ""
                     }
