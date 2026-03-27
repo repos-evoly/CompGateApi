@@ -13,6 +13,8 @@ namespace CompGateApi
                                   opt => opt.MapFrom(src => src.TransactionCategory.Name))
                        .ForMember(dest => dest.CurrencyCode,
                                   opt => opt.MapFrom(src => src.Currency.Code))
+                       .ForMember(dest => dest.CurrencyDescription,
+                                  opt => opt.MapFrom(src => src.Currency.Description))
                        .ForMember(dest => dest.PackageName,
                                   opt => opt.MapFrom(src => src.ServicePackage.Name))
                        .ForMember(dest => dest.CommissionAmount,

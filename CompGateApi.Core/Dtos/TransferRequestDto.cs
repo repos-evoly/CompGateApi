@@ -11,10 +11,12 @@ namespace CompGateApi.Core.Dtos
     {
         public int Id { get; set; }
         public int UserId { get; set; }
+        public int CurrencyId { get; set; }
 
         // ← these three must be declared so your .ForMember(…) calls compile:
         public string CategoryName { get; set; } = string.Empty;
         public string CurrencyCode { get; set; } = string.Empty;
+        public string CurrencyDescription { get; set; } = string.Empty;
         public string PackageName { get; set; } = string.Empty;
 
         public string FromAccount { get; set; } = string.Empty;

@@ -50,6 +50,7 @@ namespace CompGateApi.Data.Repositories
         {
             var q = _db.TransferRequests
                        .Include(t => t.TransactionCategory)
+                       .Include(t => t.Currency)
                        .Where(t => t.CompanyId == companyId);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -81,10 +82,12 @@ namespace CompGateApi.Data.Repositories
         public async Task<List<TransferRequest>> GetAllAsync(
             string? searchTerm, int page, int limit)
         {
-            var q = _db.TransferRequests.Include(t => t.TransactionCategory);
+            IQueryable<TransferRequest> q = _db.TransferRequests
+                .Include(t => t.TransactionCategory)
+                .Include(t => t.Currency);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
-                q = (Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<TransferRequest, TransactionCategory>)q.Where(t =>
+                q = q.Where(t =>
                     t.FromAccount.Contains(searchTerm!) ||
                     t.ToAccount.Contains(searchTerm!) ||
                     t.Status.Contains(searchTerm!));
@@ -100,6 +103,7 @@ namespace CompGateApi.Data.Repositories
         public async Task<TransferRequest?> GetByIdAsync(int id)
             => await _db.TransferRequests
                         .Include(t => t.TransactionCategory)
+                        .Include(t => t.Currency)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(t => t.Id == id);
 
