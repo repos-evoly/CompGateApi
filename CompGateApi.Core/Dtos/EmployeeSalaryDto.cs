@@ -181,3 +181,18 @@ public class SalaryCycleAdminDetailDto
 
     public List<SalaryEntryDto> Entries { get; set; } = new();
 }
+
+public class EmployeeExcelImportRowErrorDto
+{
+    public int RowNumber { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public class EmployeeExcelImportResultDto
+{
+    public int TotalRows { get; set; }
+    public int CreatedCount { get; set; }
+    public int UpdatedCount { get; set; }
+    public int SkippedCount { get; set; }
+    public List<EmployeeExcelImportRowErrorDto> Errors { get; set; } = new();
+}

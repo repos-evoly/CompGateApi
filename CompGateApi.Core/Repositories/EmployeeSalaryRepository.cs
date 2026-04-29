@@ -1,6 +1,7 @@
 ﻿// CompGateApi.Infrastructure/Repositories/EmployeeSalaryRepository.cs
 using System.Net.Http.Json;
 using AutoMapper;
+using ClosedXML.Excel;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
@@ -168,6 +169,180 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<EmployeeExcelImportResultDto> ImportEmployeesFromExcelAsync(int companyId, Stream excelStream)
+    {
+        var result = new EmployeeExcelImportResultDto();
+
+        if (excelStream == null || !excelStream.CanRead)
+            throw new InvalidDataException("Invalid Excel file stream.");
+
+        using var workbook = new XLWorkbook(excelStream);
+        var worksheet = workbook.Worksheets.FirstOrDefault();
+        if (worksheet == null)
+            throw new InvalidDataException("The uploaded file does not contain any worksheet.");
+
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        if (lastRow == 0)
+            return result;
+
+        var now = DateTime.UtcNow;
+        var existingEmployees = await _db.Employees
+            .Where(e => e.CompanyId == companyId)
+            .ToListAsync();
+
+        var byAccount = existingEmployees
+            .Where(e => !string.IsNullOrWhiteSpace(e.AccountNumber))
+            .ToDictionary(e => e.AccountNumber.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        var seenAccountsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var firstRow = LooksLikeHeaderRow(worksheet.Row(1)) ? 2 : 1;
+
+        for (var rowNumber = firstRow; rowNumber <= lastRow; rowNumber++)
+        {
+            var row = worksheet.Row(rowNumber);
+
+            var name = row.Cell(1).GetString().Trim();
+            var account = NormalizeImportedAccount(row.Cell(2).GetFormattedString());
+            var salaryText = row.Cell(3).GetFormattedString().Trim();
+
+            var rowIsCompletelyEmpty =
+                string.IsNullOrWhiteSpace(name) &&
+                string.IsNullOrWhiteSpace(account) &&
+                string.IsNullOrWhiteSpace(salaryText);
+
+            if (rowIsCompletelyEmpty)
+                continue;
+
+            result.TotalRows++;
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Name (Column A) is required." });
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(account))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Account number (Column B) is required." });
+                continue;
+            }
+
+            if (!account.All(char.IsDigit) || account.Length != 13)
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Account number (Column B) must be exactly 13 digits." });
+                continue;
+            }
+
+            if (!TryParseSalary(row.Cell(3), out var salary))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) is invalid." });
+                continue;
+            }
+
+            if (salary < 0)
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) cannot be negative." });
+                continue;
+            }
+
+            if (!seenAccountsInFile.Add(account))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Duplicate account number found in uploaded file." });
+                continue;
+            }
+
+            var cleanedName = name.Length > 100 ? name[..100] : name;
+            var roundedSalary = Math.Round(salary, 3);
+
+            if (byAccount.ContainsKey(account))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto
+                {
+                    RowNumber = rowNumber,
+                    Message = "Account number already exists for this company. Row skipped."
+                });
+                continue;
+            }
+
+            var created = new Employee
+            {
+                CompanyId = companyId,
+                Name = cleanedName,
+                Email = BuildImportedEmail(companyId, account),
+                Phone = BuildImportedPhone(account),
+                Salary = roundedSalary,
+                Date = now,
+                AccountNumber = account,
+                AccountType = "account",
+                SendSalary = true,
+                CanPost = true
+            };
+
+            _db.Employees.Add(created);
+            byAccount[account] = created;
+            result.CreatedCount++;
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
+    private static bool LooksLikeHeaderRow(IXLRow row)
+    {
+        var colA = row.Cell(1).GetString().Trim().ToLowerInvariant();
+        var colB = row.Cell(2).GetString().Trim().ToLowerInvariant();
+        var colC = row.Cell(3).GetString().Trim().ToLowerInvariant();
+
+        return (colA == "name" || colA.Contains("employee"))
+            && colB.Contains("account")
+            && colC.Contains("salary");
+    }
+
+    private static bool TryParseSalary(IXLCell salaryCell, out decimal salary)
+    {
+        if (salaryCell.TryGetValue<decimal>(out salary))
+            return true;
+
+        var raw = salaryCell.GetFormattedString().Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        raw = raw.Replace(",", "");
+        return decimal.TryParse(
+            raw,
+            System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out salary);
+    }
+
+    private static string NormalizeImportedAccount(string rawAccount)
+    {
+        if (string.IsNullOrWhiteSpace(rawAccount))
+            return string.Empty;
+
+        var normalized = rawAccount.Trim().Replace(" ", "");
+        if (normalized.EndsWith(".0", StringComparison.Ordinal))
+            normalized = normalized[..^2];
+        return normalized;
+    }
+
+    private static string BuildImportedEmail(int companyId, string account)
+    {
+        return $"imported-{companyId}-{account}@placeholder.local";
+    }
+
+    private static string BuildImportedPhone(string account)
+    {
+        return account.Length <= 10 ? account : account[^10..];
     }
 
     public async Task<PagedResult<SalaryCycleDto>> GetSalaryCyclesAsync(int companyId, int page, int limit)

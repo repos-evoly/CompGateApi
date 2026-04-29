@@ -10,6 +10,7 @@ public interface IEmployeeSalaryRepository
     Task<bool> DeleteEmployeeAsync(int companyId, int id);
     Task<bool> BatchUpdateAsync(int companyId, List<EmployeeDto> updates);
     Task<EmployeeDto?> GetEmployeeAsync(int companyId, int employeeId);
+    Task<EmployeeExcelImportResultDto> ImportEmployeesFromExcelAsync(int companyId, Stream excelStream);
 
     Task<SalaryCycleDto?> GetSalaryCycleAsync(int companyId, int cycleId);
 
