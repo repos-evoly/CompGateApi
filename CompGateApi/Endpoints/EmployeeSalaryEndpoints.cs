@@ -102,7 +102,7 @@ namespace CompGateApi.Endpoints
         }
 
         public static async Task<IResult> ImportEmployeesFromExcel(
-            [FromForm(Name = "files")] IFormFile file,
+            HttpRequest request,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
@@ -113,15 +113,21 @@ namespace CompGateApi.Endpoints
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
 
-            if (file == null || file.Length == 0)
-                return Results.BadRequest(new { error = "Please upload a non-empty .xlsx file." });
-
-            var extension = Path.GetExtension(file.FileName);
-            if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
-                return Results.BadRequest(new { error = "Only .xlsx files are supported." });
-
             try
             {
+                if (!request.HasFormContentType)
+                    return Results.BadRequest(new { error = "Request must be multipart/form-data." });
+
+                var form = await request.ReadFormAsync();
+                var file = form.Files.GetFile("files") ?? form.Files.FirstOrDefault();
+
+                if (file == null || file.Length == 0)
+                    return Results.BadRequest(new { error = "Please upload a non-empty .xlsx file." });
+
+                var extension = Path.GetExtension(file.FileName);
+                if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest(new { error = "Only .xlsx files are supported." });
+
                 await using var stream = file.OpenReadStream();
                 var result = await repo.ImportEmployeesFromExcelAsync(user.CompanyId.Value, stream);
                 return Results.Ok(result);
@@ -425,10 +431,17 @@ namespace CompGateApi.Endpoints
             if (existing.PostedAt != null)
                 return Results.BadRequest(new { error = "Salary cycle is already posted and cannot be edited.", cycleId = id });
 
-            var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
-            if (saved == null)
-                return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
-            return Results.Ok(saved);
+            try
+            {
+                var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
+                if (saved == null)
+                    return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
+                return Results.Ok(saved);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message, cycleId = id });
+            }
         }
 
 
