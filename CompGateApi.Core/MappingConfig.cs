@@ -81,12 +81,15 @@ namespace CompGateApi
                 .ForMember(d => d.AccountType, c => c.MapFrom(s => s.Employee.AccountType))
                 .ForMember(d => d.SendSalary, c => c.MapFrom(s => s.Employee.SendSalary))
                 .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost))
+                .ForMember(d => d.IsDeleted, c => c.MapFrom(s => s.Employee.IsDeleted))
                 .ForMember(d => d.TransferResultCode, c => c.MapFrom(s => s.TransferResultCode))
                 .ForMember(d => d.TransferResultReason, c => c.MapFrom(s => s.TransferResultReason))
                 .ForMember(d => d.TransferredAt, c => c.MapFrom(s => s.TransferredAt));
 
             // map SalaryCycle -> SalaryCycleDto
             CreateMap<SalaryCycle, SalaryCycleDto>()
+            .ForMember(d => d.EntryCount,
+                    c => c.MapFrom(src => src.Entries.Count))
             .ForMember(d => d.Entries,
                     c => c.MapFrom(src => src.Entries));
         }

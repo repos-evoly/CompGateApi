@@ -26,18 +26,24 @@ Response returns summary:
 - `totalRows`
 - `createdCount`
 - `updatedCount`
+- `deletedCount`
 - `skippedCount`
 - `errors` with row numbers (if any invalid rows were skipped)
 
 Import behavior:
 
-- Insert-only by account number inside the authenticated company.
+- Sync by account number inside the authenticated company.
 - New employees are created.
-- Existing employees with the same account number are skipped (not updated).
+- Existing employees with the same account number are updated from Excel (`Name` and `Salary`) and reactivated if previously soft-deleted.
+- Existing employees keep their current `Email` and `Phone` values because these columns are not included in the Excel file.
+- Existing employees missing from the uploaded Excel are marked with `isDeleted = true`.
 - Imported employees are set with:
+  - `email = null`
+  - `phone = null`
   - `accountType = "account"`
   - `sendSalary = true`
   - `canPost = true`
+  - `isDeleted = false`
 
 ## 3) Verify imported employees
 
@@ -46,6 +52,7 @@ Use:
 - `GET /api/employees`
 
 Imported employees should appear there immediately.
+Employees marked with `isDeleted = true` are not returned by this endpoint.
 
 ## 4) Create salary cycle using imported employees
 
@@ -53,7 +60,7 @@ Use:
 
 - `POST /api/employees/salarycycles`
 
-If you do **not** pass explicit `entries`, the cycle includes company employees with `sendSalary = true` (including imported rows).
+If you do **not** pass explicit `entries`, the cycle includes active company employees with `sendSalary = true` (including imported rows). Soft-deleted employees are not included and cannot be posted.
 
 Example request body:
 

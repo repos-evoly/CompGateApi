@@ -575,13 +575,14 @@ namespace CompGateApi.Data.Context
                             b.ToTable("Employees");
                             b.HasKey(e => e.Id);
                             b.Property(e => e.Name).HasMaxLength(100).IsRequired();
-                            b.Property(e => e.Email).HasMaxLength(100).IsRequired();
+                            b.Property(e => e.Email).HasMaxLength(100);
                             b.Property(e => e.Phone).HasMaxLength(20);
                             b.Property(e => e.Salary).HasPrecision(18, 2);
                             b.Property(e => e.AccountNumber).HasMaxLength(34).IsRequired();
                             b.Property(e => e.AccountType).HasMaxLength(20).IsRequired();
                             b.Property(e => e.SendSalary);
                             b.Property(e => e.CanPost);
+                            b.Property(e => e.IsDeleted).HasDefaultValue(false);
 
                             b.HasOne(e => e.Company)
                             .WithMany(c => c.Employees)
