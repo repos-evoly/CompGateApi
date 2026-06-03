@@ -75,10 +75,12 @@ namespace CompGateApi
                 .ForMember(d => d.Name, c => c.MapFrom(s => s.Employee.Name))
                 .ForMember(d => d.Email, c => c.MapFrom(s => s.Employee.Email))
                 .ForMember(d => d.Phone, c => c.MapFrom(s => s.Employee.Phone))
-                .ForMember(d => d.Salary, c => c.MapFrom(s => s.Employee.Salary))
+                .ForMember(d => d.Salary, c => c.MapFrom(s => s.Amount))
                 .ForMember(d => d.Date, c => c.MapFrom(s => s.Employee.Date))
                 .ForMember(d => d.AccountNumber, c => c.MapFrom(s => s.Employee.AccountNumber))
                 .ForMember(d => d.AccountType, c => c.MapFrom(s => s.Employee.AccountType))
+                .ForMember(d => d.EvoWallet, c => c.MapFrom(s => s.Employee.EvoWallet))
+                .ForMember(d => d.BcdWallet, c => c.MapFrom(s => s.Employee.BcdWallet))
                 .ForMember(d => d.SendSalary, c => c.MapFrom(s => s.Employee.SendSalary))
                 .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost))
                 .ForMember(d => d.IsDeleted, c => c.MapFrom(s => s.Employee.IsDeleted))
@@ -86,12 +88,17 @@ namespace CompGateApi
                 .ForMember(d => d.TransferResultReason, c => c.MapFrom(s => s.TransferResultReason))
                 .ForMember(d => d.TransferredAt, c => c.MapFrom(s => s.TransferredAt));
 
+            CreateMap<SalaryEntryAllocation, SalaryEntryAllocationDto>();
+            CreateMap<SalaryWalletBatch, SalaryWalletBatchDto>();
+
             // map SalaryCycle -> SalaryCycleDto
             CreateMap<SalaryCycle, SalaryCycleDto>()
             .ForMember(d => d.EntryCount,
                     c => c.MapFrom(src => src.Entries.Count))
             .ForMember(d => d.Entries,
-                    c => c.MapFrom(src => src.Entries));
+                    c => c.MapFrom(src => src.Entries))
+            .ForMember(d => d.WalletBatches,
+                    c => c.MapFrom(src => src.WalletBatches));
         }
     }
 

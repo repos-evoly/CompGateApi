@@ -36,6 +36,15 @@ public class Employee
     [MaxLength(34)]
     public string? BcdWallet { get; set; }
 
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal AccountAllocationAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal EvoAllocationAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal BcdAllocationAmount { get; set; }
+
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
     public bool IsDeleted { get; set; } = false;

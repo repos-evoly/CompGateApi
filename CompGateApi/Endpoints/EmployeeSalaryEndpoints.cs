@@ -69,6 +69,28 @@ namespace CompGateApi.Endpoints
             throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
         }
 
+        private static SalaryApiErrorResponseDto SalaryApiError(
+            PayrollException ex,
+            string fallbackCode,
+            string fallbackMessageEn,
+            string fallbackMessageAr,
+            object? fallbackDetails = null)
+        {
+            var messageEn = string.IsNullOrWhiteSpace(ex.MessageEn) ? fallbackMessageEn : ex.MessageEn!;
+            var messageAr = string.IsNullOrWhiteSpace(ex.MessageAr) ? fallbackMessageAr : ex.MessageAr!;
+
+            return new SalaryApiErrorResponseDto
+            {
+                Success = false,
+                Status = ex.Status,
+                Code = string.IsNullOrWhiteSpace(ex.Code) ? fallbackCode : ex.Code!,
+                Message = messageEn,
+                MessageEn = messageEn,
+                MessageAr = messageAr,
+                Details = ex.Details ?? fallbackDetails
+            };
+        }
+
         public static async Task<IResult> GetAllEmployees(
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
@@ -276,6 +298,16 @@ namespace CompGateApi.Endpoints
                 return Results.Ok(cycle);
             }
             /* -- domain / validation errors we want to surface to caller -- */
+            catch (PayrollException ex)
+            {
+                log.LogWarning(ex, "CreateSalaryCycle payroll validation failure");
+                return Results.Ok(SalaryApiError(
+                    ex,
+                    "SALARY_CYCLE_CREATE_FAILED",
+                    "Failed to create salary cycle.",
+                    "فشل إنشاء دورة الرواتب."));
+            }
+            /* -- existing validation shape retained for non-allocation create errors -- */
             catch (InvalidOperationException ex)
             {
                 log.LogWarning(ex, "CreateSalaryCycle business-rule failure");
@@ -315,19 +347,12 @@ namespace CompGateApi.Endpoints
             catch (PayrollException ex)
             {
                 log.LogWarning(ex, "PostSalaryCycle business-rule failure");
-                // Include cycle with per-entry reasons so caller sees what failed
-                try
-                {
-                    var authId2 = GetAuthUserId(ctx);
-                    var token2 = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-                    var user2 = await userRepo.GetUserByAuthId(authId2, token2);
-                    var cycleDto = user2?.CompanyId != null ? await repo.GetSalaryCycleAsync(user2.CompanyId.Value, id) : null;
-                    return Results.BadRequest(new { error = ex.Message, cycle = cycleDto });
-                }
-                catch
-                {
-                    return Results.BadRequest(new { error = ex.Message });
-                }
+                return Results.Ok(SalaryApiError(
+                    ex,
+                    "SALARY_POSTING_FAILED",
+                    "Failed to post salary cycle.",
+                    "فشل نشر دورة الرواتب.",
+                    new { salaryCycleId = id }));
             }
             catch (Exception ex)
             {

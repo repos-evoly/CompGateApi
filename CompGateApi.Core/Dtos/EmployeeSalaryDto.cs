@@ -12,6 +12,9 @@ public class EmployeeDto
     public string AccountType { get; set; } = null!;
     public string? EvoWallet { get; set; }
     public string? BcdWallet { get; set; }
+    public decimal AccountAllocationAmount { get; set; }
+    public decimal EvoAllocationAmount { get; set; }
+    public decimal BcdAllocationAmount { get; set; }
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
     public bool IsDeleted { get; set; }
@@ -28,6 +31,9 @@ public class EmployeeCreateDto
     public string AccountType { get; set; } = "account";
     public string? EvoWallet { get; set; }
     public string? BcdWallet { get; set; }
+    public decimal AccountAllocationAmount { get; set; }
+    public decimal EvoAllocationAmount { get; set; }
+    public decimal BcdAllocationAmount { get; set; }
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
 }
@@ -54,6 +60,7 @@ public class SalaryCycleDto
     public string? BankResponseRaw { get; set; }
     [JsonIgnore]
     public string? BankBatchHistoryJson { get; set; }
+    public List<SalaryWalletBatchDto> WalletBatches { get; set; } = new();
 }
 
 public class SalaryCycleCreateDto
@@ -79,6 +86,8 @@ public class SalaryEntryDto
     public DateTime Date { get; set; }
     public string AccountNumber { get; set; } = null!;
     public string AccountType { get; set; } = null!;
+    public string? EvoWallet { get; set; }
+    public string? BcdWallet { get; set; }
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
     public bool IsDeleted { get; set; }
@@ -88,6 +97,45 @@ public class SalaryEntryDto
     public string? TransferResultCode { get; set; }
     public string? TransferResultReason { get; set; }
     public DateTime? TransferredAt { get; set; }
+    public decimal CommissionAmount { get; set; }
+    public List<SalaryEntryAllocationDto> Allocations { get; set; } = new();
+}
+
+public class SalaryEntryAllocationDto
+{
+    public int Id { get; set; }
+    public int SalaryEntryId { get; set; }
+    public string PaymentChannel { get; set; } = "account";
+    public decimal Amount { get; set; }
+    public string Destination { get; set; } = string.Empty;
+    public string ClientReference { get; set; } = string.Empty;
+    public string Status { get; set; } = "pending";
+    public string? TransferResultCode { get; set; }
+    public string? TransferResultReason { get; set; }
+    public string? ProviderTransactionId { get; set; }
+    public decimal CommissionAmount { get; set; }
+    public bool IsTransferred { get; set; }
+    public DateTime? TransferredAt { get; set; }
+}
+
+public class SalaryWalletBatchDto
+{
+    public int Id { get; set; }
+    public int SalaryCycleId { get; set; }
+    public string WalletChannel { get; set; } = string.Empty;
+    public string ShadowAccount { get; set; } = string.Empty;
+    public string BatchReference { get; set; } = string.Empty;
+    public string CoreReferenceId { get; set; } = string.Empty;
+    public decimal RequestedTotalAmount { get; set; }
+    public decimal SuccessfulTotalAmount { get; set; }
+    public decimal FailedTotalAmount { get; set; }
+    public decimal TotalCommission { get; set; }
+    public string OverallStatus { get; set; } = "pending";
+    public string ReversalStatus { get; set; } = "not_required";
+    public decimal ReversalAmount { get; set; }
+    public string? ReversalBankReference { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+    public DateTime? ReversedAt { get; set; }
 }
 
 
@@ -136,6 +184,14 @@ public class SalaryEntryUpsertDto
 {
     public int EmployeeId { get; set; }
     public decimal Salary { get; set; }
+    public List<SalaryEntryAllocationUpsertDto>? Allocations { get; set; }
+}
+
+public class SalaryEntryAllocationUpsertDto
+{
+    public string PaymentChannel { get; set; } = "account";
+    public decimal Amount { get; set; }
+    public string? Destination { get; set; }
 }
 
 public class SalaryCycleAdminListItemDto
@@ -187,6 +243,7 @@ public class SalaryCycleAdminDetailDto
     public string? BankBatchHistoryJson { get; set; }
 
     public List<SalaryEntryDto> Entries { get; set; } = new();
+    public List<SalaryWalletBatchDto> WalletBatches { get; set; } = new();
 }
 
 public class EmployeeExcelImportRowErrorDto

@@ -362,6 +362,7 @@ namespace CompGateApi.Core.Startup
       services.AddScoped<IBeneficiaryRepository, BeneficiaryRepository>();
       //EmployeeSalary
       services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
+      services.AddScoped<IWalletSalaryProviderClient, FakeWalletSalaryProviderClient>();
 
       services.AddScoped<IPricingRepository, PricingRepository>();
 
@@ -419,5 +420,4 @@ namespace CompGateApi.Core.Startup
     }
   }
 }
-
 

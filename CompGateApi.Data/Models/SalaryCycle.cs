@@ -40,6 +40,6 @@ public class SalaryCycle : Auditable
     public string? BankBatchHistoryJson { get; set; }
 
     public ICollection<SalaryEntry> Entries { get; set; } = new List<SalaryEntry>();
+    public ICollection<SalaryWalletBatch> WalletBatches { get; set; } = new List<SalaryWalletBatch>();
 }
-
 

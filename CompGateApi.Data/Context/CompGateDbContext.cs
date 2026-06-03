@@ -54,6 +54,8 @@ namespace CompGateApi.Data.Context
               public DbSet<Employee> Employees => Set<Employee>();
               public DbSet<SalaryCycle> SalaryCycles => Set<SalaryCycle>();
               public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
+              public DbSet<SalaryEntryAllocation> SalaryEntryAllocations => Set<SalaryEntryAllocation>();
+              public DbSet<SalaryWalletBatch> SalaryWalletBatches => Set<SalaryWalletBatch>();
               public DbSet<Pricing> Pricings => Set<Pricing>();
 
               public DbSet<Visa> Visas => Set<Visa>();
@@ -580,6 +582,9 @@ namespace CompGateApi.Data.Context
                             b.Property(e => e.Salary).HasPrecision(18, 2);
                             b.Property(e => e.AccountNumber).HasMaxLength(34).IsRequired();
                             b.Property(e => e.AccountType).HasMaxLength(20).IsRequired();
+                            b.Property(e => e.AccountAllocationAmount).HasPrecision(18, 3);
+                            b.Property(e => e.EvoAllocationAmount).HasPrecision(18, 3);
+                            b.Property(e => e.BcdAllocationAmount).HasPrecision(18, 3);
                             b.Property(e => e.SendSalary);
                             b.Property(e => e.CanPost);
                             b.Property(e => e.IsDeleted).HasDefaultValue(false);
@@ -625,6 +630,60 @@ namespace CompGateApi.Data.Context
                             .WithMany(emp => emp.SalaryEntries)
                             .HasForeignKey(e => e.EmployeeId)
                             .OnDelete(DeleteBehavior.Cascade); // keep this
+                     });
+
+                     builder.Entity<SalaryEntryAllocation>(b =>
+                     {
+                            b.ToTable("SalaryEntryAllocations");
+                            b.HasKey(a => a.Id);
+                            b.Property(a => a.PaymentChannel).HasMaxLength(20).IsRequired();
+                            b.Property(a => a.Amount).HasPrecision(18, 3);
+                            b.Property(a => a.Destination).HasMaxLength(34).IsRequired();
+                            b.Property(a => a.ClientReference).HasMaxLength(64).IsRequired();
+                            b.Property(a => a.Status).HasMaxLength(20).IsRequired();
+                            b.Property(a => a.TransferResultCode).HasMaxLength(32);
+                            b.Property(a => a.TransferResultReason).HasMaxLength(1024);
+                            b.Property(a => a.ProviderTransactionId).HasMaxLength(128);
+                            b.Property(a => a.CommissionAmount).HasPrecision(18, 3);
+                            b.Property(a => a.RawResponse).HasColumnType("nvarchar(max)");
+
+                            b.HasOne(a => a.SalaryEntry)
+                            .WithMany(e => e.Allocations)
+                            .HasForeignKey(a => a.SalaryEntryId)
+                            .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasIndex(a => a.ClientReference).IsUnique();
+                     });
+
+                     builder.Entity<SalaryWalletBatch>(b =>
+                     {
+                            b.ToTable("SalaryWalletBatches");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.WalletChannel).HasMaxLength(20).IsRequired();
+                            b.Property(x => x.ShadowAccount).HasMaxLength(34).IsRequired();
+                            b.Property(x => x.BatchReference).HasMaxLength(64).IsRequired();
+                            b.Property(x => x.CoreReferenceId).HasMaxLength(64).IsRequired();
+                            b.Property(x => x.RequestedTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.SuccessfulTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.FailedTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.TotalCommission).HasPrecision(18, 3);
+                            b.Property(x => x.OverallStatus).HasMaxLength(20).IsRequired();
+                            b.Property(x => x.ProviderRequestJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ProviderResponseJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ProviderErrorMessage).HasMaxLength(1024);
+                            b.Property(x => x.ReversalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.ReversalStatus).HasMaxLength(20).IsRequired();
+                            b.Property(x => x.ReversalBankReference).HasMaxLength(64);
+                            b.Property(x => x.ReversalRequestJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ReversalResponseJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ReversalErrorMessage).HasMaxLength(1024);
+
+                            b.HasOne(x => x.SalaryCycle)
+                            .WithMany(c => c.WalletBatches)
+                            .HasForeignKey(x => x.SalaryCycleId)
+                            .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasIndex(x => x.BatchReference).IsUnique();
                      });
 
 

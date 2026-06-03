@@ -28,6 +28,8 @@ public class SalaryEntry:Auditable
     [Column(TypeName = "nvarchar(max)")]
     public string? BankLineResponseRaw { get; set; }
 
+    public ICollection<SalaryEntryAllocation> Allocations { get; set; } = new List<SalaryEntryAllocation>();
+
     // No per-entry override fields; edits are applied to Employee
 
 }

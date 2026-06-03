@@ -1,5 +1,6 @@
 ﻿// CompGateApi.Infrastructure/Repositories/EmployeeSalaryRepository.cs
 using System.Net.Http.Json;
+using System.Text.Json;
 using AutoMapper;
 using ClosedXML.Excel;
 using CompGateApi.Core.Abstractions;
@@ -14,10 +15,18 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     private readonly CompGateApiDbContext _db;
     private readonly IHttpClientFactory _http;
     private readonly IMapper _mapper;
+    private readonly IWalletSalaryProviderClient _walletProvider;
 
-    public EmployeeSalaryRepository(CompGateApiDbContext db, IHttpClientFactory http, IMapper mapper)
+    public EmployeeSalaryRepository(
+        CompGateApiDbContext db,
+        IHttpClientFactory http,
+        IMapper mapper,
+        IWalletSalaryProviderClient walletProvider)
     {
-        _db = db; _http = http; _mapper = mapper;
+        _db = db;
+        _http = http;
+        _mapper = mapper;
+        _walletProvider = walletProvider;
     }
 
 
@@ -35,6 +44,398 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var branch = acc.Substring(0, 4);
         var ccy3 = acc.Substring(10, 3); // last 3
         return $"{branch}932702{ccy3}";
+    }
+
+    private const string PaymentChannelAccount = "account";
+    private const string PaymentChannelEvo = "evo";
+    private const string PaymentChannelBcd = "bcd";
+    private const string EmptyBankAccount = "0000000000000";
+    private const string AllocationStatusPending = "pending";
+    private const string AllocationStatusSuccess = "success";
+    private const string AllocationStatusFailed = "failed";
+    private const string AllocationStatusUnresolved = "unresolved";
+    private const string EvoShadowAccount = "0015798000006";
+    private const string BcdShadowAccount = "0015798000009";
+    private static readonly string[] AllowedPaymentChannels = { PaymentChannelAccount, PaymentChannelEvo, PaymentChannelBcd };
+
+    private static readonly JsonSerializerOptions ProviderJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
+
+    private sealed record BankLineOutcome(string? Code, string? Reason, string Raw);
+
+    private sealed record CoreBatchResult(
+        bool IsHttpSuccess,
+        int StatusCode,
+        string Raw,
+        HashSet<string> SuccessAccounts,
+        Dictionary<string, BankLineOutcome> Outcomes,
+        string? ReturnCode,
+        string? ReturnMessageCode,
+        string? ReturnMessage);
+
+    private static int CurrencyDecimals(string? currency) =>
+        string.Equals(currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+
+    private static int CurrencyScale(string? currency) =>
+        string.Equals(currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 1000 : 100;
+
+    private static PayrollException SalaryError(
+        string code,
+        string messageEn,
+        string messageAr,
+        object? details = null,
+        int status = 400) =>
+        new(messageEn, code, messageEn, messageAr, details, status);
+
+    private static PayrollException AllocationTotalMismatchError(
+        int employeeId,
+        int? salaryCycleId,
+        decimal salary,
+        decimal allocationTotal) =>
+        SalaryError(
+            "SALARY_ALLOCATION_TOTAL_MISMATCH",
+            "Allocation total must equal salary amount.",
+            "يجب أن يساوي مجموع التوزيعات مبلغ الراتب.",
+            new
+            {
+                salaryCycleId,
+                employeeId,
+                salary,
+                allocationTotal
+            });
+
+    private static string ToCoreAmount(decimal amount, string? currency)
+    {
+        const int pad = 15;
+        var decimals = CurrencyDecimals(currency);
+        var scale = CurrencyScale(currency);
+        var minorUnits = (long)(Math.Round(amount, decimals) * scale);
+        return minorUnits.ToString($"D{pad}");
+    }
+
+    private static string NormalizePaymentChannel(string? channel)
+    {
+        var normalized = (channel ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            PaymentChannelAccount => PaymentChannelAccount,
+            PaymentChannelEvo => PaymentChannelEvo,
+            PaymentChannelBcd => PaymentChannelBcd,
+            _ => throw SalaryError(
+                "INVALID_PAYMENT_CHANNEL",
+                "Invalid payment channel.",
+                "قناة الدفع غير صالحة.",
+                new
+                {
+                    paymentChannel = channel,
+                    allowedValues = AllowedPaymentChannels
+                })
+        };
+    }
+
+    private static bool IsWalletChannel(string channel) =>
+        string.Equals(channel, PaymentChannelEvo, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(channel, PaymentChannelBcd, StringComparison.OrdinalIgnoreCase);
+
+    private static string WalletShadowAccount(string channel) =>
+        string.Equals(channel, PaymentChannelEvo, StringComparison.OrdinalIgnoreCase)
+            ? EvoShadowAccount
+            : BcdShadowAccount;
+
+    private static string BuildClientReference(int cycleId, int entryId, string channel) =>
+        $"SAL-{cycleId}-ENTRY-{entryId}-{channel.ToUpperInvariant()}";
+
+    private static string ResolveAllocationDestination(Employee employee, string channel, string? requestedDestination)
+    {
+        var hasRequestedDestination = !string.IsNullOrWhiteSpace(requestedDestination);
+        var destination = hasRequestedDestination
+            ? requestedDestination!.Trim()
+            : channel switch
+            {
+                PaymentChannelAccount => employee.AccountNumber,
+                PaymentChannelEvo => employee.EvoWallet,
+                PaymentChannelBcd => employee.BcdWallet,
+                _ => null
+            };
+
+        if (string.IsNullOrWhiteSpace(destination))
+            throw SalaryError(
+                "SALARY_ALLOCATION_DESTINATION_REQUIRED",
+                "Salary allocation destination is required.",
+                "وجهة توزيع الراتب مطلوبة.",
+                new
+                {
+                    employeeId = employee.Id,
+                    paymentChannel = channel
+                });
+
+        if (string.Equals(channel, PaymentChannelAccount, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!hasRequestedDestination)
+                destination = NormalizeAcc13(destination);
+
+            if (destination.Length != 13 || !destination.All(char.IsDigit))
+                throw SalaryError(
+                    "SALARY_ACCOUNT_DESTINATION_INVALID",
+                    "Account salary allocation destination must be 13 digits.",
+                    "يجب أن تكون وجهة حساب الراتب مكونة من 13 رقما.",
+                    new
+                    {
+                        employeeId = employee.Id,
+                        paymentChannel = channel,
+                        destination
+                    });
+        }
+
+        return destination;
+    }
+
+    private static bool HasRealBankDestination(Employee employee)
+    {
+        var account = NormalizeAcc13(employee.AccountNumber);
+        return account.Length == 13 && account.All(char.IsDigit) && account != EmptyBankAccount;
+    }
+
+    private static void AddEmployeeDefaultAllocation(
+        List<SalaryEntryAllocation> result,
+        SalaryEntry entry,
+        Employee employee,
+        string channel,
+        decimal amount,
+        int decimals)
+    {
+        var roundedAmount = Math.Round(amount, decimals);
+        if (roundedAmount <= 0m) return;
+
+        result.Add(new SalaryEntryAllocation
+        {
+            SalaryEntryId = entry.Id,
+            PaymentChannel = channel,
+            Amount = roundedAmount,
+            Destination = ResolveAllocationDestination(employee, channel, null),
+            ClientReference = BuildClientReference(entry.SalaryCycleId, entry.Id, channel),
+            Status = AllocationStatusPending
+        });
+    }
+
+    private static List<SalaryEntryAllocation> BuildEmployeeDefaultAllocations(
+        SalaryEntry entry,
+        Employee employee,
+        int decimals)
+    {
+        var result = new List<SalaryEntryAllocation>();
+
+        if (HasRealBankDestination(employee))
+        {
+            AddEmployeeDefaultAllocation(
+                result,
+                entry,
+                employee,
+                PaymentChannelAccount,
+                employee.AccountAllocationAmount,
+                decimals);
+        }
+
+        if (!string.IsNullOrWhiteSpace(employee.EvoWallet))
+        {
+            AddEmployeeDefaultAllocation(
+                result,
+                entry,
+                employee,
+                PaymentChannelEvo,
+                employee.EvoAllocationAmount,
+                decimals);
+        }
+
+        if (!string.IsNullOrWhiteSpace(employee.BcdWallet))
+        {
+            AddEmployeeDefaultAllocation(
+                result,
+                entry,
+                employee,
+                PaymentChannelBcd,
+                employee.BcdAllocationAmount,
+                decimals);
+        }
+
+        return result;
+    }
+
+    private static List<SalaryEntryAllocation> BuildAllocationsForEntry(
+        SalaryEntry entry,
+        Employee employee,
+        SalaryEntryUpsertDto? dto,
+        string currency,
+        bool throwIfNoDefault)
+    {
+        var decimals = CurrencyDecimals(currency);
+
+        if (dto?.Allocations is { Count: > 0 })
+        {
+            var duplicateChannels = dto.Allocations
+                .Select(a => NormalizePaymentChannel(a.PaymentChannel))
+                .GroupBy(c => c)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+            if (duplicateChannels.Count > 0)
+                throw SalaryError(
+                    "SALARY_DUPLICATE_ALLOCATION_CHANNEL",
+                    "Duplicate salary allocation channel.",
+                    "لا يمكن تكرار قناة الدفع لنفس الموظف.",
+                    new
+                    {
+                        employeeId = employee.Id,
+                        duplicateChannels
+                    });
+
+            var result = new List<SalaryEntryAllocation>();
+            foreach (var item in dto.Allocations)
+            {
+                var channel = NormalizePaymentChannel(item.PaymentChannel);
+                var amount = Math.Round(item.Amount, decimals);
+                if (amount <= 0m)
+                    throw SalaryError(
+                        "SALARY_ALLOCATION_AMOUNT_INVALID",
+                        "Salary allocation amount must be greater than zero.",
+                        "يجب أن يكون مبلغ توزيع الراتب أكبر من صفر.",
+                        new
+                        {
+                            employeeId = employee.Id,
+                            paymentChannel = channel,
+                            amount
+                        });
+
+                result.Add(new SalaryEntryAllocation
+                {
+                    SalaryEntryId = entry.Id,
+                    PaymentChannel = channel,
+                    Amount = amount,
+                    Destination = ResolveAllocationDestination(employee, channel, item.Destination),
+                    ClientReference = BuildClientReference(entry.SalaryCycleId, entry.Id, channel),
+                    Status = AllocationStatusPending
+                });
+            }
+
+            var total = Math.Round(result.Sum(a => a.Amount), decimals);
+            if (total != Math.Round(entry.Amount, decimals))
+                throw AllocationTotalMismatchError(
+                    employee.Id,
+                    null,
+                    Math.Round(entry.Amount, decimals),
+                    total);
+
+            return result;
+        }
+
+        var defaultAllocations = BuildEmployeeDefaultAllocations(entry, employee, decimals);
+        if (defaultAllocations.Count > 0)
+        {
+            var defaultTotal = Math.Round(defaultAllocations.Sum(a => a.Amount), decimals);
+            if (defaultTotal != Math.Round(entry.Amount, decimals))
+                throw AllocationTotalMismatchError(
+                    employee.Id,
+                    null,
+                    Math.Round(entry.Amount, decimals),
+                    defaultTotal);
+
+            return defaultAllocations;
+        }
+
+        var defaultChannel =
+            string.Equals(employee.AccountType, PaymentChannelAccount, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(employee.AccountNumber) &&
+            HasRealBankDestination(employee)
+                ? PaymentChannelAccount
+                : string.Equals(employee.AccountType, "wallet", StringComparison.OrdinalIgnoreCase) &&
+                  !string.IsNullOrWhiteSpace(employee.EvoWallet)
+                    ? PaymentChannelEvo
+                    : string.Equals(employee.AccountType, "wallet", StringComparison.OrdinalIgnoreCase) &&
+                      !string.IsNullOrWhiteSpace(employee.BcdWallet)
+                        ? PaymentChannelBcd
+                        : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(defaultChannel))
+        {
+            if (throwIfNoDefault)
+                throw SalaryError(
+                    "SALARY_DEFAULT_DESTINATION_MISSING",
+                    "No valid default salary destination exists for this employee.",
+                    "لا توجد وجهة راتب افتراضية صالحة للموظف.",
+                    new
+                    {
+                        employeeId = employee.Id
+                    });
+            return new List<SalaryEntryAllocation>();
+        }
+
+        return new List<SalaryEntryAllocation>
+        {
+            new()
+            {
+                SalaryEntryId = entry.Id,
+                PaymentChannel = defaultChannel,
+                Amount = Math.Round(entry.Amount, decimals),
+                Destination = ResolveAllocationDestination(employee, defaultChannel, null),
+                ClientReference = BuildClientReference(entry.SalaryCycleId, entry.Id, defaultChannel),
+                Status = AllocationStatusPending
+            }
+        };
+    }
+
+    private static void ResetAllocationForPosting(SalaryEntryAllocation allocation)
+    {
+        allocation.Status = AllocationStatusPending;
+        allocation.TransferResultCode = null;
+        allocation.TransferResultReason = null;
+        allocation.ProviderTransactionId = null;
+        allocation.CommissionAmount = 0m;
+        allocation.RawResponse = null;
+        allocation.IsTransferred = false;
+        allocation.TransferredAt = null;
+        allocation.PostedByUserId = null;
+    }
+
+    private static void RefreshEntryStatusFromAllocations(SalaryEntry entry)
+    {
+        if (entry.Allocations.Count == 0)
+            return;
+
+        entry.CommissionAmount = entry.Allocations.Sum(a => a.CommissionAmount);
+        entry.IsTransferred = entry.Allocations.All(a => a.IsTransferred);
+        entry.TransferredAt = entry.IsTransferred
+            ? entry.Allocations.Max(a => a.TransferredAt)
+            : null;
+        entry.PostedByUserId = entry.IsTransferred
+            ? entry.Allocations.FirstOrDefault(a => a.PostedByUserId.HasValue)?.PostedByUserId
+            : null;
+
+        if (entry.IsTransferred)
+        {
+            entry.TransferResultCode = "S";
+            entry.TransferResultReason = null;
+            return;
+        }
+
+        var statuses = entry.Allocations.Select(a => a.Status).ToList();
+        if (statuses.Any(s => string.Equals(s, AllocationStatusUnresolved, StringComparison.OrdinalIgnoreCase)))
+        {
+            entry.TransferResultCode = "UNRESOLVED";
+            entry.TransferResultReason = "One or more salary allocations require manual review.";
+        }
+        else if (statuses.Any(s => string.Equals(s, AllocationStatusSuccess, StringComparison.OrdinalIgnoreCase)))
+        {
+            entry.TransferResultCode = "PARTIAL";
+            entry.TransferResultReason = "One or more salary allocations failed.";
+        }
+        else
+        {
+            entry.TransferResultCode = entry.Allocations.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.TransferResultCode))?.TransferResultCode;
+            entry.TransferResultReason = entry.Allocations.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.TransferResultReason))?.TransferResultReason;
+        }
     }
 
     public async Task<PagedResult<EmployeeDto>> GetAllEmployeesAsync(int companyId, string? searchTerm, int page, int limit)
@@ -68,6 +469,11 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Date = e.Date,
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
+                EvoWallet = e.EvoWallet,
+                BcdWallet = e.BcdWallet,
+                AccountAllocationAmount = e.AccountAllocationAmount,
+                EvoAllocationAmount = e.EvoAllocationAmount,
+                BcdAllocationAmount = e.BcdAllocationAmount,
                 SendSalary = e.SendSalary,
                 CanPost = e.CanPost,
                 IsDeleted = e.IsDeleted
@@ -89,6 +495,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = dto.AccountType,
             EvoWallet = dto.EvoWallet,
             BcdWallet = dto.BcdWallet,
+            AccountAllocationAmount = Math.Round(dto.AccountAllocationAmount, 3),
+            EvoAllocationAmount = Math.Round(dto.EvoAllocationAmount, 3),
+            BcdAllocationAmount = Math.Round(dto.BcdAllocationAmount, 3),
             SendSalary = dto.SendSalary,
             CanPost = dto.CanPost,
             IsDeleted = false
@@ -109,6 +518,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = e.AccountType,
             EvoWallet = e.EvoWallet,
             BcdWallet = e.BcdWallet,
+            AccountAllocationAmount = e.AccountAllocationAmount,
+            EvoAllocationAmount = e.EvoAllocationAmount,
+            BcdAllocationAmount = e.BcdAllocationAmount,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost,
             IsDeleted = e.IsDeleted
@@ -129,6 +541,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         e.AccountType = dto.AccountType;
         e.EvoWallet = dto.EvoWallet;
         e.BcdWallet = dto.BcdWallet;
+        e.AccountAllocationAmount = Math.Round(dto.AccountAllocationAmount, 3);
+        e.EvoAllocationAmount = Math.Round(dto.EvoAllocationAmount, 3);
+        e.BcdAllocationAmount = Math.Round(dto.BcdAllocationAmount, 3);
         e.SendSalary = dto.SendSalary;
         e.CanPost = dto.CanPost;
 
@@ -146,6 +561,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = e.AccountType,
             EvoWallet = e.EvoWallet,
             BcdWallet = e.BcdWallet,
+            AccountAllocationAmount = e.AccountAllocationAmount,
+            EvoAllocationAmount = e.EvoAllocationAmount,
+            BcdAllocationAmount = e.BcdAllocationAmount,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost,
             IsDeleted = e.IsDeleted
@@ -278,6 +696,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 existing.Salary = roundedSalary;
                 existing.Date = now;
                 existing.AccountType = "account";
+                existing.AccountAllocationAmount = roundedSalary;
+                existing.EvoAllocationAmount = 0m;
+                existing.BcdAllocationAmount = 0m;
                 existing.SendSalary = true;
                 existing.CanPost = true;
                 existing.IsDeleted = false;
@@ -295,6 +716,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Date = now,
                 AccountNumber = account,
                 AccountType = "account",
+                AccountAllocationAmount = roundedSalary,
+                EvoAllocationAmount = 0m,
+                BcdAllocationAmount = 0m,
                 SendSalary = true,
                 CanPost = true,
                 IsDeleted = false
@@ -367,6 +791,437 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
+    private async Task EnsureAllocationsForCycleAsync(SalaryCycle cycle)
+    {
+        var anyCreated = false;
+        foreach (var entry in cycle.Entries)
+        {
+            if (entry.Employee == null || entry.Employee.IsDeleted)
+                continue;
+
+            if (entry.Allocations.Count == 0)
+            {
+                foreach (var allocation in BuildAllocationsForEntry(entry, entry.Employee, null, cycle.Currency, throwIfNoDefault: false))
+                {
+                    entry.Allocations.Add(allocation);
+                    anyCreated = true;
+                }
+                continue;
+            }
+
+            foreach (var allocation in entry.Allocations)
+            {
+                allocation.PaymentChannel = NormalizePaymentChannel(allocation.PaymentChannel);
+                allocation.Destination = ResolveAllocationDestination(entry.Employee, allocation.PaymentChannel, allocation.Destination);
+                allocation.ClientReference = BuildClientReference(cycle.Id, entry.Id, allocation.PaymentChannel);
+            }
+
+            var decimals = CurrencyDecimals(cycle.Currency);
+            var allocationTotal = Math.Round(entry.Allocations.Sum(a => a.Amount), decimals);
+            if (allocationTotal != Math.Round(entry.Amount, decimals))
+                throw AllocationTotalMismatchError(
+                    entry.EmployeeId,
+                    cycle.Id,
+                    Math.Round(entry.Amount, decimals),
+                    allocationTotal);
+        }
+
+        if (anyCreated)
+            await _db.SaveChangesAsync();
+    }
+
+    private static CoreBatchResult ParseCoreBatchResult(bool httpSuccess, int statusCode, string raw, IEnumerable<string> fallbackAccounts)
+    {
+        var successAccounts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var outcomes = new Dictionary<string, BankLineOutcome>(StringComparer.OrdinalIgnoreCase);
+        string? returnCodeText = null;
+        string? returnMessageCodeText = null;
+        string? returnMessageText = null;
+
+        try
+        {
+            using var jdoc = JsonDocument.Parse(raw);
+            var hasHeader = jdoc.RootElement.TryGetProperty("Header", out var header);
+            if (hasHeader)
+            {
+                returnCodeText = header.TryGetProperty("ReturnCode", out var returnCode) ? returnCode.GetString() : null;
+                returnMessageCodeText = header.TryGetProperty("ReturnMessageCode", out var returnMessageCode) ? returnMessageCode.GetString() : null;
+                returnMessageText = header.TryGetProperty("ReturnMessage", out var returnMessage) ? returnMessage.GetString() : null;
+            }
+
+            if (jdoc.RootElement.TryGetProperty("Details", out var details) &&
+                details.TryGetProperty("Lines", out var lines) &&
+                lines.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in lines.EnumerateArray())
+                {
+                    var response = item.TryGetProperty("YBCD10RESP", out var responseElement) ? responseElement.GetString() : null;
+                    var account = item.TryGetProperty("YBCD10ACC", out var accountElement) ? accountElement.GetString() : null;
+                    var reason = item.TryGetProperty("YBCD10REAS", out var reasonElement) ? reasonElement.GetString() :
+                                 item.TryGetProperty("YBCD10RESD", out var reasonDescription) ? reasonDescription.GetString() :
+                                 item.TryGetProperty("REASON", out var reason2) ? reason2.GetString() :
+                                 item.TryGetProperty("MESSAGE", out var reason3) ? reason3.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(account))
+                        continue;
+
+                    var normalizedAccount = NormalizeAcc13(account);
+                    var rawLine = item.GetRawText();
+                    outcomes[normalizedAccount] = new BankLineOutcome(response, reason, rawLine);
+
+                    if (string.Equals(response, "S", StringComparison.OrdinalIgnoreCase))
+                        successAccounts.Add(normalizedAccount);
+                }
+            }
+
+            if (outcomes.Count == 0 &&
+                string.Equals(returnCodeText, "Success", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var account in fallbackAccounts)
+                    successAccounts.Add(NormalizeAcc13(account));
+            }
+        }
+        catch
+        {
+            // Keep the raw response saved; callers will treat missing line success as failed.
+        }
+
+        return new CoreBatchResult(httpSuccess, statusCode, raw, successAccounts, outcomes, returnCodeText, returnMessageCodeText, returnMessageText);
+    }
+
+    private async Task<CoreBatchResult> PostCoreBatchAsync(object payload, IEnumerable<string> expectedCreditAccounts)
+    {
+        var bankClient = _http.CreateClient("BankApi");
+        var requestUri = new Uri(bankClient.BaseAddress!, "api/mobile/PostBatchApply");
+        var response = await bankClient.PostAsJsonAsync(requestUri, payload);
+        var raw = await response.Content.ReadAsStringAsync();
+        return ParseCoreBatchResult(response.IsSuccessStatusCode, (int)response.StatusCode, raw, expectedCreditAccounts);
+    }
+
+    private static object BuildCoreBatchPayload(
+        string hid,
+        string type,
+        string debitOrCreditAccount,
+        string currency,
+        string customerNumber,
+        string narration,
+        List<Dictionary<string, string>> journalEntries)
+    {
+        const int pad = 15;
+        var totalAmount = journalEntries.Sum(j => long.Parse(j["YBCD10AMT"]));
+        var details = new Dictionary<string, object>
+        {
+            ["@UNIT"] = "LIV",
+            ["@HID"] = hid,
+            ["@TYPE"] = type,
+            ["@FORCPAY"] = "N",
+            ["@ACCOUNT"] = debitOrCreditAccount,
+            ["@TRFAMT"] = totalAmount.ToString($"D{pad}"),
+            ["@TRFCCY"] = currency,
+            ["@DTCD"] = "021",
+            ["@CTCD"] = "521",
+            ["@TRFREF"] = hid,
+            ["@NR1"] = narration,
+            ["@NR2"] = string.Empty,
+            ["@NR3"] = string.Empty,
+            ["@NR4"] = string.Empty,
+            ["JournalEntries"] = journalEntries
+        };
+
+        return new
+        {
+            Header = new
+            {
+                system = "CompanyGateway",
+                referenceId = hid,
+                userName = "CompanyGateway",
+                customerNumber,
+                language = "AR"
+            },
+            Details = details
+        };
+    }
+
+    private async Task ReverseSuccessfulBankAllocationsAsync(
+        SalaryCycle cycle,
+        List<SalaryEntryAllocation> allocations,
+        string debitAcc13,
+        string customerNumber,
+        string salaryMonthText)
+    {
+        if (allocations.Count == 0)
+            return;
+
+        var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var hid = baseId + "AR00";
+        var journalEntries = new List<Dictionary<string, string>>();
+        var lineNo = 1;
+
+        foreach (var allocation in allocations)
+        {
+            var destination = NormalizeAcc13(allocation.Destination);
+            journalEntries.Add(new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = baseId + $"A{lineNo:00}",
+                ["YBCD10ACC"] = destination,
+                ["YBCD10AMT"] = ToCoreAmount(allocation.Amount, cycle.Currency),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"Salary reversal {salaryMonthText}",
+                ["YBCD10NR2"] = string.Empty,
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            });
+            lineNo++;
+        }
+
+        var payload = BuildCoreBatchPayload(
+            hid,
+            "C",
+            debitAcc13,
+            cycle.Currency,
+            customerNumber,
+            $"Salary reversal {salaryMonthText}",
+            journalEntries);
+
+        var result = await PostCoreBatchAsync(payload, allocations.Select(a => NormalizeAcc13(a.Destination)));
+
+        foreach (var allocation in allocations)
+        {
+            var destination = NormalizeAcc13(allocation.Destination);
+            var reversed = result.IsHttpSuccess && result.SuccessAccounts.Contains(destination);
+
+            allocation.Status = AllocationStatusFailed;
+            allocation.TransferResultCode = reversed ? "SHADOW_FUNDING_FAILED" : "BANK_REVERSAL_FAILED";
+            allocation.TransferResultReason = reversed
+                ? "Wallet shadow funding failed; bank salary allocation was reversed to cancel the salary posting."
+                : "Wallet shadow funding failed, but reversing this bank salary allocation was not confirmed.";
+            allocation.IsTransferred = false;
+            allocation.TransferredAt = null;
+            allocation.PostedByUserId = null;
+            allocation.CommissionAmount = 0m;
+        }
+    }
+
+    private async Task ReverseWalletAmountAsync(
+        SalaryWalletBatch batch,
+        SalaryCycle cycle,
+        string fromShadowAccount,
+        decimal amount,
+        string reason)
+    {
+        if (amount <= 0m)
+        {
+            batch.ReversalStatus = "not_required";
+            return;
+        }
+
+        var debitAcc13 = NormalizeAcc13(cycle.DebitAccount);
+        var shadowAcc13 = NormalizeAcc13(fromShadowAccount);
+        var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var hid = baseId + (string.Equals(batch.WalletChannel, PaymentChannelEvo, StringComparison.OrdinalIgnoreCase) ? "ER00" : "BR00");
+
+        var journalEntries = new List<Dictionary<string, string>>
+        {
+            new()
+            {
+                ["YBCD10DID"] = baseId + "R01",
+                ["YBCD10ACC"] = debitAcc13,
+                ["YBCD10AMT"] = ToCoreAmount(amount, cycle.Currency),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = reason,
+                ["YBCD10NR2"] = string.Empty,
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            }
+        };
+
+        var payload = BuildCoreBatchPayload(
+            hid,
+            "D",
+            shadowAcc13,
+            cycle.Currency,
+            shadowAcc13.Substring(4, 6),
+            reason,
+            journalEntries);
+
+        batch.ReversalRequired = true;
+        batch.ReversalAmount = amount;
+        batch.ReversalStatus = "pending";
+        batch.ReversalBankReference = hid;
+        batch.ReversalRequestJson = JsonSerializer.Serialize(payload);
+
+        var result = await PostCoreBatchAsync(payload, new[] { debitAcc13 });
+        batch.ReversalResponseJson = result.Raw;
+
+        if (!result.IsHttpSuccess)
+        {
+            batch.ReversalStatus = "failed";
+            batch.ReversalErrorMessage = $"Bank HTTP {result.StatusCode}";
+            return;
+        }
+
+        batch.ReversalStatus = result.SuccessAccounts.Contains(debitAcc13) ? "success" : "failed";
+        if (batch.ReversalStatus == "failed")
+            batch.ReversalErrorMessage = result.Outcomes.TryGetValue(debitAcc13, out var outcome)
+                ? outcome.Reason
+                : "Wallet reversal was not confirmed by core response.";
+        else
+            batch.ReversedAt = DateTime.UtcNow;
+    }
+
+    private async Task PostWalletBatchAsync(
+        SalaryCycle cycle,
+        string channel,
+        List<SalaryEntryAllocation> allocations,
+        string coreReferenceId,
+        int postedBy)
+    {
+        if (allocations.Count == 0)
+            return;
+
+        var shadowAccount = WalletShadowAccount(channel);
+        var batchReference = $"SAL-{cycle.Id}-{channel.ToUpperInvariant()}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
+        var request = new WalletSalaryTransferRequestDto
+        {
+            BatchReference = batchReference,
+            CoreReferenceId = coreReferenceId,
+            WalletChannel = channel,
+            Currency = cycle.Currency,
+            RequestedTotalAmount = allocations.Sum(a => a.Amount),
+            Items = allocations.Select(a => new WalletSalaryTransferItemDto
+            {
+                ClientReference = a.ClientReference,
+                SalaryCycleId = cycle.Id,
+                SalaryEntryId = a.SalaryEntryId,
+                EmployeeId = a.SalaryEntry.EmployeeId,
+                WalletId = a.Destination,
+                Amount = a.Amount,
+                Currency = cycle.Currency
+            }).ToList()
+        };
+
+        var batch = new SalaryWalletBatch
+        {
+            SalaryCycleId = cycle.Id,
+            WalletChannel = channel,
+            ShadowAccount = shadowAccount,
+            BatchReference = batchReference,
+            CoreReferenceId = coreReferenceId,
+            RequestedTotalAmount = request.RequestedTotalAmount,
+            OverallStatus = "pending",
+            ReversalStatus = "not_required",
+            ProviderRequestJson = JsonSerializer.Serialize(request, ProviderJsonOptions)
+        };
+        cycle.WalletBatches.Add(batch);
+
+        WalletSalaryTransferResponseDto response;
+        try
+        {
+            response = await _walletProvider.PostSalaryWalletBatchAsync(request);
+        }
+        catch (Exception ex)
+        {
+            batch.OverallStatus = AllocationStatusUnresolved;
+            batch.ProviderErrorMessage = ex.Message;
+            foreach (var allocation in allocations)
+            {
+                allocation.Status = AllocationStatusUnresolved;
+                allocation.TransferResultCode = "PROVIDER_NO_RESPONSE";
+                allocation.TransferResultReason = "Wallet provider did not return a usable response.";
+            }
+            return;
+        }
+
+        batch.ProviderResponseJson = JsonSerializer.Serialize(response, ProviderJsonOptions);
+        batch.OverallStatus = response.OverallStatus;
+        batch.SuccessfulTotalAmount = response.SuccessfulTotalAmount;
+        batch.FailedTotalAmount = response.FailedTotalAmount;
+        batch.TotalCommission = response.TotalCommission;
+        batch.ProcessedAt = DateTime.UtcNow;
+
+        var resultByReference = response.Results.ToDictionary(r => r.ClientReference, StringComparer.OrdinalIgnoreCase);
+        foreach (var allocation in allocations)
+        {
+            if (!resultByReference.TryGetValue(allocation.ClientReference, out var result))
+            {
+                allocation.Status = AllocationStatusUnresolved;
+                allocation.TransferResultCode = "MISSING_PROVIDER_RESULT";
+                allocation.TransferResultReason = "Wallet provider response did not include this salary allocation.";
+                continue;
+            }
+
+            allocation.RawResponse = JsonSerializer.Serialize(result, ProviderJsonOptions);
+            allocation.TransferResultCode = result.StatusCode;
+            allocation.TransferResultReason = result.StatusMessage;
+            allocation.ProviderTransactionId = result.ProviderTransactionId;
+            allocation.CommissionAmount = string.Equals(result.Status, AllocationStatusSuccess, StringComparison.OrdinalIgnoreCase)
+                ? result.Commission
+                : 0m;
+
+            if (string.Equals(result.Status, AllocationStatusSuccess, StringComparison.OrdinalIgnoreCase))
+            {
+                allocation.Status = AllocationStatusSuccess;
+                allocation.IsTransferred = true;
+                allocation.TransferredAt = result.ProcessedAt;
+                allocation.PostedByUserId = postedBy;
+            }
+            else if (string.Equals(result.Status, AllocationStatusFailed, StringComparison.OrdinalIgnoreCase))
+            {
+                allocation.Status = AllocationStatusFailed;
+                allocation.IsTransferred = false;
+            }
+            else
+            {
+                allocation.Status = AllocationStatusUnresolved;
+                allocation.IsTransferred = false;
+            }
+        }
+
+        var failedTotal = allocations
+            .Where(a => string.Equals(a.Status, AllocationStatusFailed, StringComparison.OrdinalIgnoreCase))
+            .Sum(a => a.Amount);
+
+        if (failedTotal > 0m)
+            await ReverseWalletAmountAsync(batch, cycle, shadowAccount, failedTotal, $"Wallet salary reversal {channel.ToUpperInvariant()}");
+    }
+
+    private async Task MarkWalletFundingFailureAsync(
+        SalaryCycle cycle,
+        string channel,
+        List<SalaryEntryAllocation> allocations,
+        decimal requestedTotal,
+        bool shadowFunded,
+        string coreReferenceId)
+    {
+        if (allocations.Count == 0)
+            return;
+
+        var batch = new SalaryWalletBatch
+        {
+            SalaryCycleId = cycle.Id,
+            WalletChannel = channel,
+            ShadowAccount = WalletShadowAccount(channel),
+            BatchReference = $"SAL-{cycle.Id}-{channel.ToUpperInvariant()}-FUNDING-FAILED-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}",
+            CoreReferenceId = coreReferenceId,
+            RequestedTotalAmount = requestedTotal,
+            FailedTotalAmount = requestedTotal,
+            OverallStatus = AllocationStatusFailed,
+            ProviderErrorMessage = "Required wallet shadow account funding was not fully confirmed. Provider call was skipped.",
+            ReversalStatus = "not_required"
+        };
+
+        cycle.WalletBatches.Add(batch);
+
+        foreach (var allocation in allocations)
+        {
+            allocation.Status = AllocationStatusFailed;
+            allocation.TransferResultCode = "SHADOW_FUNDING_FAILED";
+            allocation.TransferResultReason = "Required wallet shadow account funding was not confirmed. Provider call was skipped.";
+        }
+
+        if (shadowFunded)
+            await ReverseWalletAmountAsync(batch, cycle, batch.ShadowAccount, requestedTotal, $"Wallet funding reversal {channel.ToUpperInvariant()}");
+    }
+
     public async Task<PagedResult<SalaryCycleDto>> GetSalaryCyclesAsync(int companyId, int page, int limit)
     {
         if (page < 1) page = 1;
@@ -411,7 +1266,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto)
     {
-        List<(Employee emp, decimal amount)> list;
+        List<(Employee emp, decimal amount, SalaryEntryUpsertDto? dto)> list;
 
         /* a) caller sent an explicit list ------------------------------- */
         if (dto.Entries is { Count: > 0 })
@@ -433,7 +1288,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 throw new InvalidOperationException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
 
             list = dto.Entries
-                     .Select(e => (empMap[e.EmployeeId], e.Salary))
+                     .Select(e => (empMap[e.EmployeeId], e.Salary, (SalaryEntryUpsertDto?)e))
                      .ToList();
         }
         /* b) legacy behaviour ------------------------------------------ */
@@ -443,17 +1298,19 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                  .Where(e => e.CompanyId == companyId && e.SendSalary && !e.IsDeleted)
                  .ToListAsync();
 
-            list = employees.Select(e => (e, e.Salary)).ToList();
+            list = employees.Select(e => (e, e.Salary, (SalaryEntryUpsertDto?)null)).ToList();
         }
 
         // Round per-currency: LYD -> 3dp, others -> 2dp
         var decimals = string.Equals(dto.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
-        list = list.Select(x => (emp: x.emp, amount: Math.Round(x.amount, decimals))).ToList();
+        list = list.Select(x => (emp: x.emp, amount: Math.Round(x.amount, decimals), dto: x.dto)).ToList();
         var total = Math.Round(list.Sum(x => x.amount), decimals);
         // normalize additionalMonth: only keep if between 13 and 24 (inclusive)
         string? additionalMonthStr = null;
         if (dto.AdditionalMonth.HasValue && dto.AdditionalMonth.Value >= 13 && dto.AdditionalMonth.Value <= 24)
             additionalMonthStr = dto.AdditionalMonth.Value.ToString();
+
+        await using var tx = await _db.Database.BeginTransactionAsync();
 
         var cycle = new SalaryCycle
         {
@@ -467,6 +1324,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Entries = list.Select(x => new SalaryEntry
             {
                 EmployeeId = x.emp.Id,
+                Employee = x.emp,
                 Amount = Math.Round(x.amount, decimals)
             }).ToList()
         };
@@ -474,10 +1332,467 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         _db.SalaryCycles.Add(cycle);
         await _db.SaveChangesAsync();
 
+        foreach (var entry in cycle.Entries)
+        {
+            var source = list.First(x => x.emp.Id == entry.EmployeeId);
+            var allocations = BuildAllocationsForEntry(entry, source.emp, source.dto, cycle.Currency, throwIfNoDefault: false);
+            foreach (var allocation in allocations)
+                entry.Allocations.Add(allocation);
+        }
+        await _db.SaveChangesAsync();
+
+        await tx.CommitAsync();
+
         return _mapper.Map<SalaryCycleDto>(cycle);
     }
+
+    private async Task<SalaryCycleDto?> PostSalaryCycleWithWalletsAsync(int companyId, int cycleId, int postedBy)
+    {
+        var cycle = await _db.SalaryCycles
+            .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
+            .Include(c => c.WalletBatches)
+            .Include(c => c.Company).ThenInclude(c => c.ServicePackage)
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
+
+        if (cycle is null) return null;
+        if (cycle.PostedAt != null) return null;
+
+        var pkgId = cycle.Company.ServicePackageId;
+        var detail = await _db.ServicePackageDetails
+            .Include(d => d.TransactionCategory)
+            .FirstOrDefaultAsync(d => d.ServicePackageId == pkgId &&
+                                      d.TransactionCategory.Name == "Salary Payment");
+        if (detail is null || !detail.IsEnabledForPackage)
+            throw SalaryError(
+                "SALARY_SERVICE_PACKAGE_DISABLED",
+                "Salary payments are not enabled for your service package.",
+                "خدمة دفع الرواتب غير مفعلة في باقة الخدمة.",
+                new
+                {
+                    salaryCycleId = cycle.Id,
+                    servicePackageId = pkgId
+                },
+                403);
+
+        var debitAcc13 = NormalizeAcc13(cycle.DebitAccount);
+        if (debitAcc13.Length != 13)
+            throw SalaryError(
+                "SALARY_DEBIT_ACCOUNT_INVALID",
+                "Debit account must be 13 digits.",
+                "يجب أن يكون حساب الخصم مكونا من 13 رقما.",
+                new
+                {
+                    salaryCycleId = cycle.Id,
+                    debitAccount = cycle.DebitAccount
+                });
+
+        await EnsureAllocationsForCycleAsync(cycle);
+
+        var allAllocations = cycle.Entries
+            .Where(e => e.Employee != null && !e.Employee.IsDeleted)
+            .SelectMany(e => e.Allocations)
+            .Where(a => a.Amount > 0m)
+            .ToList();
+
+        if (allAllocations.Count == 0)
+            throw SalaryError(
+                "SALARY_NO_ELIGIBLE_ALLOCATIONS",
+                "No eligible salary allocations were found.",
+                "لا توجد توزيعات رواتب مؤهلة للنشر.",
+                new
+                {
+                    salaryCycleId = cycle.Id
+                });
+
+        foreach (var allocation in allAllocations)
+            ResetAllocationForPosting(allocation);
+
+        var accountAllocations = allAllocations
+            .Where(a => string.Equals(a.PaymentChannel, PaymentChannelAccount, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var evoAllocations = allAllocations
+            .Where(a => string.Equals(a.PaymentChannel, PaymentChannelEvo, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var bcdAllocations = allAllocations
+            .Where(a => string.Equals(a.PaymentChannel, PaymentChannelBcd, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        const int trxCatSalaryFixedFee = 17;
+        decimal fixedFee = 0m;
+        string? feeGl = null;
+        string feeNarration = "Salary receiver-paid fixed fee";
+
+        if (accountAllocations.Count > 0)
+        {
+            var feePricing = await _db.Pricings.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.TrxCatId == trxCatSalaryFixedFee && p.Unit == 1);
+            if (feePricing == null)
+                throw SalaryError(
+                    "SALARY_PRICING_NOT_CONFIGURED",
+                    "Pricing for salary fixed fee is not configured.",
+                    "تسعيرة عمولة الراتب غير مهيأة.",
+                    new
+                    {
+                        salaryCycleId = cycle.Id,
+                        trxCatId = trxCatSalaryFixedFee,
+                        unit = 1
+                    },
+                    500);
+
+            fixedFee = feePricing.Price ?? 0m;
+            if (fixedFee <= 0m)
+                throw SalaryError(
+                    "SALARY_FIXED_FEE_INVALID",
+                    "Invalid pricing: fixed fee must be greater than zero.",
+                    "عمولة الراتب الثابتة غير صالحة.",
+                    new
+                    {
+                        salaryCycleId = cycle.Id,
+                        fixedFee
+                    },
+                    500);
+
+            feeGl = !string.IsNullOrWhiteSpace(feePricing.GL1)
+                ? NormalizeAcc13(feePricing.GL1)
+                : BuildCommissionGlFromSender(debitAcc13);
+            if (feeGl.Length != 13)
+                throw SalaryError(
+                    "SALARY_FEE_GL_INVALID",
+                    "Configured fee GL must be a 13-digit account.",
+                    "حساب عمولة الراتب غير صالح.",
+                    new
+                    {
+                        salaryCycleId = cycle.Id,
+                        feeGl
+                    },
+                    500);
+
+            feeNarration = string.IsNullOrWhiteSpace(feePricing.NR2)
+                ? feeNarration
+                : feePricing.NR2;
+
+            foreach (var allocation in accountAllocations)
+            {
+                if (allocation.Amount < fixedFee)
+                    throw SalaryError(
+                        "SALARY_ALLOCATION_LESS_THAN_FEE",
+                        "Salary allocation amount is less than the fixed fee.",
+                        "مبلغ توزيع الراتب أقل من العمولة الثابتة.",
+                        new
+                        {
+                            salaryCycleId = cycle.Id,
+                            salaryEntryId = allocation.SalaryEntryId,
+                            employeeId = allocation.SalaryEntry.EmployeeId,
+                            amount = allocation.Amount,
+                            fixedFee,
+                            currency = cycle.Currency
+                        });
+            }
+        }
+
+        var salaryMonthText = cycle.SalaryMonth ?? string.Empty;
+        var customerNumber = debitAcc13.Substring(4, 6);
+        var baseId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var hidFunding = baseId + "BA00";
+        var journalEntries = new List<Dictionary<string, string>>();
+        var expectedCreditAccounts = new List<string>();
+        var lineNo = 1;
+
+        foreach (var allocation in accountAllocations)
+        {
+            var destination = NormalizeAcc13(allocation.Destination);
+            journalEntries.Add(new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = baseId + $"B{lineNo:00}",
+                ["YBCD10ACC"] = destination,
+                ["YBCD10AMT"] = ToCoreAmount(allocation.Amount, cycle.Currency),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"Salary {salaryMonthText}",
+                ["YBCD10NR2"] = string.Empty,
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            });
+            expectedCreditAccounts.Add(destination);
+            lineNo++;
+        }
+
+        var evoTotal = Math.Round(evoAllocations.Sum(a => a.Amount), CurrencyDecimals(cycle.Currency));
+        var bcdTotal = Math.Round(bcdAllocations.Sum(a => a.Amount), CurrencyDecimals(cycle.Currency));
+
+        if (evoTotal > 0m)
+        {
+            journalEntries.Add(new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = baseId + $"B{lineNo:00}",
+                ["YBCD10ACC"] = EvoShadowAccount,
+                ["YBCD10AMT"] = ToCoreAmount(evoTotal, cycle.Currency),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"Salary wallet funding EVO {salaryMonthText}",
+                ["YBCD10NR2"] = string.Empty,
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            });
+            expectedCreditAccounts.Add(EvoShadowAccount);
+            lineNo++;
+        }
+
+        if (bcdTotal > 0m)
+        {
+            journalEntries.Add(new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = baseId + $"B{lineNo:00}",
+                ["YBCD10ACC"] = BcdShadowAccount,
+                ["YBCD10AMT"] = ToCoreAmount(bcdTotal, cycle.Currency),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"Salary wallet funding BCD {salaryMonthText}",
+                ["YBCD10NR2"] = string.Empty,
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            });
+            expectedCreditAccounts.Add(BcdShadowAccount);
+        }
+
+        var fundingPayload = BuildCoreBatchPayload(
+            hidFunding,
+            "D",
+            debitAcc13,
+            cycle.Currency,
+            customerNumber,
+            $"Salary {salaryMonthText}",
+            journalEntries);
+
+        cycle.BankReference = hidFunding;
+        await _db.SaveChangesAsync();
+
+        var fundingResult = await PostCoreBatchAsync(fundingPayload, expectedCreditAccounts);
+        cycle.BankResponseRaw = fundingResult.Raw;
+        await _db.SaveChangesAsync();
+
+        if (!fundingResult.IsHttpSuccess)
+            throw SalaryError(
+                "SALARY_BANK_FUNDING_FAILED",
+                "Bank salary funding request failed.",
+                "فشل تمويل دفعة الرواتب من النظام البنكي.",
+                new
+                {
+                    salaryCycleId = cycle.Id,
+                    bankReference = hidFunding,
+                    bankStatus = fundingResult.StatusCode,
+                    bankResponse = fundingResult.Raw
+                },
+                502);
+
+        var successfulAccountAllocations = new List<SalaryEntryAllocation>();
+
+        foreach (var allocation in accountAllocations)
+        {
+            var destination = NormalizeAcc13(allocation.Destination);
+            fundingResult.Outcomes.TryGetValue(destination, out var outcome);
+            allocation.RawResponse = outcome?.Raw;
+
+            if (fundingResult.SuccessAccounts.Contains(destination))
+            {
+                allocation.Status = AllocationStatusSuccess;
+                allocation.TransferResultCode = "S";
+                allocation.IsTransferred = true;
+                allocation.TransferredAt = DateTime.UtcNow;
+                allocation.PostedByUserId = postedBy;
+                successfulAccountAllocations.Add(allocation);
+            }
+            else
+            {
+                allocation.Status = AllocationStatusFailed;
+                allocation.TransferResultCode = outcome?.Code;
+                allocation.TransferResultReason = outcome?.Reason ?? "Core salary funding did not confirm this account allocation.";
+            }
+        }
+
+        var evoShadowFunded = evoTotal == 0m || fundingResult.SuccessAccounts.Contains(EvoShadowAccount);
+        var bcdShadowFunded = bcdTotal == 0m || fundingResult.SuccessAccounts.Contains(BcdShadowAccount);
+        var shadowFundingReady = evoShadowFunded && bcdShadowFunded;
+
+        if (expectedCreditAccounts.Count > 0 && fundingResult.SuccessAccounts.Count == 0)
+        {
+            var hasInsufficientBalance = string.Equals(fundingResult.ReturnMessageCode, "RC00000210", StringComparison.OrdinalIgnoreCase) ||
+                (fundingResult.ReturnMessage?.Contains("No Available Balance", StringComparison.OrdinalIgnoreCase) ?? false);
+            var coreFailureCode = hasInsufficientBalance
+                ? "SALARY_INSUFFICIENT_DEBIT_BALANCE"
+                : "SALARY_CORE_FUNDING_FAILED";
+            var coreFailureMessageEn = hasInsufficientBalance
+                ? "Insufficient debit account balance."
+                : "Core salary funding failed.";
+            var coreFailureMessageAr = hasInsufficientBalance
+                ? "رصيد حساب الخصم غير كاف."
+                : "فشل تمويل الرواتب من النظام البنكي.";
+            var allocationFailureReason = string.IsNullOrWhiteSpace(fundingResult.ReturnMessage)
+                ? coreFailureMessageEn
+                : fundingResult.ReturnMessage!;
+            var persistedFailureCode = string.IsNullOrWhiteSpace(fundingResult.ReturnMessageCode)
+                ? "CORE_FUNDING_FAILED"
+                : fundingResult.ReturnMessageCode!.Trim();
+            if (persistedFailureCode.Length > 32)
+                persistedFailureCode = persistedFailureCode[..32];
+            var persistedFailureReason = allocationFailureReason.Length > 1024
+                ? allocationFailureReason[..1024]
+                : allocationFailureReason;
+
+            foreach (var allocation in allAllocations)
+            {
+                allocation.Status = AllocationStatusFailed;
+                allocation.TransferResultCode = persistedFailureCode;
+                allocation.TransferResultReason = persistedFailureReason;
+            }
+
+            foreach (var entry in cycle.Entries)
+                RefreshEntryStatusFromAllocations(entry);
+
+            await _db.SaveChangesAsync();
+
+            var failedAllocations = allAllocations
+                .Select(a => new
+                {
+                    salaryEntryId = a.SalaryEntryId,
+                    employeeId = a.SalaryEntry.EmployeeId,
+                    paymentChannel = a.PaymentChannel,
+                    amount = a.Amount,
+                    destination = a.Destination,
+                    transferResultCode = string.IsNullOrWhiteSpace(a.TransferResultCode)
+                        ? persistedFailureCode
+                        : a.TransferResultCode,
+                    transferResultReason = string.IsNullOrWhiteSpace(a.TransferResultReason)
+                        ? persistedFailureReason
+                        : a.TransferResultReason
+                })
+                .ToList();
+
+            throw SalaryError(
+                coreFailureCode,
+                coreFailureMessageEn,
+                coreFailureMessageAr,
+                new
+                {
+                    salaryCycleId = cycle.Id,
+                    bankReference = hidFunding,
+                    debitAccount = debitAcc13,
+                    requestedAmount = Math.Round(
+                        accountAllocations.Sum(a => a.Amount) + evoTotal + bcdTotal,
+                        CurrencyDecimals(cycle.Currency)),
+                    currency = cycle.Currency,
+                    coreReturnCode = fundingResult.ReturnCode,
+                    coreReturnMessageCode = fundingResult.ReturnMessageCode,
+                    coreReturnMessage = fundingResult.ReturnMessage,
+                    failedAllocations
+                },
+                hasInsufficientBalance ? 400 : 502);
+        }
+
+        if (shadowFundingReady && successfulAccountAllocations.Count > 0 && feeGl != null)
+        {
+            var baseIdFee = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var hidFee = baseIdFee + "BF00";
+            var feeEntries = new List<Dictionary<string, string>>();
+            var feeLineNo = 1;
+
+            foreach (var allocation in successfulAccountAllocations)
+            {
+                var destination = NormalizeAcc13(allocation.Destination);
+                feeEntries.Add(new Dictionary<string, string>
+                {
+                    ["YBCD10DID"] = baseIdFee + $"B{feeLineNo:00}",
+                    ["YBCD10ACC"] = destination,
+                    ["YBCD10AMT"] = ToCoreAmount(fixedFee, cycle.Currency),
+                    ["YBCD10CCY"] = cycle.Currency,
+                    ["YBCD10NR1"] = $"Salary commission {salaryMonthText}",
+                    ["YBCD10NR2"] = string.Empty,
+                    ["YBCD10NR3"] = string.Empty,
+                    ["YBCD10NR4"] = string.Empty
+                });
+                feeLineNo++;
+                allocation.CommissionAmount = fixedFee;
+            }
+
+            var feePayload = BuildCoreBatchPayload(
+                hidFee,
+                "C",
+                feeGl,
+                cycle.Currency,
+                customerNumber,
+                feeNarration,
+                feeEntries);
+
+            var feeResult = await PostCoreBatchAsync(feePayload, successfulAccountAllocations.Select(a => a.Destination));
+            cycle.BankFeeReference = hidFee;
+            cycle.BankFeeResponseRaw = feeResult.Raw;
+        }
+
+        if (!shadowFundingReady)
+        {
+            await ReverseSuccessfulBankAllocationsAsync(cycle, successfulAccountAllocations, debitAcc13, customerNumber, salaryMonthText);
+            await MarkWalletFundingFailureAsync(cycle, PaymentChannelEvo, evoAllocations, evoTotal, evoShadowFunded, hidFunding);
+            await MarkWalletFundingFailureAsync(cycle, PaymentChannelBcd, bcdAllocations, bcdTotal, bcdShadowFunded, hidFunding);
+
+            foreach (var entry in cycle.Entries)
+                RefreshEntryStatusFromAllocations(entry);
+
+            await _db.SaveChangesAsync();
+
+            var failedShadowAccounts = new List<object>();
+            if (evoTotal > 0m && !evoShadowFunded)
+                failedShadowAccounts.Add(new
+                {
+                    walletChannel = PaymentChannelEvo,
+                    shadowAccount = EvoShadowAccount,
+                    requestedAmount = evoTotal
+                });
+            if (bcdTotal > 0m && !bcdShadowFunded)
+                failedShadowAccounts.Add(new
+                {
+                    walletChannel = PaymentChannelBcd,
+                    shadowAccount = BcdShadowAccount,
+                    requestedAmount = bcdTotal
+                });
+
+            throw SalaryError(
+                "SALARY_SHADOW_FUNDING_FAILED",
+                "Wallet shadow account funding failed.",
+                "فشل تمويل حسابات المحافظ الوسيطة.",
+                new
+                {
+                    salaryCycleId = cycle.Id,
+                    bankReference = hidFunding,
+                    failedShadowAccounts
+                },
+                502);
+        }
+        else
+        {
+            await PostWalletBatchAsync(cycle, PaymentChannelEvo, evoAllocations, hidFunding, postedBy);
+            await PostWalletBatchAsync(cycle, PaymentChannelBcd, bcdAllocations, hidFunding, postedBy);
+        }
+
+        foreach (var entry in cycle.Entries)
+            RefreshEntryStatusFromAllocations(entry);
+
+        var successTotal = allAllocations
+            .Where(a => a.IsTransferred)
+            .Sum(a => a.Amount);
+
+        if (successTotal > 0m)
+        {
+            cycle.TotalAmount = Math.Round(successTotal, CurrencyDecimals(cycle.Currency));
+            cycle.PostedAt = DateTime.UtcNow;
+            cycle.PostedByUserId = postedBy;
+        }
+
+        await _db.SaveChangesAsync();
+        return _mapper.Map<SalaryCycleDto>(cycle);
+    }
+
     public async Task<SalaryCycleDto?> PostSalaryCycleAsync(int companyId, int cycleId, int postedBy)
     {
+        return await PostSalaryCycleWithWalletsAsync(companyId, cycleId, postedBy);
+#if false
         // 1) Load cycle
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
@@ -794,6 +2109,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         await _db.SaveChangesAsync();
         return _mapper.Map<SalaryCycleDto>(cycle);
+#endif
     }
 
 
@@ -815,6 +2131,11 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Date = e.Date,
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
+                EvoWallet = e.EvoWallet,
+                BcdWallet = e.BcdWallet,
+                AccountAllocationAmount = e.AccountAllocationAmount,
+                EvoAllocationAmount = e.EvoAllocationAmount,
+                BcdAllocationAmount = e.BcdAllocationAmount,
                 SendSalary = e.SendSalary,
                 CanPost = e.CanPost,
                 IsDeleted = e.IsDeleted
@@ -823,50 +2144,22 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<SalaryCycleDto?> GetSalaryCycleAsync(int companyId, int cycleId)
     {
-        return await _db.SalaryCycles
+        var cycle = await _db.SalaryCycles
             .AsNoTracking()
+            .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
+            .Include(c => c.WalletBatches)
             .Where(c => c.CompanyId == companyId && c.Id == cycleId)
-            .Select(s => new SalaryCycleDto
-            {
-                Id = s.Id,
-                SalaryMonth = s.SalaryMonth,
-                AdditionalMonth = s.AdditionalMonth,
-                DebitAccount = s.DebitAccount,
-                Currency = s.Currency,
-                CreatedAt = s.CreatedAt,
-                PostedAt = s.PostedAt,
-                CreatedByUserId = s.CreatedByUserId,
-                PostedByUserId = s.PostedByUserId,
-                TotalAmount = s.TotalAmount,
-                EntryCount = s.Entries.Count(),
-                BankReference = s.BankReference,
-                Entries = s.Entries.Select(en => new SalaryEntryDto
-                {
-                    Id = en.Id,
-                    EmployeeId = en.EmployeeId,
-                    Name = en.Employee.Name,
-                    Email = en.Employee.Email,
-                    Phone = en.Employee.Phone,
-                    Salary = en.Amount,
-                    Date = en.Employee.Date,
-                    AccountNumber = en.Employee.AccountNumber,
-                    AccountType = en.Employee.AccountType,
-                    SendSalary = en.Employee.SendSalary,
-                    CanPost = en.Employee.CanPost,
-                    IsDeleted = en.Employee.IsDeleted,
-                    IsTransferred = en.IsTransferred,
-                    TransferResultCode = en.TransferResultCode,
-                    TransferResultReason = en.TransferResultReason,
-                    TransferredAt = en.TransferredAt
-                }).ToList()
-            })
             .FirstOrDefaultAsync();
+
+        return cycle == null ? null : _mapper.Map<SalaryCycleDto>(cycle);
     }
 
     public async Task<SalaryEntryDto?> GetSalaryEntryAsync(int companyId, int cycleId, int entryId)
     {
         var en = await _db.SalaryEntries
                           .Include(e => e.Employee)
+                          .Include(e => e.Allocations)
                           .Include(e => e.SalaryCycle)
                           .AsNoTracking()
                           .FirstOrDefaultAsync(e =>
@@ -874,63 +2167,27 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                               e.SalaryCycleId == cycleId &&
                               e.SalaryCycle.CompanyId == companyId);
 
-        return en == null ? null : new SalaryEntryDto
-        {
-            Id = en.Id,
-            EmployeeId = en.EmployeeId,
-            /* identical employee fields */
-            Name = en.Employee.Name,
-            Email = en.Employee.Email,
-            Phone = en.Employee.Phone,
-            Salary = en.Amount,
-            Date = en.Employee.Date,
-            AccountNumber = en.Employee.AccountNumber,
-            AccountType = en.Employee.AccountType,
-            SendSalary = en.Employee.SendSalary,
-            CanPost = en.Employee.CanPost,
-            IsDeleted = en.Employee.IsDeleted,
-            /* payroll-specific */
-            IsTransferred = en.IsTransferred,
-            TransferResultCode = en.TransferResultCode,
-            TransferResultReason = en.TransferResultReason,
-            TransferredAt = en.TransferredAt
-        };
+        return en == null ? null : _mapper.Map<SalaryEntryDto>(en);
     }
 
     public async Task<List<SalaryEntryDto>> GetFailedEntriesAsync(int companyId, int cycleId)
     {
         var list = await _db.SalaryEntries
             .Include(e => e.Employee)
+            .Include(e => e.Allocations)
             .Include(e => e.SalaryCycle)
             .Where(e => e.SalaryCycle.CompanyId == companyId && e.SalaryCycleId == cycleId && !e.IsTransferred && !e.Employee.IsDeleted)
             .AsNoTracking()
             .ToListAsync();
 
-        return list.Select(en => new SalaryEntryDto
-        {
-            Id = en.Id,
-            EmployeeId = en.EmployeeId,
-            Name = en.Employee.Name,
-            Email = en.Employee.Email,
-            Phone = en.Employee.Phone,
-            Salary = en.Amount,
-            Date = en.Employee.Date,
-            AccountNumber = en.Employee.AccountNumber,
-            AccountType = en.Employee.AccountType,
-            SendSalary = en.Employee.SendSalary,
-            CanPost = en.Employee.CanPost,
-            IsDeleted = en.Employee.IsDeleted,
-            IsTransferred = en.IsTransferred,
-            TransferResultCode = en.TransferResultCode,
-            TransferResultReason = en.TransferResultReason,
-            TransferredAt = en.TransferredAt
-        }).ToList();
+        return list.Select(en => _mapper.Map<SalaryEntryDto>(en)).ToList();
     }
 
     public async Task<SalaryEntryDto?> EditEntryAndEmployeeAsync(int companyId, int cycleId, int entryId, SalaryEntryEditDto dto)
     {
         var en = await _db.SalaryEntries
             .Include(e => e.Employee)
+            .Include(e => e.Allocations)
             .Include(e => e.SalaryCycle)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.SalaryCycleId == cycleId && e.SalaryCycle.CompanyId == companyId);
 
@@ -942,33 +2199,20 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             var cycle = await _db.SalaryCycles.AsNoTracking().FirstOrDefaultAsync(c => c.Id == en.SalaryCycleId);
             var decimals = (cycle != null && string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase)) ? 3 : 2;
             en.Amount = Math.Round(dto.Amount.Value, decimals);
+            if (en.Allocations.Count == 1)
+                en.Allocations.First().Amount = en.Amount;
         }
         if (!string.IsNullOrWhiteSpace(dto.AccountNumber)) en.Employee.AccountNumber = dto.AccountNumber!;
         if (!string.IsNullOrWhiteSpace(dto.AccountType)) en.Employee.AccountType = dto.AccountType!;
         if (!string.IsNullOrWhiteSpace(dto.EvoWallet)) en.Employee.EvoWallet = dto.EvoWallet!;
         if (!string.IsNullOrWhiteSpace(dto.BcdWallet)) en.Employee.BcdWallet = dto.BcdWallet!;
 
+        foreach (var allocation in en.Allocations)
+            allocation.Destination = ResolveAllocationDestination(en.Employee, NormalizePaymentChannel(allocation.PaymentChannel), allocation.Destination);
+
         await _db.SaveChangesAsync();
 
-        return new SalaryEntryDto
-        {
-            Id = en.Id,
-            EmployeeId = en.EmployeeId,
-            Name = en.Employee.Name,
-            Email = en.Employee.Email,
-            Phone = en.Employee.Phone,
-            Salary = en.Amount,
-            Date = en.Employee.Date,
-            AccountNumber = en.Employee.AccountNumber,
-            AccountType = en.Employee.AccountType,
-            SendSalary = en.Employee.SendSalary,
-            CanPost = en.Employee.CanPost,
-            IsDeleted = en.Employee.IsDeleted,
-            IsTransferred = en.IsTransferred,
-            TransferResultCode = en.TransferResultCode,
-            TransferResultReason = en.TransferResultReason,
-            TransferredAt = en.TransferredAt
-        };
+        return _mapper.Map<SalaryEntryDto>(en);
     }
 
     public async Task<SalaryCycleDto?> RepostFailedEntriesAsync(int companyId, int cycleId, int postedBy, SalaryRepostIdsRequestDto dto)
@@ -1155,6 +2399,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
         if (cycle == null || cycle.PostedAt != null)
@@ -1191,6 +2436,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 // Round per cycle currency precision (LYD=3dp, others=2dp)
                 var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
                 existing.Amount = Math.Round(inc.Salary, decimals);
+                _db.SalaryEntryAllocations.RemoveRange(existing.Allocations);
+                existing.Allocations.Clear();
+                foreach (var allocation in BuildAllocationsForEntry(existing, existing.Employee, inc, cycle.Currency, throwIfNoDefault: false))
+                    existing.Allocations.Add(allocation);
                 incoming.Remove(existing.EmployeeId);
             }
             else
@@ -1212,8 +2461,22 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             cycle.Entries.Add(new SalaryEntry
             {
                 EmployeeId = emp.Id,
-                Amount = Math.Round(inc.Salary, decimals)
+                Employee = emp,
+                Amount = Math.Round(inc.Salary, decimals),
+                Allocations = new List<SalaryEntryAllocation>()
             });
+        }
+
+        await _db.SaveChangesAsync();
+
+        foreach (var entry in cycle.Entries.Where(e => e.Allocations.Count == 0).ToList())
+        {
+            var inc = (dto.Entries ?? new List<SalaryEntryUpsertDto>()).FirstOrDefault(x => x.EmployeeId == entry.EmployeeId);
+            if (inc == null || entry.Employee == null)
+                continue;
+
+            foreach (var allocation in BuildAllocationsForEntry(entry, entry.Employee, inc, cycle.Currency, throwIfNoDefault: false))
+                entry.Allocations.Add(allocation);
         }
 
         {
@@ -1228,7 +2491,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     public async Task<SalaryCycleDto?> AddEntriesToPostedCycleAsync(int companyId, int cycleId, SalaryCycleAddEntriesDto dto)
     {
         var cycle = await _db.SalaryCycles
-            .Include(c => c.Entries)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
         if (cycle == null) return null;
@@ -1279,14 +2542,35 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             throw new PayrollException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
 
         var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+        var newEntries = new List<SalaryEntry>();
 
         foreach (var inc in dto.Entries)
         {
-            cycle.Entries.Add(new SalaryEntry
+            var emp = await _db.Employees
+                .FirstOrDefaultAsync(e => e.Id == inc.EmployeeId && e.CompanyId == companyId && !e.IsDeleted);
+            if (emp == null) continue;
+
+            var entry = new SalaryEntry
             {
                 EmployeeId = inc.EmployeeId,
-                Amount = Math.Round(inc.Salary, decimals)
-            });
+                Employee = emp,
+                Amount = Math.Round(inc.Salary, decimals),
+                Allocations = new List<SalaryEntryAllocation>()
+            };
+            cycle.Entries.Add(entry);
+            newEntries.Add(entry);
+        }
+
+        await _db.SaveChangesAsync();
+
+        foreach (var entry in newEntries)
+        {
+            var inc = dto.Entries.FirstOrDefault(x => x.EmployeeId == entry.EmployeeId);
+            if (inc == null || entry.Employee == null)
+                continue;
+
+            foreach (var allocation in BuildAllocationsForEntry(entry, entry.Employee, inc, cycle.Currency, throwIfNoDefault: false))
+                entry.Allocations.Add(allocation);
         }
 
         await _db.SaveChangesAsync();
@@ -1455,6 +2739,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var s = await _db.SalaryCycles
             .Include(x => x.Company)
             .Include(x => x.Entries).ThenInclude(e => e.Employee)
+            .Include(x => x.Entries).ThenInclude(e => e.Allocations)
+            .Include(x => x.WalletBatches)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == cycleId);
 
@@ -1491,13 +2777,51 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Date = e.Employee.Date,
                 AccountNumber = e.Employee.AccountNumber,
                 AccountType = e.Employee.AccountType,
+                EvoWallet = e.Employee.EvoWallet,
+                BcdWallet = e.Employee.BcdWallet,
                 SendSalary = e.Employee.SendSalary,
                 CanPost = e.Employee.CanPost,
                 IsDeleted = e.Employee.IsDeleted,
                 IsTransferred = e.IsTransferred,
                 TransferResultCode = e.TransferResultCode,
                 TransferResultReason = e.TransferResultReason,
-                TransferredAt = e.TransferredAt
+                TransferredAt = e.TransferredAt,
+                CommissionAmount = e.CommissionAmount,
+                Allocations = e.Allocations.Select(a => new SalaryEntryAllocationDto
+                {
+                    Id = a.Id,
+                    SalaryEntryId = a.SalaryEntryId,
+                    PaymentChannel = a.PaymentChannel,
+                    Amount = a.Amount,
+                    Destination = a.Destination,
+                    ClientReference = a.ClientReference,
+                    Status = a.Status,
+                    TransferResultCode = a.TransferResultCode,
+                    TransferResultReason = a.TransferResultReason,
+                    ProviderTransactionId = a.ProviderTransactionId,
+                    CommissionAmount = a.CommissionAmount,
+                    IsTransferred = a.IsTransferred,
+                    TransferredAt = a.TransferredAt
+                }).ToList()
+            }).ToList(),
+            WalletBatches = s.WalletBatches.Select(b => new SalaryWalletBatchDto
+            {
+                Id = b.Id,
+                SalaryCycleId = b.SalaryCycleId,
+                WalletChannel = b.WalletChannel,
+                ShadowAccount = b.ShadowAccount,
+                BatchReference = b.BatchReference,
+                CoreReferenceId = b.CoreReferenceId,
+                RequestedTotalAmount = b.RequestedTotalAmount,
+                SuccessfulTotalAmount = b.SuccessfulTotalAmount,
+                FailedTotalAmount = b.FailedTotalAmount,
+                TotalCommission = b.TotalCommission,
+                OverallStatus = b.OverallStatus,
+                ReversalStatus = b.ReversalStatus,
+                ReversalAmount = b.ReversalAmount,
+                ReversalBankReference = b.ReversalBankReference,
+                ProcessedAt = b.ProcessedAt,
+                ReversedAt = b.ReversedAt
             }).ToList()
         };
     }
