@@ -20,6 +20,7 @@ public interface IEmployeeSalaryRepository
     Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto);
     // IEmployeeSalaryRepository.cs
     Task<SalaryCycleDto?> PostSalaryCycleAsync(int companyId, int cycleId, int postedBy);
+    Task<int> ReconcilePendingWalletBatchesAsync(CancellationToken cancellationToken = default);
     Task<SalaryCycleDto?> RepostFailedEntriesAsync(int companyId, int cycleId, int postedBy, SalaryRepostIdsRequestDto dto);
     Task<List<SalaryEntryDto>> GetFailedEntriesAsync(int companyId, int cycleId);
     Task<SalaryEntryDto?> EditEntryAndEmployeeAsync(int companyId, int cycleId, int entryId, SalaryEntryEditDto dto);

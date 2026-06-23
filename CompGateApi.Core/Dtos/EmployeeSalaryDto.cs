@@ -122,6 +122,7 @@ public class SalaryWalletBatchDto
 {
     public int Id { get; set; }
     public int SalaryCycleId { get; set; }
+    public int? PostedByUserId { get; set; }
     public string WalletChannel { get; set; } = string.Empty;
     public string ShadowAccount { get; set; } = string.Empty;
     public string BatchReference { get; set; } = string.Empty;
@@ -131,6 +132,14 @@ public class SalaryWalletBatchDto
     public decimal FailedTotalAmount { get; set; }
     public decimal TotalCommission { get; set; }
     public string OverallStatus { get; set; } = "pending";
+    public string ReconciliationStatus { get; set; } = "not_required";
+    public string ReconciliationMode { get; set; } = "payment_retry";
+    public int AttemptCount { get; set; }
+    public int MaxAttempts { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public string? LastErrorMessage { get; set; }
+    public DateTime? ResolvedAt { get; set; }
     public string ReversalStatus { get; set; } = "not_required";
     public decimal ReversalAmount { get; set; }
     public string? ReversalBankReference { get; set; }

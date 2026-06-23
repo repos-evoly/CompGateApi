@@ -9,6 +9,8 @@ public class SalaryWalletBatch : Auditable
     public int SalaryCycleId { get; set; }
     public SalaryCycle SalaryCycle { get; set; } = null!;
 
+    public int? PostedByUserId { get; set; }
+
     [MaxLength(20)]
     public string WalletChannel { get; set; } = string.Empty;
 
@@ -47,6 +49,30 @@ public class SalaryWalletBatch : Auditable
 
     public DateTime? ProcessedAt { get; set; }
 
+    [MaxLength(32)]
+    public string ReconciliationStatus { get; set; } = "not_required";
+
+    [MaxLength(32)]
+    public string ReconciliationMode { get; set; } = "payment_retry";
+
+    public int AttemptCount { get; set; }
+
+    public int MaxAttempts { get; set; } = 3;
+
+    public DateTime? NextAttemptAt { get; set; }
+
+    public DateTime? LastAttemptAt { get; set; }
+
+    [MaxLength(1024)]
+    public string? LastErrorMessage { get; set; }
+
+    public DateTime? LockedUntil { get; set; }
+
+    [MaxLength(64)]
+    public string? LockedBy { get; set; }
+
+    public DateTime? ResolvedAt { get; set; }
+
     public bool ReversalRequired { get; set; }
 
     [Column(TypeName = "decimal(18,3)")]
@@ -68,4 +94,7 @@ public class SalaryWalletBatch : Auditable
     public string? ReversalErrorMessage { get; set; }
 
     public DateTime? ReversedAt { get; set; }
+
+    public ICollection<SalaryWalletBatchAttempt> Attempts { get; set; } = new List<SalaryWalletBatchAttempt>();
+    public ICollection<SalaryWalletManualReview> ManualReviews { get; set; } = new List<SalaryWalletManualReview>();
 }

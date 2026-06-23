@@ -56,6 +56,8 @@ namespace CompGateApi.Data.Context
               public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
               public DbSet<SalaryEntryAllocation> SalaryEntryAllocations => Set<SalaryEntryAllocation>();
               public DbSet<SalaryWalletBatch> SalaryWalletBatches => Set<SalaryWalletBatch>();
+              public DbSet<SalaryWalletBatchAttempt> SalaryWalletBatchAttempts => Set<SalaryWalletBatchAttempt>();
+              public DbSet<SalaryWalletManualReview> SalaryWalletManualReviews => Set<SalaryWalletManualReview>();
               public DbSet<Pricing> Pricings => Set<Pricing>();
 
               public DbSet<Visa> Visas => Set<Visa>();
@@ -659,6 +661,7 @@ namespace CompGateApi.Data.Context
                      {
                             b.ToTable("SalaryWalletBatches");
                             b.HasKey(x => x.Id);
+                            b.Property(x => x.PostedByUserId);
                             b.Property(x => x.WalletChannel).HasMaxLength(20).IsRequired();
                             b.Property(x => x.ShadowAccount).HasMaxLength(34).IsRequired();
                             b.Property(x => x.BatchReference).HasMaxLength(64).IsRequired();
@@ -672,6 +675,11 @@ namespace CompGateApi.Data.Context
                             b.Property(x => x.ProviderResponseJson).HasColumnType("nvarchar(max)");
                             b.Property(x => x.ProviderErrorMessage).HasMaxLength(1024);
                             b.Property(x => x.ReversalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.ReconciliationStatus).HasMaxLength(32).IsRequired().HasDefaultValue("not_required");
+                            b.Property(x => x.ReconciliationMode).HasMaxLength(32).IsRequired().HasDefaultValue("payment_retry");
+                            b.Property(x => x.MaxAttempts).HasDefaultValue(3);
+                            b.Property(x => x.LastErrorMessage).HasMaxLength(1024);
+                            b.Property(x => x.LockedBy).HasMaxLength(64);
                             b.Property(x => x.ReversalStatus).HasMaxLength(20).IsRequired();
                             b.Property(x => x.ReversalBankReference).HasMaxLength(64);
                             b.Property(x => x.ReversalRequestJson).HasColumnType("nvarchar(max)");
@@ -684,6 +692,57 @@ namespace CompGateApi.Data.Context
                             .OnDelete(DeleteBehavior.Cascade);
 
                             b.HasIndex(x => x.BatchReference).IsUnique();
+                            b.HasIndex(x => new { x.ReconciliationStatus, x.NextAttemptAt });
+                     });
+
+                     builder.Entity<SalaryWalletBatchAttempt>(b =>
+                     {
+                            b.ToTable("SalaryWalletBatchAttempts");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.AttemptType).HasMaxLength(32).IsRequired();
+                            b.Property(x => x.ResultStatus).HasMaxLength(32).IsRequired();
+                            b.Property(x => x.RequestJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ResponseJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ErrorMessage).HasMaxLength(1024);
+
+                            b.HasOne(x => x.SalaryWalletBatch)
+                            .WithMany(x => x.Attempts)
+                            .HasForeignKey(x => x.SalaryWalletBatchId)
+                            .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasIndex(x => x.SalaryWalletBatchId);
+                     });
+
+                     builder.Entity<SalaryWalletManualReview>(b =>
+                     {
+                            b.ToTable("SalaryWalletManualReviews");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.WalletChannel).HasMaxLength(20).IsRequired();
+                            b.Property(x => x.BatchReference).HasMaxLength(64).IsRequired();
+                            b.Property(x => x.CoreReferenceId).HasMaxLength(64).IsRequired();
+                            b.Property(x => x.ShadowAccount).HasMaxLength(34).IsRequired();
+                            b.Property(x => x.RequestedAmount).HasPrecision(18, 3);
+                            b.Property(x => x.UnresolvedAmount).HasPrecision(18, 3);
+                            b.Property(x => x.Status).HasMaxLength(32).IsRequired();
+                            b.Property(x => x.ReasonCode).HasMaxLength(64).IsRequired();
+                            b.Property(x => x.ReasonMessage).HasMaxLength(1024).IsRequired();
+                            b.Property(x => x.LastErrorMessage).HasMaxLength(1024);
+                            b.Property(x => x.ProviderRequestJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ProviderResponseJson).HasColumnType("nvarchar(max)");
+                            b.Property(x => x.ResolutionNote).HasMaxLength(1024);
+
+                            b.HasOne(x => x.SalaryWalletBatch)
+                            .WithMany(x => x.ManualReviews)
+                            .HasForeignKey(x => x.SalaryWalletBatchId)
+                            .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(x => x.SalaryCycle)
+                            .WithMany()
+                            .HasForeignKey(x => x.SalaryCycleId)
+                            .OnDelete(DeleteBehavior.NoAction);
+
+                            b.HasIndex(x => x.SalaryWalletBatchId);
+                            b.HasIndex(x => new { x.Status, x.CreatedAt });
                      });
 
 

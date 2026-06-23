@@ -21,6 +21,7 @@ using CompGateApi.Data.Repositories;
 using CompGateApi.Data.Abstractions;
 using CompGateApi.Validators;
 using CompGateApi.Core.Validators;
+using CompGateApi.Core.Options;
 using System.Net.Http.Headers;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
@@ -70,6 +71,8 @@ namespace CompGateApi.Core.Startup
 
       builder.Services.RegisterValidators();
       builder.Services.AddSignalR();
+      builder.Services.Configure<WalletSalaryReconciliationOptions>(
+        builder.Configuration.GetSection("WalletSalaryReconciliation"));
 
       // Optionally, add your NotificationService to DI:
 
@@ -363,6 +366,7 @@ namespace CompGateApi.Core.Startup
       //EmployeeSalary
       services.AddScoped<IEmployeeSalaryRepository, EmployeeSalaryRepository>();
       services.AddScoped<IWalletSalaryProviderClient, FakeWalletSalaryProviderClient>();
+      services.AddHostedService<WalletSalaryReconciliationWorker>();
 
       services.AddScoped<IPricingRepository, PricingRepository>();
 
@@ -420,4 +424,3 @@ namespace CompGateApi.Core.Startup
     }
   }
 }
-

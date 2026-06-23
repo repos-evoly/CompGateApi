@@ -7,9 +7,9 @@ public class FakeWalletSalaryProviderClient : IWalletSalaryProviderClient
         var processedAt = DateTime.UtcNow;
         var results = request.Items.Select((item, index) =>
         {
+            var upperChannel = request.WalletChannel.ToUpperInvariant();
             var isSuccess = index % 2 == 0;
             var commission = isSuccess ? Math.Round(item.Amount * 0.002m, 3) : 0m;
-            var upperChannel = request.WalletChannel.ToUpperInvariant();
 
             return new WalletSalaryTransferResultDto
             {
@@ -61,5 +61,39 @@ public class FakeWalletSalaryProviderClient : IWalletSalaryProviderClient
         };
 
         return Task.FromResult(response);
+    }
+
+    public Task<WalletSalaryStatusResponseDto> CheckSalaryWalletBatchStatusAsync(
+        WalletSalaryStatusRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var processedAt = DateTime.UtcNow;
+        var results = request.Items.Select(item => new WalletSalaryTransferResultDto
+        {
+            ClientReference = item.ClientReference,
+            SalaryCycleId = item.SalaryCycleId,
+            SalaryEntryId = item.SalaryEntryId,
+            EmployeeId = item.EmployeeId,
+            Status = "not_found",
+            StatusCode = "TRANSACTION_NOT_FOUND",
+            StatusMessage = "No transaction found for this client reference",
+            Currency = request.Currency,
+            ProcessedAt = processedAt
+        }).ToList();
+
+        return Task.FromResult(new WalletSalaryStatusResponseDto
+        {
+            BatchReference = request.BatchReference,
+            CoreReferenceId = request.CoreReferenceId,
+            WalletChannel = request.WalletChannel,
+            OverallStatus = "not_found",
+            Currency = request.Currency,
+            RequestedTotalAmount = 0m,
+            SuccessfulTotalAmount = 0m,
+            FailedTotalAmount = 0m,
+            TotalCommission = 0m,
+            Results = results,
+            TraceId = $"FAKE-STATUS-{request.WalletChannel.ToUpperInvariant()}-{Guid.NewGuid():N}"
+        });
     }
 }

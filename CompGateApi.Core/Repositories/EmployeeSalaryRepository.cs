@@ -6,9 +6,11 @@ using ClosedXML.Excel;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
+using CompGateApi.Core.Options;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 {
@@ -16,17 +18,20 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     private readonly IHttpClientFactory _http;
     private readonly IMapper _mapper;
     private readonly IWalletSalaryProviderClient _walletProvider;
+    private readonly WalletSalaryReconciliationOptions _reconciliationOptions;
 
     public EmployeeSalaryRepository(
         CompGateApiDbContext db,
         IHttpClientFactory http,
         IMapper mapper,
-        IWalletSalaryProviderClient walletProvider)
+        IWalletSalaryProviderClient walletProvider,
+        IOptions<WalletSalaryReconciliationOptions> reconciliationOptions)
     {
         _db = db;
         _http = http;
         _mapper = mapper;
         _walletProvider = walletProvider;
+        _reconciliationOptions = reconciliationOptions.Value;
     }
 
 
@@ -54,6 +59,13 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     private const string AllocationStatusSuccess = "success";
     private const string AllocationStatusFailed = "failed";
     private const string AllocationStatusUnresolved = "unresolved";
+    private const string ReconciliationStatusNotRequired = "not_required";
+    private const string ReconciliationStatusPending = "pending";
+    private const string ReconciliationStatusProcessing = "processing";
+    private const string ReconciliationStatusResolved = "resolved";
+    private const string ReconciliationStatusManualRequired = "manual_required";
+    private const string ReconciliationModePaymentRetry = "payment_retry";
+    private const string ReconciliationModeStatusApiFirst = "status_api_first";
     private const string EvoShadowAccount = "0015798000006";
     private const string BcdShadowAccount = "0015798000009";
     private static readonly string[] AllowedPaymentChannels = { PaymentChannelAccount, PaymentChannelEvo, PaymentChannelBcd };
@@ -61,6 +73,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     private static readonly JsonSerializerOptions ProviderJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         WriteIndented = false
     };
 
@@ -1068,19 +1081,39 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             batch.ReversedAt = DateTime.UtcNow;
     }
 
-    private async Task PostWalletBatchAsync(
+    private WalletSalaryChannelReconciliationOptions ChannelReconciliationOptions(string channel)
+    {
+        return _reconciliationOptions.ForChannel(channel);
+    }
+
+    private string ReconciliationModeFor(string channel)
+    {
+        var configured = ChannelReconciliationOptions(channel).ReconciliationMode;
+        return string.IsNullOrWhiteSpace(configured)
+            ? ReconciliationModePaymentRetry
+            : configured.Trim().ToLowerInvariant();
+    }
+
+    private int MaxAttemptsFor(string channel)
+    {
+        var configured = ChannelReconciliationOptions(channel).MaxAttempts;
+        return Math.Max(1, configured ?? _reconciliationOptions.MaxAttempts);
+    }
+
+    private int RetryDelaySecondsFor(string channel)
+    {
+        var configured = ChannelReconciliationOptions(channel).RetryDelaySeconds;
+        return Math.Max(10, configured ?? _reconciliationOptions.RetryDelaySeconds);
+    }
+
+    private static WalletSalaryTransferRequestDto BuildWalletTransferRequest(
         SalaryCycle cycle,
         string channel,
-        List<SalaryEntryAllocation> allocations,
+        string batchReference,
         string coreReferenceId,
-        int postedBy)
+        List<SalaryEntryAllocation> allocations)
     {
-        if (allocations.Count == 0)
-            return;
-
-        var shadowAccount = WalletShadowAccount(channel);
-        var batchReference = $"SAL-{cycle.Id}-{channel.ToUpperInvariant()}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
-        var request = new WalletSalaryTransferRequestDto
+        return new WalletSalaryTransferRequestDto
         {
             BatchReference = batchReference,
             CoreReferenceId = coreReferenceId,
@@ -1098,39 +1131,90 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Currency = cycle.Currency
             }).ToList()
         };
+    }
 
-        var batch = new SalaryWalletBatch
+    private static WalletSalaryStatusRequestDto BuildWalletStatusRequest(WalletSalaryTransferRequestDto request)
+    {
+        return new WalletSalaryStatusRequestDto
         {
-            SalaryCycleId = cycle.Id,
-            WalletChannel = channel,
-            ShadowAccount = shadowAccount,
-            BatchReference = batchReference,
-            CoreReferenceId = coreReferenceId,
-            RequestedTotalAmount = request.RequestedTotalAmount,
-            OverallStatus = "pending",
-            ReversalStatus = "not_required",
-            ProviderRequestJson = JsonSerializer.Serialize(request, ProviderJsonOptions)
+            BatchReference = request.BatchReference,
+            CoreReferenceId = request.CoreReferenceId,
+            WalletChannel = request.WalletChannel,
+            Currency = request.Currency,
+            Items = request.Items.Select(i => new WalletSalaryStatusItemDto
+            {
+                ClientReference = i.ClientReference,
+                SalaryCycleId = i.SalaryCycleId,
+                SalaryEntryId = i.SalaryEntryId,
+                EmployeeId = i.EmployeeId
+            }).ToList()
         };
-        cycle.WalletBatches.Add(batch);
+    }
 
-        WalletSalaryTransferResponseDto response;
+    private static WalletSalaryTransferRequestDto? TryReadWalletTransferRequest(SalaryWalletBatch batch)
+    {
+        if (string.IsNullOrWhiteSpace(batch.ProviderRequestJson))
+            return null;
+
         try
         {
-            response = await _walletProvider.PostSalaryWalletBatchAsync(request);
+            return JsonSerializer.Deserialize<WalletSalaryTransferRequestDto>(batch.ProviderRequestJson, ProviderJsonOptions);
         }
-        catch (Exception ex)
+        catch
         {
-            batch.OverallStatus = AllocationStatusUnresolved;
-            batch.ProviderErrorMessage = ex.Message;
-            foreach (var allocation in allocations)
-            {
-                allocation.Status = AllocationStatusUnresolved;
-                allocation.TransferResultCode = "PROVIDER_NO_RESPONSE";
-                allocation.TransferResultReason = "Wallet provider did not return a usable response.";
-            }
-            return;
+            return null;
         }
+    }
 
+    private List<SalaryEntryAllocation> GetBatchAllocations(SalaryWalletBatch batch)
+    {
+        var request = TryReadWalletTransferRequest(batch);
+        var references = request?.Items
+            .Select(i => i.ClientReference)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var allAllocations = batch.SalaryCycle.Entries
+            .SelectMany(e => e.Allocations)
+            .Where(a => string.Equals(a.PaymentChannel, batch.WalletChannel, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return references is { Count: > 0 }
+            ? allAllocations.Where(a => references.Contains(a.ClientReference)).ToList()
+            : allAllocations;
+    }
+
+    private void ScheduleWalletBatchReconciliation(
+        SalaryWalletBatch batch,
+        List<SalaryEntryAllocation> allocations,
+        string code,
+        string reason)
+    {
+        var now = DateTime.UtcNow;
+        batch.OverallStatus = AllocationStatusUnresolved;
+        batch.ReconciliationStatus = ReconciliationStatusPending;
+        batch.ReconciliationMode = ReconciliationModeFor(batch.WalletChannel);
+        batch.MaxAttempts = MaxAttemptsFor(batch.WalletChannel);
+        batch.NextAttemptAt = now.AddSeconds(RetryDelaySecondsFor(batch.WalletChannel));
+        batch.LastErrorMessage = reason;
+        batch.LockedBy = null;
+        batch.LockedUntil = null;
+        batch.ProviderErrorMessage = reason;
+
+        foreach (var allocation in allocations.Where(a => string.Equals(a.Status, AllocationStatusUnresolved, StringComparison.OrdinalIgnoreCase)))
+        {
+            allocation.TransferResultCode = string.IsNullOrWhiteSpace(allocation.TransferResultCode) ? code : allocation.TransferResultCode;
+            allocation.TransferResultReason = string.IsNullOrWhiteSpace(allocation.TransferResultReason) ? reason : allocation.TransferResultReason;
+        }
+    }
+
+    private async Task<bool> ApplyWalletProviderResponseAsync(
+        SalaryWalletBatch batch,
+        List<SalaryEntryAllocation> allocations,
+        WalletSalaryTransferResponseDto response,
+        int? postedBy,
+        bool reverseWhenFinal)
+    {
         batch.ProviderResponseJson = JsonSerializer.Serialize(response, ProviderJsonOptions);
         batch.OverallStatus = response.OverallStatus;
         batch.SuccessfulTotalAmount = response.SuccessfulTotalAmount;
@@ -1139,6 +1223,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         batch.ProcessedAt = DateTime.UtcNow;
 
         var resultByReference = response.Results.ToDictionary(r => r.ClientReference, StringComparer.OrdinalIgnoreCase);
+        var hasUnresolved = false;
+
         foreach (var allocation in allocations)
         {
             if (!resultByReference.TryGetValue(allocation.ClientReference, out var result))
@@ -1146,6 +1232,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 allocation.Status = AllocationStatusUnresolved;
                 allocation.TransferResultCode = "MISSING_PROVIDER_RESULT";
                 allocation.TransferResultReason = "Wallet provider response did not include this salary allocation.";
+                hasUnresolved = true;
                 continue;
             }
 
@@ -1161,27 +1248,318 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 allocation.Status = AllocationStatusSuccess;
                 allocation.IsTransferred = true;
-                allocation.TransferredAt = result.ProcessedAt;
+                allocation.TransferredAt = result.ProcessedAt == default ? DateTime.UtcNow : result.ProcessedAt;
                 allocation.PostedByUserId = postedBy;
             }
             else if (string.Equals(result.Status, AllocationStatusFailed, StringComparison.OrdinalIgnoreCase))
             {
                 allocation.Status = AllocationStatusFailed;
                 allocation.IsTransferred = false;
+                allocation.TransferredAt = null;
+                allocation.PostedByUserId = null;
             }
             else
             {
                 allocation.Status = AllocationStatusUnresolved;
                 allocation.IsTransferred = false;
+                allocation.TransferredAt = null;
+                allocation.PostedByUserId = null;
+                hasUnresolved = true;
             }
+        }
+
+        foreach (var entry in batch.SalaryCycle.Entries)
+            RefreshEntryStatusFromAllocations(entry);
+
+        if (hasUnresolved)
+        {
+            batch.OverallStatus = AllocationStatusUnresolved;
+            return true;
         }
 
         var failedTotal = allocations
             .Where(a => string.Equals(a.Status, AllocationStatusFailed, StringComparison.OrdinalIgnoreCase))
             .Sum(a => a.Amount);
 
-        if (failedTotal > 0m)
-            await ReverseWalletAmountAsync(batch, cycle, shadowAccount, failedTotal, $"Wallet salary reversal {channel.ToUpperInvariant()}");
+        if (reverseWhenFinal &&
+            failedTotal > 0m &&
+            string.Equals(batch.ReversalStatus, "not_required", StringComparison.OrdinalIgnoreCase))
+        {
+            await ReverseWalletAmountAsync(batch, batch.SalaryCycle, batch.ShadowAccount, failedTotal, $"Wallet salary reversal {batch.WalletChannel.ToUpperInvariant()}");
+        }
+
+        batch.ReconciliationStatus = batch.AttemptCount > 0
+            ? ReconciliationStatusResolved
+            : ReconciliationStatusNotRequired;
+        batch.ResolvedAt = batch.AttemptCount > 0 ? DateTime.UtcNow : null;
+        batch.NextAttemptAt = null;
+        batch.LockedBy = null;
+        batch.LockedUntil = null;
+
+        var successTotal = batch.SalaryCycle.Entries
+            .SelectMany(e => e.Allocations)
+            .Where(a => a.IsTransferred)
+            .Sum(a => a.Amount);
+
+        if (successTotal > 0m)
+        {
+            batch.SalaryCycle.TotalAmount = Math.Round(successTotal, CurrencyDecimals(batch.SalaryCycle.Currency));
+            batch.SalaryCycle.PostedAt ??= DateTime.UtcNow;
+            batch.SalaryCycle.PostedByUserId ??= postedBy;
+        }
+
+        await CloseManualReviewIfAnyAsync(batch, "Resolved by automatic reconciliation.");
+        return false;
+    }
+
+    private async Task CloseManualReviewIfAnyAsync(SalaryWalletBatch batch, string note)
+    {
+        var review = await _db.SalaryWalletManualReviews
+            .FirstOrDefaultAsync(r => r.SalaryWalletBatchId == batch.Id && r.Status == "open");
+        if (review == null)
+            return;
+
+        review.Status = "resolved";
+        review.ResolvedAt = DateTime.UtcNow;
+        review.ResolutionNote = note;
+        review.AttemptCount = batch.AttemptCount;
+        review.LastAttemptAt = batch.LastAttemptAt;
+        review.LastErrorMessage = batch.LastErrorMessage;
+        review.ProviderResponseJson = batch.ProviderResponseJson;
+    }
+
+    private async Task EnsureManualReviewAsync(
+        SalaryWalletBatch batch,
+        List<SalaryEntryAllocation> allocations,
+        string reasonCode,
+        string reasonMessage)
+    {
+        var unresolvedAmount = allocations
+            .Where(a => string.Equals(a.Status, AllocationStatusUnresolved, StringComparison.OrdinalIgnoreCase))
+            .Sum(a => a.Amount);
+        if (unresolvedAmount <= 0m)
+            unresolvedAmount = allocations.Sum(a => a.Amount);
+
+        var review = await _db.SalaryWalletManualReviews
+            .FirstOrDefaultAsync(r => r.SalaryWalletBatchId == batch.Id && r.Status == "open");
+
+        if (review == null)
+        {
+            review = new SalaryWalletManualReview
+            {
+                SalaryWalletBatchId = batch.Id,
+                SalaryCycleId = batch.SalaryCycleId,
+                WalletChannel = batch.WalletChannel,
+                BatchReference = batch.BatchReference,
+                CoreReferenceId = batch.CoreReferenceId,
+                ShadowAccount = batch.ShadowAccount,
+                Status = "open"
+            };
+            _db.SalaryWalletManualReviews.Add(review);
+        }
+
+        review.RequestedAmount = batch.RequestedTotalAmount;
+        review.UnresolvedAmount = unresolvedAmount;
+        review.ReasonCode = reasonCode;
+        review.ReasonMessage = reasonMessage;
+        review.AttemptCount = batch.AttemptCount;
+        review.LastAttemptAt = batch.LastAttemptAt;
+        review.LastErrorMessage = batch.LastErrorMessage;
+        review.ProviderRequestJson = batch.ProviderRequestJson;
+        review.ProviderResponseJson = batch.ProviderResponseJson;
+    }
+
+    private async Task MarkReconciliationUnknownAsync(
+        SalaryWalletBatch batch,
+        List<SalaryEntryAllocation> allocations,
+        string code,
+        string reason)
+    {
+        batch.LastErrorMessage = reason;
+        batch.ProviderErrorMessage = reason;
+        batch.LockedBy = null;
+        batch.LockedUntil = null;
+
+        if (batch.AttemptCount >= batch.MaxAttempts)
+        {
+            batch.ReconciliationStatus = ReconciliationStatusManualRequired;
+            batch.NextAttemptAt = null;
+            await EnsureManualReviewAsync(batch, allocations, code, reason);
+            return;
+        }
+
+        batch.ReconciliationStatus = ReconciliationStatusPending;
+        batch.NextAttemptAt = DateTime.UtcNow.AddSeconds(RetryDelaySecondsFor(batch.WalletChannel));
+    }
+
+    public async Task<int> ReconcilePendingWalletBatchesAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var batches = await _db.SalaryWalletBatches
+            .Include(b => b.SalaryCycle).ThenInclude(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(b => b.SalaryCycle).ThenInclude(c => c.Entries).ThenInclude(e => e.Allocations)
+            .Where(b =>
+                (b.ReconciliationStatus == ReconciliationStatusPending ||
+                 (b.ReconciliationStatus == ReconciliationStatusProcessing && b.LockedUntil != null && b.LockedUntil <= now)) &&
+                (b.NextAttemptAt == null || b.NextAttemptAt <= now))
+            .OrderBy(b => b.NextAttemptAt)
+            .ThenBy(b => b.CreatedAt)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        var processed = 0;
+        foreach (var batch in batches)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            batch.ReconciliationStatus = ReconciliationStatusProcessing;
+            batch.LockedBy = Environment.MachineName;
+            batch.LockedUntil = DateTime.UtcNow.AddMinutes(Math.Max(1, _reconciliationOptions.LockMinutes));
+            await _db.SaveChangesAsync(cancellationToken);
+
+            await ReconcileWalletBatchAsync(batch, cancellationToken);
+            processed++;
+        }
+
+        return processed;
+    }
+
+    private async Task ReconcileWalletBatchAsync(SalaryWalletBatch batch, CancellationToken cancellationToken)
+    {
+        var allocations = GetBatchAllocations(batch);
+        var request = TryReadWalletTransferRequest(batch) ??
+            BuildWalletTransferRequest(batch.SalaryCycle, batch.WalletChannel, batch.BatchReference, batch.CoreReferenceId, allocations);
+
+        batch.ProviderRequestJson ??= JsonSerializer.Serialize(request, ProviderJsonOptions);
+        batch.AttemptCount += 1;
+        batch.MaxAttempts = batch.MaxAttempts <= 0 ? MaxAttemptsFor(batch.WalletChannel) : batch.MaxAttempts;
+        batch.LastAttemptAt = DateTime.UtcNow;
+
+        var mode = string.IsNullOrWhiteSpace(batch.ReconciliationMode)
+            ? ReconciliationModeFor(batch.WalletChannel)
+            : batch.ReconciliationMode;
+        var attemptType = string.Equals(mode, ReconciliationModeStatusApiFirst, StringComparison.OrdinalIgnoreCase)
+            ? "status_check"
+            : "payment_retry";
+
+        var attempt = new SalaryWalletBatchAttempt
+        {
+            SalaryWalletBatchId = batch.Id,
+            AttemptNumber = batch.AttemptCount,
+            AttemptType = attemptType,
+            StartedAt = DateTime.UtcNow,
+            RequestJson = attemptType == "status_check"
+                ? JsonSerializer.Serialize(BuildWalletStatusRequest(request), ProviderJsonOptions)
+                : JsonSerializer.Serialize(request, ProviderJsonOptions)
+        };
+        _db.SalaryWalletBatchAttempts.Add(attempt);
+
+        try
+        {
+            WalletSalaryTransferResponseDto response;
+            if (attemptType == "status_check")
+            {
+                response = await _walletProvider.CheckSalaryWalletBatchStatusAsync(BuildWalletStatusRequest(request), cancellationToken);
+            }
+            else
+            {
+                response = await _walletProvider.PostSalaryWalletBatchAsync(request, cancellationToken);
+            }
+
+            attempt.ResponseJson = JsonSerializer.Serialize(response, ProviderJsonOptions);
+            attempt.CompletedAt = DateTime.UtcNow;
+
+            var stillUnresolved = await ApplyWalletProviderResponseAsync(
+                batch,
+                allocations,
+                response,
+                batch.PostedByUserId ?? batch.SalaryCycle.PostedByUserId ?? batch.SalaryCycle.CreatedByUserId,
+                reverseWhenFinal: true);
+
+            if (stillUnresolved)
+            {
+                attempt.ResultStatus = AllocationStatusUnresolved;
+                ScheduleWalletBatchReconciliation(batch, allocations, "PROVIDER_RETRY_UNRESOLVED", "Wallet provider retry did not return final statuses for all allocations.");
+                await MarkReconciliationUnknownAsync(batch, allocations, "PROVIDER_RETRY_UNRESOLVED", "Wallet provider retry did not return final statuses for all allocations.");
+            }
+            else
+            {
+                attempt.ResultStatus = ReconciliationStatusResolved;
+            }
+        }
+        catch (Exception ex)
+        {
+            attempt.ErrorMessage = ex.Message;
+            attempt.CompletedAt = DateTime.UtcNow;
+            attempt.ResultStatus = AllocationStatusUnresolved;
+            await MarkReconciliationUnknownAsync(batch, allocations, "PROVIDER_RETRY_EXCEPTION", ex.Message);
+        }
+
+        foreach (var entry in batch.SalaryCycle.Entries)
+            RefreshEntryStatusFromAllocations(entry);
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task PostWalletBatchAsync(
+        SalaryCycle cycle,
+        string channel,
+        List<SalaryEntryAllocation> allocations,
+        string coreReferenceId,
+        int postedBy)
+    {
+        if (allocations.Count == 0)
+            return;
+
+        var shadowAccount = WalletShadowAccount(channel);
+        var batchReference = $"SAL-{cycle.Id}-{channel.ToUpperInvariant()}-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
+        var request = BuildWalletTransferRequest(cycle, channel, batchReference, coreReferenceId, allocations);
+
+        var batch = new SalaryWalletBatch
+        {
+            SalaryCycleId = cycle.Id,
+            SalaryCycle = cycle,
+            PostedByUserId = postedBy,
+            WalletChannel = channel,
+            ShadowAccount = shadowAccount,
+            BatchReference = batchReference,
+            CoreReferenceId = coreReferenceId,
+            RequestedTotalAmount = request.RequestedTotalAmount,
+            OverallStatus = "pending",
+            ReversalStatus = "not_required",
+            ReconciliationStatus = ReconciliationStatusNotRequired,
+            ReconciliationMode = ReconciliationModeFor(channel),
+            MaxAttempts = MaxAttemptsFor(channel),
+            ProviderRequestJson = JsonSerializer.Serialize(request, ProviderJsonOptions)
+        };
+        cycle.WalletBatches.Add(batch);
+
+        WalletSalaryTransferResponseDto response;
+        try
+        {
+            response = await _walletProvider.PostSalaryWalletBatchAsync(request);
+        }
+        catch (Exception ex)
+        {
+            foreach (var allocation in allocations)
+            {
+                allocation.Status = AllocationStatusUnresolved;
+                allocation.TransferResultCode = "PROVIDER_NO_RESPONSE";
+                allocation.TransferResultReason = "Wallet provider did not return a usable response.";
+            }
+            ScheduleWalletBatchReconciliation(batch, allocations, "PROVIDER_NO_RESPONSE", ex.Message);
+            return;
+        }
+
+        var stillUnresolved = await ApplyWalletProviderResponseAsync(
+            batch,
+            allocations,
+            response,
+            postedBy,
+            reverseWhenFinal: true);
+
+        if (stillUnresolved)
+            ScheduleWalletBatchReconciliation(batch, allocations, "PROVIDER_RESULT_UNRESOLVED", "Wallet provider response did not return final statuses for all allocations.");
     }
 
     private async Task MarkWalletFundingFailureAsync(
@@ -1198,6 +1576,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var batch = new SalaryWalletBatch
         {
             SalaryCycleId = cycle.Id,
+            SalaryCycle = cycle,
             WalletChannel = channel,
             ShadowAccount = WalletShadowAccount(channel),
             BatchReference = $"SAL-{cycle.Id}-{channel.ToUpperInvariant()}-FUNDING-FAILED-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}",

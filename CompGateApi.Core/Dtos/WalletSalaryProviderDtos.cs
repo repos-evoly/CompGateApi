@@ -34,6 +34,27 @@ public class WalletSalaryTransferResponseDto
     public string TraceId { get; set; } = string.Empty;
 }
 
+public class WalletSalaryStatusRequestDto
+{
+    public string BatchReference { get; set; } = string.Empty;
+    public string CoreReferenceId { get; set; } = string.Empty;
+    public string WalletChannel { get; set; } = string.Empty;
+    public string Currency { get; set; } = "LYD";
+    public List<WalletSalaryStatusItemDto> Items { get; set; } = new();
+}
+
+public class WalletSalaryStatusItemDto
+{
+    public string ClientReference { get; set; } = string.Empty;
+    public int SalaryCycleId { get; set; }
+    public int SalaryEntryId { get; set; }
+    public int EmployeeId { get; set; }
+}
+
+public class WalletSalaryStatusResponseDto : WalletSalaryTransferResponseDto
+{
+}
+
 public class WalletSalaryTransferResultDto
 {
     public string ClientReference { get; set; } = string.Empty;
