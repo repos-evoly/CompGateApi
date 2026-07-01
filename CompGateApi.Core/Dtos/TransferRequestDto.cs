@@ -21,6 +21,7 @@ namespace CompGateApi.Core.Dtos
 
         public string FromAccount { get; set; } = string.Empty;
         public string ToAccount { get; set; } = string.Empty;
+        public string? ToCompanyName { get; set; }
         public decimal Amount { get; set; }
         public int EconomicSectorId { get; set; }
         public string EconomicSectorName { get; set; } = string.Empty;

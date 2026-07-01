@@ -109,6 +109,35 @@ namespace CompGateApi.Endpoints
             var total = await repo.GetCountByCompanyAsync(me.CompanyId.Value, searchTerm);
             var list = await repo.GetAllByCompanyAsync(me.CompanyId.Value, searchTerm, page, limit);
             var dtos = list.Select(r => mapper.Map<TransferRequestDto>(r)).ToList();
+            var toCompanyNames = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var toAccount in list
+                .Select(t => t.ToAccount?.Trim())
+                .Where(a => !string.IsNullOrWhiteSpace(a) && (a.Length == 6 || a.Length == 13))
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var accounts = await repo.GetAccountsAsync(toAccount!);
+                    toCompanyNames[toAccount!] = accounts
+                        .FirstOrDefault(a => string.Equals(a.AccountString, toAccount, StringComparison.OrdinalIgnoreCase))
+                        ?.CompanyName;
+                }
+                catch
+                {
+                    toCompanyNames[toAccount!] = null;
+                }
+            }
+
+            foreach (var dto in dtos)
+            {
+                var toAccount = dto.ToAccount?.Trim();
+                if (!string.IsNullOrWhiteSpace(toAccount) &&
+                    toCompanyNames.TryGetValue(toAccount, out var companyName))
+                {
+                    dto.ToCompanyName = companyName;
+                }
+            }
 
             return Results.Ok(new PagedResult<TransferRequestDto>
             {
