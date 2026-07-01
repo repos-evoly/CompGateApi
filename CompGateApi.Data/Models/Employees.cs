@@ -14,10 +14,10 @@ public class Employee
     public string Name { get; set; } = null!;
 
     [MaxLength(100)]
-    public string Email { get; set; } = null!;
+    public string? Email { get; set; }
 
     [MaxLength(20)]
-    public string Phone { get; set; } = null!;
+    public string? Phone { get; set; }
 
     [Column(TypeName = "decimal(18,3)")]
     public decimal Salary { get; set; }
@@ -38,6 +38,7 @@ public class Employee
 
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
+    public bool IsDeleted { get; set; } = false;
 
     public ICollection<SalaryEntry> SalaryEntries { get; set; } = new List<SalaryEntry>();
 }

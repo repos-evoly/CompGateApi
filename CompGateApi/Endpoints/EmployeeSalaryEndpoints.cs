@@ -22,6 +22,10 @@ namespace CompGateApi.Endpoints
 
             group.MapGet("/", GetAllEmployees);
             group.MapPost("/", CreateEmployee);
+            group.MapPost("/upload", ImportEmployeesFromExcel)
+                .Accepts<IFormFile>("multipart/form-data")
+                .Produces<EmployeeExcelImportResultDto>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest);
             group.MapPut("/{id:int}", UpdateEmployee);
             group.MapPost("/{id:int}/update", UpdateEmployee); // POST alias
             group.MapDelete("/{id:int}", DeleteEmployee);
@@ -95,6 +99,48 @@ namespace CompGateApi.Endpoints
 
             var employee = await repo.CreateEmployeeAsync(user.CompanyId.Value, dto);
             return Results.Ok(employee);
+        }
+
+        public static async Task<IResult> ImportEmployeesFromExcel(
+            HttpRequest request,
+            HttpContext ctx,
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromServices] IUserRepository userRepo,
+            [FromServices] ILogger<EmployeeSalaryEndpoints> log)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+
+            try
+            {
+                if (!request.HasFormContentType)
+                    return Results.BadRequest(new { error = "Request must be multipart/form-data." });
+
+                var form = await request.ReadFormAsync();
+                var file = form.Files.GetFile("files") ?? form.Files.FirstOrDefault();
+
+                if (file == null || file.Length == 0)
+                    return Results.BadRequest(new { error = "Please upload a non-empty .xlsx file." });
+
+                var extension = Path.GetExtension(file.FileName);
+                if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest(new { error = "Only .xlsx files are supported." });
+
+                await using var stream = file.OpenReadStream();
+                var result = await repo.ImportEmployeesFromExcelAsync(user.CompanyId.Value, stream);
+                return Results.Ok(result);
+            }
+            catch (InvalidDataException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Unhandled error while importing employee excel for company {CompanyId}", user.CompanyId.Value);
+                return Results.StatusCode(StatusCodes.Status500InternalServerError);
+            }
         }
 
         public static async Task<IResult> UpdateEmployee(
@@ -385,10 +431,17 @@ namespace CompGateApi.Endpoints
             if (existing.PostedAt != null)
                 return Results.BadRequest(new { error = "Salary cycle is already posted and cannot be edited.", cycleId = id });
 
-            var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
-            if (saved == null)
-                return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
-            return Results.Ok(saved);
+            try
+            {
+                var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
+                if (saved == null)
+                    return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
+                return Results.Ok(saved);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message, cycleId = id });
+            }
         }
 
 

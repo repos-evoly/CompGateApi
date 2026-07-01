@@ -1,6 +1,7 @@
 ﻿// CompGateApi.Infrastructure/Repositories/EmployeeSalaryRepository.cs
 using System.Net.Http.Json;
 using AutoMapper;
+using ClosedXML.Excel;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
@@ -38,11 +39,14 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<PagedResult<EmployeeDto>> GetAllEmployeesAsync(int companyId, string? searchTerm, int page, int limit)
     {
-        var query = _db.Employees.Where(e => e.CompanyId == companyId);
+        var query = _db.Employees.Where(e => e.CompanyId == companyId && !e.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            query = query.Where(e => e.Name.Contains(searchTerm) || e.Email.Contains(searchTerm));
+            query = query.Where(e =>
+                e.Name.Contains(searchTerm) ||
+                (e.Email != null && e.Email.Contains(searchTerm)) ||
+                (e.Phone != null && e.Phone.Contains(searchTerm)));
         }
 
         var total = await query.CountAsync();
@@ -65,7 +69,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
                 SendSalary = e.SendSalary,
-                CanPost = e.CanPost
+                CanPost = e.CanPost,
+                IsDeleted = e.IsDeleted
             }).ToList()
         };
     }
@@ -76,8 +81,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         {
             CompanyId = companyId,
             Name = dto.Name,
-            Email = dto.Email,
-            Phone = dto.Phone,
+            Email = NormalizeOptionalText(dto.Email),
+            Phone = NormalizeOptionalText(dto.Phone),
             Salary = dto.Salary,
             Date = dto.Date,
             AccountNumber = dto.AccountNumber,
@@ -85,7 +90,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             EvoWallet = dto.EvoWallet,
             BcdWallet = dto.BcdWallet,
             SendSalary = dto.SendSalary,
-            CanPost = dto.CanPost
+            CanPost = dto.CanPost,
+            IsDeleted = false
         };
 
         _db.Employees.Add(e);
@@ -104,18 +110,19 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             EvoWallet = e.EvoWallet,
             BcdWallet = e.BcdWallet,
             SendSalary = e.SendSalary,
-            CanPost = e.CanPost
+            CanPost = e.CanPost,
+            IsDeleted = e.IsDeleted
         };
     }
 
     public async Task<EmployeeDto?> UpdateEmployeeAsync(int companyId, int id, EmployeeCreateDto dto)
     {
-        var e = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId);
+        var e = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId && !x.IsDeleted);
         if (e == null) return null;
 
         e.Name = dto.Name;
-        e.Email = dto.Email;
-        e.Phone = dto.Phone;
+        e.Email = NormalizeOptionalText(dto.Email);
+        e.Phone = NormalizeOptionalText(dto.Phone);
         e.Salary = dto.Salary;
         e.Date = dto.Date;
         e.AccountNumber = dto.AccountNumber;
@@ -140,7 +147,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             EvoWallet = e.EvoWallet,
             BcdWallet = e.BcdWallet,
             SendSalary = e.SendSalary,
-            CanPost = e.CanPost
+            CanPost = e.CanPost,
+            IsDeleted = e.IsDeleted
         };
     }
 
@@ -157,7 +165,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     public async Task<bool> BatchUpdateAsync(int companyId, List<EmployeeDto> updates)
     {
         var ids = updates.Select(e => e.Id).ToList();
-        var employees = await _db.Employees.Where(e => e.CompanyId == companyId && ids.Contains(e.Id)).ToListAsync();
+        var employees = await _db.Employees.Where(e => e.CompanyId == companyId && !e.IsDeleted && ids.Contains(e.Id)).ToListAsync();
 
         foreach (var e in employees)
         {
@@ -170,23 +178,211 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         return true;
     }
 
+    public async Task<EmployeeExcelImportResultDto> ImportEmployeesFromExcelAsync(int companyId, Stream excelStream)
+    {
+        var result = new EmployeeExcelImportResultDto();
+
+        if (excelStream == null || !excelStream.CanRead)
+            throw new InvalidDataException("Invalid Excel file stream.");
+
+        using var workbook = new XLWorkbook(excelStream);
+        var worksheet = workbook.Worksheets.FirstOrDefault();
+        if (worksheet == null)
+            throw new InvalidDataException("The uploaded file does not contain any worksheet.");
+
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        if (lastRow == 0)
+            return result;
+
+        var now = DateTime.UtcNow;
+        var existingEmployees = await _db.Employees
+            .Where(e => e.CompanyId == companyId)
+            .ToListAsync();
+
+        var byAccount = existingEmployees
+            .Where(e => !string.IsNullOrWhiteSpace(e.AccountNumber))
+            .ToDictionary(e => NormalizeImportedAccount(e.AccountNumber), StringComparer.OrdinalIgnoreCase);
+
+        var seenAccountsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var accountsPresentInExcel = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var firstRow = LooksLikeHeaderRow(worksheet.Row(1)) ? 2 : 1;
+
+        for (var rowNumber = firstRow; rowNumber <= lastRow; rowNumber++)
+        {
+            var row = worksheet.Row(rowNumber);
+
+            var name = row.Cell(1).GetString().Trim();
+            var account = NormalizeImportedAccount(row.Cell(2).GetFormattedString());
+            var salaryText = row.Cell(3).GetFormattedString().Trim();
+
+            var rowIsCompletelyEmpty =
+                string.IsNullOrWhiteSpace(name) &&
+                string.IsNullOrWhiteSpace(account) &&
+                string.IsNullOrWhiteSpace(salaryText);
+
+            if (rowIsCompletelyEmpty)
+                continue;
+
+            result.TotalRows++;
+
+            if (string.IsNullOrWhiteSpace(account))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Account number (Column B) is required." });
+                continue;
+            }
+
+            if (!account.All(char.IsDigit) || account.Length != 13)
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Account number (Column B) must be exactly 13 digits." });
+                continue;
+            }
+
+            accountsPresentInExcel.Add(account);
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Name (Column A) is required." });
+                continue;
+            }
+
+            if (!TryParseSalary(row.Cell(3), out var salary))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) is invalid." });
+                continue;
+            }
+
+            if (salary < 0)
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) cannot be negative." });
+                continue;
+            }
+
+            if (!seenAccountsInFile.Add(account))
+            {
+                result.SkippedCount++;
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Duplicate account number found in uploaded file." });
+                continue;
+            }
+
+            var cleanedName = name.Length > 100 ? name[..100] : name;
+            var roundedSalary = Math.Round(salary, 3);
+
+            if (byAccount.TryGetValue(account, out var existing))
+            {
+                existing.Name = cleanedName;
+                existing.Salary = roundedSalary;
+                existing.Date = now;
+                existing.AccountType = "account";
+                existing.SendSalary = true;
+                existing.CanPost = true;
+                existing.IsDeleted = false;
+                result.UpdatedCount++;
+                continue;
+            }
+
+            var created = new Employee
+            {
+                CompanyId = companyId,
+                Name = cleanedName,
+                Email = null,
+                Phone = null,
+                Salary = roundedSalary,
+                Date = now,
+                AccountNumber = account,
+                AccountType = "account",
+                SendSalary = true,
+                CanPost = true,
+                IsDeleted = false
+            };
+
+            _db.Employees.Add(created);
+            byAccount[account] = created;
+            result.CreatedCount++;
+        }
+
+        foreach (var existing in existingEmployees)
+        {
+            var existingAccount = NormalizeImportedAccount(existing.AccountNumber);
+            if (string.IsNullOrWhiteSpace(existingAccount))
+                continue;
+
+            if (!accountsPresentInExcel.Contains(existingAccount) && !existing.IsDeleted)
+            {
+                existing.IsDeleted = true;
+                result.DeletedCount++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return result;
+    }
+
+    private static bool LooksLikeHeaderRow(IXLRow row)
+    {
+        var colA = row.Cell(1).GetString().Trim().ToLowerInvariant();
+        var colB = row.Cell(2).GetString().Trim().ToLowerInvariant();
+        var colC = row.Cell(3).GetString().Trim().ToLowerInvariant();
+
+        return (colA == "name" || colA.Contains("employee"))
+            && colB.Contains("account")
+            && colC.Contains("salary");
+    }
+
+    private static bool TryParseSalary(IXLCell salaryCell, out decimal salary)
+    {
+        if (salaryCell.TryGetValue<decimal>(out salary))
+            return true;
+
+        var raw = salaryCell.GetFormattedString().Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        raw = raw.Replace(",", "");
+        return decimal.TryParse(
+            raw,
+            System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out salary);
+    }
+
+    private static string NormalizeImportedAccount(string rawAccount)
+    {
+        if (string.IsNullOrWhiteSpace(rawAccount))
+            return string.Empty;
+
+        var normalized = rawAccount.Trim().Replace(" ", "");
+        if (normalized.EndsWith(".0", StringComparison.Ordinal))
+            normalized = normalized[..^2];
+        return normalized;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
     public async Task<PagedResult<SalaryCycleDto>> GetSalaryCyclesAsync(int companyId, int page, int limit)
     {
+        if (page < 1) page = 1;
+        if (limit < 1) limit = 50;
+        if (limit > 100) limit = 100;
+
         var query = _db.SalaryCycles
             .Where(s => s.CompanyId == companyId)
-            .OrderByDescending(s => s.CreatedAt)
-            .Include(s => s.Entries).ThenInclude(e => e.Employee);
+            .AsNoTracking();
 
         var total = await query.CountAsync();
-        var list = await query.Skip((page - 1) * limit).Take(limit).ToListAsync();
-
-        return new PagedResult<SalaryCycleDto>
-        {
-            Page = page,
-            Limit = limit,
-            TotalRecords = total,
-            TotalPages = (int)Math.Ceiling(total / (double)limit),
-            Data = list.Select(s => new SalaryCycleDto
+        var list = await query
+            .OrderByDescending(s => s.CreatedAt)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .Select(s => new SalaryCycleDto
             {
                 Id = s.Id,
                 SalaryMonth = s.SalaryMonth,
@@ -199,29 +395,17 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 PostedByUserId = s.PostedByUserId,
                 TotalAmount = s.TotalAmount,
                 BankReference = s.BankReference,
-                BankResponseRaw = s.BankResponseRaw,
-                BankBatchHistoryJson = s.BankBatchHistoryJson,
-                Entries = s.Entries.Select(e => new SalaryEntryDto
-                {
-                    Id = e.Id,
-                    EmployeeId = e.EmployeeId,
-                    Name = e.Employee.Name,
-                    Email = e.Employee.Email,
-                    Phone = e.Employee.Phone,
-                    Salary = e.Amount,
-                    Date = e.Employee.Date,
-                    AccountNumber = e.Employee.AccountNumber,
-                    AccountType = e.Employee.AccountType,
-                    SendSalary = e.Employee.SendSalary,
-                    CanPost = e.Employee.CanPost,
+                EntryCount = s.Entries.Count()
+            })
+            .ToListAsync();
 
-                    /* payroll-specific */
-                    IsTransferred = e.IsTransferred,
-                    TransferResultCode = e.TransferResultCode,
-                    TransferResultReason = e.TransferResultReason,
-                    TransferredAt = e.TransferredAt
-                }).ToList()
-            }).ToList()
+        return new PagedResult<SalaryCycleDto>
+        {
+            Page = page,
+            Limit = limit,
+            TotalRecords = total,
+            TotalPages = (int)Math.Ceiling(total / (double)limit),
+            Data = list
         };
     }
 
@@ -234,13 +418,21 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         {
             // fetch only those employees and keep the order from dto
             var empIds = dto.Entries.Select(e => e.EmployeeId).ToList();
+            var requestedEmployeeIds = empIds.Distinct().ToList();
             var empMap = await _db.Employees
                                  .Where(e => e.CompanyId == companyId &&
-                                             empIds.Contains(e.Id))
+                                             !e.IsDeleted &&
+                                             requestedEmployeeIds.Contains(e.Id))
                                  .ToDictionaryAsync(e => e.Id);
 
+            var missingEmployeeIds = requestedEmployeeIds
+                .Where(id => !empMap.ContainsKey(id))
+                .OrderBy(x => x)
+                .ToList();
+            if (missingEmployeeIds.Count > 0)
+                throw new InvalidOperationException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
+
             list = dto.Entries
-                     .Where(e => empMap.ContainsKey(e.EmployeeId))
                      .Select(e => (empMap[e.EmployeeId], e.Salary))
                      .ToList();
         }
@@ -248,7 +440,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         else
         {
             var employees = await _db.Employees
-                 .Where(e => e.CompanyId == companyId && e.SendSalary)
+                 .Where(e => e.CompanyId == companyId && e.SendSalary && !e.IsDeleted)
                  .ToListAsync();
 
             list = employees.Select(e => (e, e.Salary)).ToList();
@@ -307,12 +499,13 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         // 3) Eligible entries (account + 13 digits)
         var eligibleEntries = cycle.Entries
             .Where(e => e.Employee != null
+                        && !e.Employee.IsDeleted
                         && e.Employee.AccountType.Equals("account", StringComparison.OrdinalIgnoreCase)
                         && !string.IsNullOrWhiteSpace(e.Employee.AccountNumber)
                         && e.Employee.AccountNumber!.Length == 13)
             .ToList();
         if (eligibleEntries.Count == 0)
-            throw new PayrollException("No eligible employees (13-digit account numbers of type 'account') found.");
+            throw new PayrollException("No eligible active employees (13-digit account numbers of type 'account') found.");
 
         // 4) Load fixed fee pricing (TrxCatId = 17, Unit = 1)
         const int TRXCAT_SALARY_FIXED_FEE = 17;
@@ -608,7 +801,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     {
         var e = await _db.Employees
                          .AsNoTracking()
-                         .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.Id == employeeId);
+                         .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.Id == employeeId && !x.IsDeleted);
 
         return e == null
             ? null
@@ -623,53 +816,51 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
                 SendSalary = e.SendSalary,
-                CanPost = e.CanPost
+                CanPost = e.CanPost,
+                IsDeleted = e.IsDeleted
             };
     }
 
     public async Task<SalaryCycleDto?> GetSalaryCycleAsync(int companyId, int cycleId)
     {
-        var s = await _db.SalaryCycles
-                         .Include(c => c.Entries).ThenInclude(en => en.Employee)
-                         .AsNoTracking()
-                         .FirstOrDefaultAsync(c => c.CompanyId == companyId && c.Id == cycleId);
-
-        return s == null ? null : new SalaryCycleDto
-        {
-            Id = s.Id,
-            SalaryMonth = s.SalaryMonth,
-            AdditionalMonth = s.AdditionalMonth,
-            DebitAccount = s.DebitAccount,
-            Currency = s.Currency,
-            CreatedAt = s.CreatedAt,
-            PostedAt = s.PostedAt,
-            CreatedByUserId = s.CreatedByUserId,
-            PostedByUserId = s.PostedByUserId,
-            TotalAmount = s.TotalAmount,
-            BankReference = s.BankReference,
-            BankResponseRaw = s.BankResponseRaw,
-            BankBatchHistoryJson = s.BankBatchHistoryJson,
-            Entries = s.Entries.Select(en => new SalaryEntryDto
+        return await _db.SalaryCycles
+            .AsNoTracking()
+            .Where(c => c.CompanyId == companyId && c.Id == cycleId)
+            .Select(s => new SalaryCycleDto
             {
-                Id = en.Id,
-                EmployeeId = en.EmployeeId,
-                /* identical employee fields */
-                Name = en.Employee.Name,
-                Email = en.Employee.Email,
-                Phone = en.Employee.Phone,
-                Salary = en.Amount,
-                Date = en.Employee.Date,
-                AccountNumber = en.Employee.AccountNumber,
-                AccountType = en.Employee.AccountType,
-                SendSalary = en.Employee.SendSalary,
-                CanPost = en.Employee.CanPost,
-                /* payroll-specific */
-                IsTransferred = en.IsTransferred,
-                TransferResultCode = en.TransferResultCode,
-                TransferResultReason = en.TransferResultReason,
-                TransferredAt = en.TransferredAt
-            }).ToList()
-        };
+                Id = s.Id,
+                SalaryMonth = s.SalaryMonth,
+                AdditionalMonth = s.AdditionalMonth,
+                DebitAccount = s.DebitAccount,
+                Currency = s.Currency,
+                CreatedAt = s.CreatedAt,
+                PostedAt = s.PostedAt,
+                CreatedByUserId = s.CreatedByUserId,
+                PostedByUserId = s.PostedByUserId,
+                TotalAmount = s.TotalAmount,
+                EntryCount = s.Entries.Count(),
+                BankReference = s.BankReference,
+                Entries = s.Entries.Select(en => new SalaryEntryDto
+                {
+                    Id = en.Id,
+                    EmployeeId = en.EmployeeId,
+                    Name = en.Employee.Name,
+                    Email = en.Employee.Email,
+                    Phone = en.Employee.Phone,
+                    Salary = en.Amount,
+                    Date = en.Employee.Date,
+                    AccountNumber = en.Employee.AccountNumber,
+                    AccountType = en.Employee.AccountType,
+                    SendSalary = en.Employee.SendSalary,
+                    CanPost = en.Employee.CanPost,
+                    IsDeleted = en.Employee.IsDeleted,
+                    IsTransferred = en.IsTransferred,
+                    TransferResultCode = en.TransferResultCode,
+                    TransferResultReason = en.TransferResultReason,
+                    TransferredAt = en.TransferredAt
+                }).ToList()
+            })
+            .FirstOrDefaultAsync();
     }
 
     public async Task<SalaryEntryDto?> GetSalaryEntryAsync(int companyId, int cycleId, int entryId)
@@ -697,6 +888,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = en.Employee.AccountType,
             SendSalary = en.Employee.SendSalary,
             CanPost = en.Employee.CanPost,
+            IsDeleted = en.Employee.IsDeleted,
             /* payroll-specific */
             IsTransferred = en.IsTransferred,
             TransferResultCode = en.TransferResultCode,
@@ -710,7 +902,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var list = await _db.SalaryEntries
             .Include(e => e.Employee)
             .Include(e => e.SalaryCycle)
-            .Where(e => e.SalaryCycle.CompanyId == companyId && e.SalaryCycleId == cycleId && !e.IsTransferred)
+            .Where(e => e.SalaryCycle.CompanyId == companyId && e.SalaryCycleId == cycleId && !e.IsTransferred && !e.Employee.IsDeleted)
             .AsNoTracking()
             .ToListAsync();
 
@@ -727,6 +919,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = en.Employee.AccountType,
             SendSalary = en.Employee.SendSalary,
             CanPost = en.Employee.CanPost,
+            IsDeleted = en.Employee.IsDeleted,
             IsTransferred = en.IsTransferred,
             TransferResultCode = en.TransferResultCode,
             TransferResultReason = en.TransferResultReason,
@@ -770,6 +963,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             AccountType = en.Employee.AccountType,
             SendSalary = en.Employee.SendSalary,
             CanPost = en.Employee.CanPost,
+            IsDeleted = en.Employee.IsDeleted,
             IsTransferred = en.IsTransferred,
             TransferResultCode = en.TransferResultCode,
             TransferResultReason = en.TransferResultReason,
@@ -811,6 +1005,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var employeeIds = new HashSet<int>((dto.EmployeeIds ?? new List<int>()));
         var toRepost = cycle.Entries
             .Where(e => !e.IsTransferred &&
+                        e.Employee != null &&
+                        !e.Employee.IsDeleted &&
                         (entryIds.Contains(e.Id) || (employeeIds.Count > 0 && employeeIds.Contains(e.EmployeeId))))
             .ToList();
         if (toRepost.Count == 0) throw new PayrollException("No failed entries to repost were provided (check entryIds/employeeIds).");
@@ -972,6 +1168,21 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var incoming = (dto.Entries ?? Enumerable.Empty<SalaryEntryUpsertDto>())
                        .ToDictionary(e => e.EmployeeId, e => e);
 
+        if (incoming.Count > 0)
+        {
+            var requestedEmployeeIds = incoming.Keys.ToList();
+            var activeEmployeeIds = await _db.Employees
+                .Where(e => e.CompanyId == companyId && !e.IsDeleted && requestedEmployeeIds.Contains(e.Id))
+                .Select(e => e.Id)
+                .ToListAsync();
+            var activeEmployeeSet = activeEmployeeIds.ToHashSet();
+            var missingEmployeeIds = requestedEmployeeIds
+                .Where(id => !activeEmployeeSet.Contains(id))
+                .OrderBy(x => x)
+                .ToList();
+            if (missingEmployeeIds.Count > 0)
+                throw new InvalidOperationException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
+        }
 
         foreach (var existing in cycle.Entries.ToList())
         {
@@ -993,7 +1204,8 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             var emp = await _db.Employees
                                .FirstOrDefaultAsync(e =>
                                    e.Id == inc.EmployeeId &&
-                                   e.CompanyId == companyId);
+                                   e.CompanyId == companyId &&
+                                   !e.IsDeleted);
             if (emp == null) continue;
 
             var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
@@ -1054,7 +1266,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             .ToList();
 
         var companyEmployeeIds = await _db.Employees
-            .Where(e => e.CompanyId == companyId && requestedEmployeeIds.Contains(e.Id))
+            .Where(e => e.CompanyId == companyId && !e.IsDeleted && requestedEmployeeIds.Contains(e.Id))
             .Select(e => e.Id)
             .ToListAsync();
 
@@ -1064,7 +1276,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             .OrderBy(x => x)
             .ToList();
         if (missingEmployeeIds.Count > 0)
-            throw new PayrollException($"Employee(s) not found for this company: {string.Join(", ", missingEmployeeIds)}.");
+            throw new PayrollException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
 
         var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
 
@@ -1281,6 +1493,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 AccountType = e.Employee.AccountType,
                 SendSalary = e.Employee.SendSalary,
                 CanPost = e.Employee.CanPost,
+                IsDeleted = e.Employee.IsDeleted,
                 IsTransferred = e.IsTransferred,
                 TransferResultCode = e.TransferResultCode,
                 TransferResultReason = e.TransferResultReason,
@@ -1293,5 +1506,3 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
 
 }
-
-

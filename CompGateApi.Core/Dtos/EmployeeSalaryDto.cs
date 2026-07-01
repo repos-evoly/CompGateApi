@@ -1,9 +1,11 @@
+using System.Text.Json.Serialization;
+
 public class EmployeeDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = null!;
-    public string Email { get; set; } = null!;
-    public string Phone { get; set; } = null!;
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
     public decimal Salary { get; set; }
     public DateTime Date { get; set; }
     public string AccountNumber { get; set; } = null!;
@@ -12,13 +14,14 @@ public class EmployeeDto
     public string? BcdWallet { get; set; }
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
+    public bool IsDeleted { get; set; }
 }
 
 public class EmployeeCreateDto
 {
     public string Name { get; set; } = null!;
-    public string Email { get; set; } = null!;
-    public string Phone { get; set; } = null!;
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
     public decimal Salary { get; set; }
     public DateTime Date { get; set; }
     public string AccountNumber { get; set; } = null!;
@@ -43,10 +46,13 @@ public class SalaryCycleDto
     public DateTime? PostedAt { get; set; }
     public int CreatedByUserId { get; set; }
     public int? PostedByUserId { get; set; }
+    public int EntryCount { get; set; }
     public List<SalaryEntryDto> Entries { get; set; } = new();
 
     public string? BankReference { get; set; }
+    [JsonIgnore]
     public string? BankResponseRaw { get; set; }
+    [JsonIgnore]
     public string? BankBatchHistoryJson { get; set; }
 }
 
@@ -67,14 +73,15 @@ public class SalaryEntryDto
 
     /* ── all the fields that EmployeeDto exposes ───────────────────── */
     public string Name { get; set; } = null!;
-    public string Email { get; set; } = null!;
-    public string Phone { get; set; } = null!;
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
     public decimal Salary { get; set; }
     public DateTime Date { get; set; }
     public string AccountNumber { get; set; } = null!;
     public string AccountType { get; set; } = null!;
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }
+    public bool IsDeleted { get; set; }
 
     /* ── payroll-specific data  ─────────────────────────────────────── */
     public bool IsTransferred { get; set; }
@@ -180,4 +187,20 @@ public class SalaryCycleAdminDetailDto
     public string? BankBatchHistoryJson { get; set; }
 
     public List<SalaryEntryDto> Entries { get; set; } = new();
+}
+
+public class EmployeeExcelImportRowErrorDto
+{
+    public int RowNumber { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public class EmployeeExcelImportResultDto
+{
+    public int TotalRows { get; set; }
+    public int CreatedCount { get; set; }
+    public int UpdatedCount { get; set; }
+    public int DeletedCount { get; set; }
+    public int SkippedCount { get; set; }
+    public List<EmployeeExcelImportRowErrorDto> Errors { get; set; } = new();
 }
