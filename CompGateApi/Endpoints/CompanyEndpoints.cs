@@ -526,8 +526,16 @@ namespace CompGateApi.Endpoints
 
             var company = await companyRepo.GetByCodeAsync(code);
             if (company == null) return Results.NotFound($"Company '{code}' not found.");
-            if (!me.IsCompanyAdmin || !string.Equals(me.CompanyCode, company.Code, StringComparison.OrdinalIgnoreCase))
-                return Results.Unauthorized();
+
+            var belongsToCompany = string.Equals(
+                me.CompanyCode,
+                company.Code,
+                StringComparison.OrdinalIgnoreCase);
+            var canAddCompanyUser = me.Permissions.Any(permission =>
+                string.Equals(permission, "companyCanAddUser", StringComparison.OrdinalIgnoreCase));
+
+            if (!belongsToCompany || (!me.IsCompanyAdmin && !canAddCompanyUser))
+                return Results.Forbid();
 
             var client = httpFactory.CreateClient("AuthApi");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
