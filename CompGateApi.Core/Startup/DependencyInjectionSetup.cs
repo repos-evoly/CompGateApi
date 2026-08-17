@@ -28,6 +28,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using CompGateApi.Core.OnePay;
 using CompGateApi.Core.LyPay;
+using CompGateApi.Core.Authentication;
+using CompGateApi.Core.Notifications;
+using Microsoft.AspNetCore.Authentication;
 
 
 
@@ -45,6 +48,7 @@ namespace CompGateApi.Core.Startup
       builder.Services.RegisterCors();
       builder.Services.RegisterSwagger();
       builder.Services.RegisterAuths(issuer, audience, jwtKey);
+      builder.Services.RegisterMobileServiceAuthentication(builder.Configuration);
       if (builder.Environment.IsDevelopment())
       {
         builder.Services.AddDbContext<CompGateApiDbContext>(opt => opt.UseSqlServer(builder.Configuration["ConnectionStrings:DevConnection"]));
@@ -73,6 +77,15 @@ namespace CompGateApi.Core.Startup
 
       builder.Services.RegisterValidators();
       builder.Services.AddSignalR();
+      builder.Services
+        .AddOptions<NotificationDeliveryOptions>()
+        .Bind(builder.Configuration.GetSection(NotificationDeliveryOptions.SectionName));
+      builder.Services.AddSingleton(TimeProvider.System);
+      builder.Services.AddScoped<CompanyNotificationService>();
+      builder.Services.AddScoped<ICompanyNotificationService>(services =>
+        services.GetRequiredService<CompanyNotificationService>());
+      builder.Services.AddScoped<INotificationEventWriter>(services =>
+        services.GetRequiredService<CompanyNotificationService>());
 
       // Optionally, add your NotificationService to DI:
 
@@ -220,6 +233,46 @@ namespace CompGateApi.Core.Startup
 
         opts.AddPolicy("AdminAccess", p =>
                   p.RequireRole("SuperAdmin", "Admin", "Support", "Auditor"));
+      });
+
+      return services;
+    }
+
+    public static IServiceCollection RegisterMobileServiceAuthentication(
+      this IServiceCollection services,
+      IConfiguration configuration)
+    {
+      services
+        .AddOptions<MobileServiceTokenOptions>()
+        .Bind(configuration.GetSection(MobileServiceTokenOptions.SectionName));
+      services.AddSingleton<IMobileServiceTokenValidator, MobileServiceTokenValidator>();
+
+      services.AddAuthentication()
+        .AddScheme<AuthenticationSchemeOptions, MobileServiceAuthenticationHandler>(
+          MobileServiceAuthenticationDefaults.Scheme,
+          _ => { });
+
+      services.AddAuthorization(options =>
+      {
+        options.AddPolicy(
+          MobileServiceAuthenticationDefaults.RequireMobileBffServicePolicy,
+          policy => policy
+            .AddAuthenticationSchemes(MobileServiceAuthenticationDefaults.Scheme)
+            .RequireAuthenticatedUser()
+            .RequireClaim("token_type", "service"));
+
+        options.AddPolicy(
+          MobileServiceAuthenticationDefaults.RequireCompanyUserAndMobileBffServicePolicy,
+          policy => policy
+            .AddAuthenticationSchemes(
+              JwtBearerDefaults.AuthenticationScheme,
+              MobileServiceAuthenticationDefaults.Scheme)
+            .RequireAssertion(context =>
+              context.User.HasClaim("token_type", "service") &&
+              context.User.HasClaim(claim =>
+                (claim.Type == "nameid" ||
+                 claim.Type == System.Security.Claims.ClaimTypes.NameIdentifier) &&
+                !string.IsNullOrWhiteSpace(claim.Value))));
       });
 
       return services;

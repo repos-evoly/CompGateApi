@@ -9,7 +9,13 @@ namespace CompGateApi.Core.Startup
   public class Always200ResponseMiddleware
   {
     private readonly RequestDelegate _next;
-    private static readonly string[] _skipPrefixes = new[] { "/swagger", "/notificationHub" };
+    private static readonly string[] _skipPrefixes = new[]
+    {
+      "/swagger",
+      "/notificationHub",
+      "/api/mobile-notifications",
+      "/api/mobile-notification-deliveries"
+    };
 
     public Always200ResponseMiddleware(RequestDelegate next)
     {

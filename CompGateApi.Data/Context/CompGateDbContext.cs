@@ -21,6 +21,8 @@ namespace CompGateApi.Data.Context
               public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
               public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
               public DbSet<Settings> Settings => Set<Settings>();
+              public DbSet<Notification> Notifications => Set<Notification>();
+              public DbSet<NotificationOutbox> NotificationOutbox => Set<NotificationOutbox>();
 
               // ── MULTI-TENANT ────────────────────────────────────────────────────────
               public DbSet<Company> Companies => Set<Company>();
@@ -163,6 +165,29 @@ namespace CompGateApi.Data.Context
                             .HasForeignKey(u => u.CompanyId)
                             .OnDelete(DeleteBehavior.Restrict)
                             .IsRequired(false);
+
+                     builder.Entity<Notification>(b =>
+                     {
+                            b.HasOne(item => item.FromUser)
+                             .WithMany()
+                             .HasForeignKey(item => item.FromUserId)
+                             .OnDelete(DeleteBehavior.NoAction);
+
+                            b.HasOne(item => item.ToUser)
+                             .WithMany()
+                             .HasForeignKey(item => item.ToUserId)
+                             .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(item => item.Outbox)
+                             .WithOne(item => item.Notification)
+                             .HasForeignKey<NotificationOutbox>(item => item.NotificationId)
+                             .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     builder.Entity<NotificationOutbox>(b =>
+                     {
+                            b.Property(item => item.PayloadJson).HasColumnType("nvarchar(max)");
+                     });
 
                      // ── BENEFICIARIES ─────────────────────────────────────────────────────
                      builder.Entity<Beneficiary>(b =>
