@@ -4,6 +4,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CompGateApi.Data.Models
 {
+    public enum PaymentRail
+    {
+        Normal,
+        OnePay,
+        LyPay
+    }
+
     [Table("Beneficiaries")]
     public class Beneficiary : Auditable
     {
@@ -13,6 +20,11 @@ namespace CompGateApi.Data.Models
         [Required]
         public int CompanyId { get; set; }
         public Company Company { get; set; } = null!;
+
+        public int? CreatedByUserId { get; set; }
+        public User? CreatedByUser { get; set; }
+
+        public PaymentRail PaymentRail { get; set; } = PaymentRail.Normal;
 
         [Required]
         [MaxLength(20)]
@@ -32,6 +44,15 @@ namespace CompGateApi.Data.Models
         [MaxLength(34)]
         public string AccountNumber { get; set; } = null!;
 
+        [MaxLength(50)]
+        public string? InstitutionId { get; set; }
+
+        [MaxLength(50)]
+        public string? ProviderInstitutionReference { get; set; }
+
+        [MaxLength(200)]
+        public string? InstitutionName { get; set; }
+
         [MaxLength(100)]
         public string? Bank { get; set; } // For local
 
@@ -45,6 +66,9 @@ namespace CompGateApi.Data.Models
         public string? IntermediaryBankName { get; set; } // For international
 
         public bool IsDeleted { get; set; } = false;
+
+        [Timestamp]
+        public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     }
 }

@@ -407,3 +407,6 @@ c:\\kyc\\logs*
 
 # Ignore Attachments Folder
 KycApi/Attachments/
+
+# Accidental Windows-style log paths created on macOS
+/CompGateApi/c:*

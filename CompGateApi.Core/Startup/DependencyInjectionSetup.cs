@@ -25,6 +25,9 @@ using System.Net.Http.Headers;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using CompGateApi.Core.OnePay;
+using CompGateApi.Core.LyPay;
 
 
 
@@ -265,6 +268,36 @@ namespace CompGateApi.Core.Startup
     public static IServiceCollection RegisterRepos(this IServiceCollection services, IConfiguration config, IHostEnvironment env)
     {
       services.AddEndpointsApiExplorer();
+      services.AddMemoryCache();
+
+      services.Configure<OnePayOptions>(config.GetSection(OnePayOptions.SectionName));
+      services.Configure<OnePayReconciliationOptions>(config.GetSection(OnePayReconciliationOptions.SectionName));
+      services.AddHttpClient<IOnePayProviderClient, OnePayProviderClient>((provider, client) =>
+      {
+        var options = provider.GetRequiredService<IOptions<OnePayOptions>>().Value;
+        var baseUrl = options.BaseUrl.TrimEnd('/') + "/";
+        client.BaseAddress = new Uri(baseUrl);
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        client.DefaultRequestHeaders.Accept.Add(
+          new MediaTypeWithQualityHeaderValue("application/json"));
+      });
+      services.AddScoped<OnePayTransferService>();
+      services.AddHostedService<OnePayReconciliationWorker>();
+
+      // LY Pay is exposed by the same CBL provider and deliberately uses the
+      // same base URL, system ID and checksum credentials as OnePay.
+      services.Configure<LyPayReconciliationOptions>(config.GetSection(LyPayReconciliationOptions.SectionName));
+      services.AddHttpClient<ILyPayProviderClient, LyPayProviderClient>((provider, client) =>
+      {
+        var options = provider.GetRequiredService<IOptions<OnePayOptions>>().Value;
+        var baseUrl = options.BaseUrl.TrimEnd('/') + "/";
+        client.BaseAddress = new Uri(baseUrl);
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        client.DefaultRequestHeaders.Accept.Add(
+          new MediaTypeWithQualityHeaderValue("application/json"));
+      });
+      services.AddScoped<LyPayTransferService>();
+      services.AddHostedService<LyPayReconciliationWorker>();
 
       // Generic
       services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -419,5 +452,3 @@ namespace CompGateApi.Core.Startup
     }
   }
 }
-
-
