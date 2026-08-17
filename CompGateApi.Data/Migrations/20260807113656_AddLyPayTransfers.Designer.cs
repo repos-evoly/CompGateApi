@@ -4,6 +4,7 @@ using CompGateApi.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CompGateApi.Data.Migrations
 {
     [DbContext(typeof(CompGateApiDbContext))]
-    partial class CompGateApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260807113656_AddLyPayTransfers")]
+    partial class AddLyPayTransfers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -250,17 +253,6 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<int?>("CreatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("InstitutionId")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("InstitutionName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("IntermediaryBankName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -277,23 +269,6 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("PaymentRail")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)")
-                        .HasDefaultValue("Normal");
-
-                    b.Property<string>("ProviderInstitutionReference")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -305,16 +280,6 @@ namespace CompGateApi.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompanyId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("CompanyId", "PaymentRail", "IsDeleted")
-                        .HasDatabaseName("IX_Beneficiaries_CompanyId_PaymentRail_IsDeleted");
-
-                    b.HasIndex("CompanyId", "PaymentRail", "InstitutionId", "AccountNumber")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Beneficiaries_ActiveRailDestination")
-                        .HasFilter("[IsDeleted] = 0 AND [InstitutionId] IS NOT NULL AND [PaymentRail] IN (N'OnePay', N'LyPay')");
 
                     b.ToTable("Beneficiaries");
                 });
@@ -3022,14 +2987,7 @@ namespace CompGateApi.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("CompGateApi.Data.Models.User", "CreatedByUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Company");
-
-                    b.Navigation("CreatedByUser");
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>

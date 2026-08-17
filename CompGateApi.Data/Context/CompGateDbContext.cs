@@ -55,6 +55,10 @@ namespace CompGateApi.Data.Context
               public DbSet<SalaryCycle> SalaryCycles => Set<SalaryCycle>();
               public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
               public DbSet<Pricing> Pricings => Set<Pricing>();
+              public DbSet<OnePayTransfer> OnePayTransfers => Set<OnePayTransfer>();
+              public DbSet<OnePayValidationSession> OnePayValidationSessions => Set<OnePayValidationSession>();
+              public DbSet<LyPayTransfer> LyPayTransfers => Set<LyPayTransfer>();
+              public DbSet<LyPayValidationSession> LyPayValidationSessions => Set<LyPayValidationSession>();
 
               public DbSet<Visa> Visas => Set<Visa>();
 
@@ -159,6 +163,44 @@ namespace CompGateApi.Data.Context
                             .HasForeignKey(u => u.CompanyId)
                             .OnDelete(DeleteBehavior.Restrict)
                             .IsRequired(false);
+
+                     // ── BENEFICIARIES ─────────────────────────────────────────────────────
+                     builder.Entity<Beneficiary>(b =>
+                     {
+                            b.Property(x => x.PaymentRail)
+                             .HasConversion<string>()
+                             .HasMaxLength(20)
+                             .HasDefaultValue(PaymentRail.Normal);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+
+                            // Keep the existing FK index explicitly. The composite rail
+                            // index supplements it and should not make EF treat it as removed.
+                            b.HasIndex(x => x.CompanyId);
+
+                            b.HasIndex(x => new { x.CompanyId, x.PaymentRail, x.IsDeleted })
+                             .HasDatabaseName("IX_Beneficiaries_CompanyId_PaymentRail_IsDeleted");
+
+                            b.HasIndex(x => new
+                             {
+                                    x.CompanyId,
+                                    x.PaymentRail,
+                                    x.InstitutionId,
+                                    x.AccountNumber
+                             })
+                             .IsUnique()
+                             .HasFilter("[IsDeleted] = 0 AND [InstitutionId] IS NOT NULL AND [PaymentRail] IN (N'OnePay', N'LyPay')")
+                             .HasDatabaseName("UX_Beneficiaries_ActiveRailDestination");
+
+                            b.HasOne(x => x.Company)
+                             .WithMany()
+                             .HasForeignKey(x => x.CompanyId)
+                             .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(x => x.CreatedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.CreatedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
 
                      // ── ATTACHMENTS ─────────────────────────────────────────────────────
                      builder.Entity<Attachment>(b =>
@@ -359,6 +401,102 @@ namespace CompGateApi.Data.Context
                                      .WithMany(es => es.Transfers)
                                      .HasForeignKey(tr => tr.EconomicSectorId)
                                      .OnDelete(DeleteBehavior.Restrict); // or .SetNull if desired
+                     });
+
+                     // ── ONEPAY ─────────────────────────────────────────────────────────────
+                     builder.Entity<OnePayTransfer>(b =>
+                     {
+                            b.ToTable("OnePayTransfers");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => x.ReferenceNo).IsUnique();
+                            b.HasIndex(x => new { x.CompanyId, x.Status, x.NextStatusCheckAt });
+                            b.HasIndex(x => new { x.Status, x.NextStatusCheckAt });
+                            b.Property(x => x.Amount).HasPrecision(18, 4);
+                            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+
+                            b.HasOne(x => x.Company)
+                             .WithMany()
+                             .HasForeignKey(x => x.CompanyId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.CreatedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.CreatedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.ApprovedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.ApprovedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
+
+                     builder.Entity<OnePayValidationSession>(b =>
+                     {
+                            b.ToTable("OnePayValidationSessions");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => x.ReferenceNo).IsUnique();
+                            b.HasIndex(x => new { x.CompanyId, x.CreatedByUserId, x.ExpiresAt });
+                            b.Property(x => x.Amount).HasPrecision(18, 4);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+
+                            b.HasOne(x => x.Company)
+                             .WithMany()
+                             .HasForeignKey(x => x.CompanyId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.CreatedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.CreatedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
+
+                     // ── LY PAY ─────────────────────────────────────────────────────────────
+                     builder.Entity<LyPayTransfer>(b =>
+                     {
+                            b.ToTable("LyPayTransfers");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => x.ReferenceNo).IsUnique();
+                            b.HasIndex(x => new { x.CompanyId, x.Status, x.NextStatusCheckAt });
+                            b.HasIndex(x => new { x.Status, x.NextStatusCheckAt });
+                            b.Property(x => x.Amount).HasPrecision(18, 4);
+                            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(50);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+
+                            b.HasOne(x => x.Company)
+                             .WithMany()
+                             .HasForeignKey(x => x.CompanyId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.CreatedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.CreatedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.ApprovedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.ApprovedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
+
+                     builder.Entity<LyPayValidationSession>(b =>
+                     {
+                            b.ToTable("LyPayValidationSessions");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => x.ReferenceNo).IsUnique();
+                            b.HasIndex(x => new { x.CompanyId, x.CreatedByUserId, x.ExpiresAt });
+                            b.Property(x => x.Amount).HasPrecision(18, 4);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+
+                            b.HasOne(x => x.Company)
+                             .WithMany()
+                             .HasForeignKey(x => x.CompanyId)
+                             .OnDelete(DeleteBehavior.Restrict);
+
+                            b.HasOne(x => x.CreatedByUser)
+                             .WithMany()
+                             .HasForeignKey(x => x.CreatedByUserId)
+                             .OnDelete(DeleteBehavior.Restrict);
                      });
 
                      // ── VISA REQUESTS ─────────────────────────────────────────────────────
