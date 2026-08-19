@@ -156,6 +156,9 @@ public sealed class LyPayProviderClient : ILyPayProviderClient
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    private static readonly JsonSerializerOptions ExecuteWireJsonOptions =
+        CreateExecuteWireJsonOptions();
+
     private readonly HttpClient _httpClient;
     private readonly OnePayOptions _options;
     private readonly ILogger<LyPayProviderClient> _logger;
@@ -244,7 +247,8 @@ public sealed class LyPayProviderClient : ILyPayProviderClient
             "CBLT/ExecuteOutgoingTransfer",
             payload,
             requestTimeUtc,
-            cancellationToken);
+            cancellationToken,
+            ExecuteWireJsonOptions);
     }
 
     public Task<LyPayProviderCall<LyPayStatusResponseData>> CheckTransactionStatusAsync(
@@ -290,7 +294,8 @@ public sealed class LyPayProviderClient : ILyPayProviderClient
         string relativePath,
         object payload,
         DateTimeOffset requestTimeUtc,
-        CancellationToken cancellationToken) where T : class
+        CancellationToken cancellationToken,
+        JsonSerializerOptions? requestJsonOptions = null) where T : class
     {
         if (!IsConfigured)
         {
@@ -302,7 +307,9 @@ public sealed class LyPayProviderClient : ILyPayProviderClient
                 "LyPay integration is not configured.");
         }
 
-        var exactJson = JsonSerializer.Serialize(payload, WireJsonOptions);
+        var exactJson = JsonSerializer.Serialize(
+            payload,
+            requestJsonOptions ?? WireJsonOptions);
         var checksum = OnePayChecksum.Generate(
             exactJson,
             _options.ChecksumPassword,
@@ -383,6 +390,32 @@ public sealed class LyPayProviderClient : ILyPayProviderClient
         dhbReference.StartsWith("LYPay_", StringComparison.OrdinalIgnoreCase)
             ? dhbReference
             : $"LYPay_{dhbReference}";
+
+    private static JsonSerializerOptions CreateExecuteWireJsonOptions()
+    {
+        var options = new JsonSerializerOptions(WireJsonOptions);
+        options.Converters.Add(new ProviderDecimalJsonConverter());
+        return options;
+    }
+
+    private sealed class ProviderDecimalJsonConverter : JsonConverter<decimal>
+    {
+        // Validation succeeds with canonical numeric values such as 10. Strip
+        // insignificant zeros introduced by SQL decimal(18,4) so Execute signs
+        // the same numeric representation while preserving meaningful digits.
+        private const string Format = "0.############################";
+
+        public override decimal Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options) => reader.GetDecimal();
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            decimal value,
+            JsonSerializerOptions options) =>
+            writer.WriteRawValue(value.ToString(Format, CultureInfo.InvariantCulture));
+    }
 
     private sealed class LyPayProviderEnvelope<T> where T : class
     {
