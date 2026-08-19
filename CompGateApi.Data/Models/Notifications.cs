@@ -1,38 +1,51 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using CompGateApi.Data.Models;
+using Microsoft.EntityFrameworkCore;
 
-namespace CompGateApi.Data.Models
+namespace CompGateApi.Data.Models;
+
+[Table("Notifications")]
+[Index(nameof(ToAuthUserId), nameof(CreatedAt))]
+[Index(nameof(ToAuthUserId), nameof(ReadAt))]
+[Index(nameof(EventId), IsUnique = true)]
+public sealed class Notification : Auditable
 {
-    [Table("Notifications")]
-    public class Notification : Auditable
-    {
-        [Key]
-        public int Id { get; set; }
+    [Key]
+    public int Id { get; set; }
 
-        // From user (who created the notification)
-        public int FromUserId { get; set; }
-        public User FromUser { get; set; } = null!;
+    public Guid EventId { get; set; }
 
-        // To user (who will receive the notification)
-        public int ToUserId { get; set; }
-        public User ToUser { get; set; } = null!;
+    public int? FromUserId { get; set; }
+    public User? FromUser { get; set; }
 
-        // Subject for the notification (e.g., "Transaction Escalation")
-        [MaxLength(255)]
-        public string Subject { get; set; } = string.Empty;
+    public int ToUserId { get; set; }
+    public User ToUser { get; set; } = null!;
 
-        // Message content of the notification
-        [MaxLength(500)]
-        public string Message { get; set; } = string.Empty;
+    public int ToAuthUserId { get; set; }
+    public int? CompanyId { get; set; }
 
-        // Link for redirection (e.g., transaction detail page)
-        [MaxLength(500)]
-        public string Link { get; set; } = string.Empty;
+    [Required, MaxLength(64)]
+    public string Type { get; set; } = string.Empty;
 
-        // Read status (default is false)
-        public bool IsRead { get; set; } = false;
+    [Required, MaxLength(200)]
+    public string Subject { get; set; } = string.Empty;
 
-    }
+    [Required, MaxLength(1000)]
+    public string Message { get; set; } = string.Empty;
+
+    [Required, MaxLength(64)]
+    public string EntityType { get; set; } = string.Empty;
+
+    [Required, MaxLength(128)]
+    public string EntityId { get; set; } = string.Empty;
+
+    // Retained for the existing web DTO. Values are generated internally only.
+    [MaxLength(256)]
+    public string Link { get; set; } = string.Empty;
+
+    public bool IsRead { get; set; }
+    public DateTimeOffset? ReadAt { get; set; }
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public NotificationOutbox? Outbox { get; set; }
 }

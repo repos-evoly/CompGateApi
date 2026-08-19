@@ -4,6 +4,8 @@ using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
+using CompGateApi.Core.Notifications;
+using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -106,7 +108,9 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
-            [FromServices] ILogger<EmployeeSalaryEndpoints> log)
+            [FromServices] ILogger<EmployeeSalaryEndpoints> log,
+            [FromServices] CompGateApiDbContext db,
+            [FromServices] INotificationEventWriter notificationWriter)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -257,7 +261,9 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
-            [FromServices] ILogger<EmployeeSalaryEndpoints> log)
+            [FromServices] ILogger<EmployeeSalaryEndpoints> log,
+            [FromServices] CompGateApiDbContext db,
+            [FromServices] INotificationEventWriter notificationWriter)
         {
             try
             {
@@ -268,10 +274,23 @@ namespace CompGateApi.Endpoints
                 if (user?.CompanyId == null)
                     return Results.Unauthorized();
 
+                await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
                 var cycle = await repo.CreateSalaryCycleAsync(
                                 user.CompanyId.Value,
                                 user.UserId,
                                 dto);
+
+                await notificationWriter.CreateForCompanyApproversAsync(
+                    user.CompanyId.Value,
+                    user.UserId,
+                    "salary_pending_approval",
+                    "salary",
+                    cycle.Id.ToString(),
+                    "Salary cycle awaiting approval",
+                    "A salary cycle is ready for review.",
+                    $"salary:{cycle.Id}:pending",
+                    ctx.RequestAborted);
+                await transaction.CommitAsync(ctx.RequestAborted);
 
                 return Results.Ok(cycle);
             }
@@ -294,7 +313,8 @@ namespace CompGateApi.Endpoints
     HttpContext ctx,
     [FromServices] IEmployeeSalaryRepository repo,
     [FromServices] IUserRepository userRepo,
-    ILogger<EmployeeSalaryEndpoints> log)
+    ILogger<EmployeeSalaryEndpoints> log,
+    [FromServices] INotificationEventWriter notificationWriter)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -305,6 +325,29 @@ namespace CompGateApi.Endpoints
             {
                 var result = await repo.PostSalaryCycleAsync(user.CompanyId.Value, id, user.UserId);
                 if (result is null) return Results.NotFound();
+
+                try
+                {
+                    await notificationWriter.CreateForUserAsync(
+                        result.CreatedByUserId,
+                        user.UserId,
+                        "salary_cycle_approved",
+                        "salary",
+                        id.ToString(),
+                        "Salary cycle approved",
+                        "Your salary cycle was approved and submitted successfully.",
+                        $"salary:{id}:approved",
+                        ctx.RequestAborted);
+                }
+                catch (Exception exception)
+                {
+                    // Salary posting is an external financial operation and has already
+                    // succeeded; a push-enqueue failure must not change that outcome.
+                    log.LogError(
+                        exception,
+                        "Failed to enqueue the approval notification for salary cycle {CycleId}.",
+                        id);
+                }
 
                 // shape: include your cycle and the bank’s per-entry outcome
                 return Results.Ok(new
@@ -417,7 +460,9 @@ namespace CompGateApi.Endpoints
 
         public static async Task<IResult> SaveSalaryCycle(
         int id, SalaryCycleSaveDto dto, HttpContext ctx,
-        IEmployeeSalaryRepository repo, IUserRepository userRepo)
+        IEmployeeSalaryRepository repo, IUserRepository userRepo,
+        CompGateApiDbContext db,
+        INotificationEventWriter notificationWriter)
         {
             var authId = GetAuthUserId(ctx);
             var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
@@ -433,9 +478,21 @@ namespace CompGateApi.Endpoints
 
             try
             {
+                await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
                 var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
                 if (saved == null)
                     return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
+                await notificationWriter.CreateForCompanyApproversAsync(
+                    me.CompanyId.Value,
+                    me.UserId,
+                    "salary_cycle_edited",
+                    "salary",
+                    id.ToString(),
+                    "Salary cycle updated",
+                    "A salary cycle was updated and is ready for review.",
+                    $"salary:{id}:edited:{Guid.NewGuid():N}",
+                    ctx.RequestAborted);
+                await transaction.CommitAsync(ctx.RequestAborted);
                 return Results.Ok(saved);
             }
             catch (InvalidOperationException ex)

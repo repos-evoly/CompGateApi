@@ -4,6 +4,7 @@ using AutoMapper;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
+using CompGateApi.Core.Notifications;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using FluentValidation;
@@ -200,7 +201,8 @@ namespace CompGateApi.Endpoints
          [FromServices] IMapper mapper,
          [FromServices] ILogger<TransferRequestEndpoints> log,
          [FromServices] IHttpClientFactory httpFactory,           // kept to preserve signature (unused here)
-         [FromServices] CompGateApiDbContext db)                 // kept to preserve signature (unused here)
+         [FromServices] CompGateApiDbContext db,
+         [FromServices] INotificationEventWriter notificationWriter)
         {
             // 1) Validate input
             var v = await validator.ValidateAsync(dto);
@@ -240,6 +242,7 @@ namespace CompGateApi.Endpoints
             dto.CurrencyId = currency.Id;
 
             // 4) Create draft transfer only (no posting to core bank yet)
+            await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
             var result = await repo.CreateDraftAsync(
                 userId: me.UserId,
                 companyId: me.CompanyId.Value,
@@ -250,6 +253,18 @@ namespace CompGateApi.Endpoints
 
             if (!result.Success)
                 return Results.BadRequest(result.Error);
+
+            await notificationWriter.CreateForCompanyApproversAsync(
+                me.CompanyId.Value,
+                me.UserId,
+                "transfer_pending_approval",
+                "transfer",
+                result.Entity!.Id.ToString(),
+                "Transfer awaiting approval",
+                "A company transfer is ready for review.",
+                $"transfer:{result.Entity.Id}:pending",
+                ctx.RequestAborted);
+            await transaction.CommitAsync(ctx.RequestAborted);
 
             var dtoResult = mapper.Map<TransferRequestDto>(result.Entity!);
 
@@ -329,10 +344,13 @@ namespace CompGateApi.Endpoints
         public static async Task<IResult> UpdateStatus(
             int id,
             [FromBody] TransferRequestStatusUpdateDto dto,
+            HttpContext ctx,
             ITransferRequestRepository repo,
             IValidator<TransferRequestStatusUpdateDto> validator,
             IMapper mapper,
-            ILogger<TransferRequestEndpoints> log)
+            ILogger<TransferRequestEndpoints> log,
+            CompGateApiDbContext db,
+            INotificationEventWriter notificationWriter)
         {
             var v = await validator.ValidateAsync(dto);
             if (!v.IsValid)
@@ -341,8 +359,25 @@ namespace CompGateApi.Endpoints
             var ent = await repo.GetByIdAsync(id);
             if (ent == null) return Results.NotFound("Not found.");
 
+            var actorAuthId = TryGetAuthUserId(ctx, out var parsedAuthId) ? parsedAuthId : 0;
+            var actorUserId = await db.Users
+                .Where(user => user.AuthUserId == actorAuthId)
+                .Select(user => (int?)user.Id)
+                .FirstOrDefaultAsync(ctx.RequestAborted);
+            await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
             ent.Status = dto.Status;
             await repo.UpdateAsync(ent);
+            await notificationWriter.CreateForUserAsync(
+                ent.UserId,
+                actorUserId,
+                "transfer_status_changed",
+                "transfer",
+                ent.Id.ToString(),
+                "Transfer status updated",
+                $"Your transfer status is now {dto.Status.Trim()}.",
+                $"transfer:{ent.Id}:status:{dto.Status.Trim().ToLowerInvariant()}",
+                ctx.RequestAborted);
+            await transaction.CommitAsync(ctx.RequestAborted);
             return Results.Ok(mapper.Map<TransferRequestDto>(ent));
         }
 
@@ -352,7 +387,9 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             ITransferRequestRepository repo,
             IUserRepository userRepo,
-            IMapper mapper)
+            IMapper mapper,
+            INotificationEventWriter notificationWriter,
+            ILogger<TransferRequestEndpoints> log)
         {
             if (!TryGetAuthUserId(ctx, out var authId))
                 return Results.Unauthorized();
@@ -369,6 +406,29 @@ namespace CompGateApi.Endpoints
             var exec = await repo.ExecuteAsync(id, me.UserId, me.CompanyId.Value, token, ctx.RequestAborted);
             if (!exec.Success)
                 return Results.BadRequest(exec.Error);
+
+            try
+            {
+                await notificationWriter.CreateForUserAsync(
+                    ent.UserId,
+                    me.UserId,
+                    "transfer_approved",
+                    "transfer",
+                    ent.Id.ToString(),
+                    "Transfer approved",
+                    "Your transfer was approved and submitted successfully.",
+                    $"transfer:{ent.Id}:approved",
+                    ctx.RequestAborted);
+            }
+            catch (Exception exception)
+            {
+                // The bank operation already succeeded. Preserve that result and let
+                // operational monitoring surface the missing notification event.
+                log.LogError(
+                    exception,
+                    "Failed to enqueue the approval notification for transfer {TransferId}.",
+                    ent.Id);
+            }
 
             var dto = mapper.Map<TransferRequestDto>(exec.Entity!);
             return Results.Ok(new

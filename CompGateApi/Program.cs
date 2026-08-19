@@ -5,6 +5,7 @@ using CompGateApi.Hubs;
 
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddServiceTokenEnvironmentAliases();
 builder.RegisterServices();
 builder.Logging.ClearProviders();
 builder.Host.ConfigureSerilog();
