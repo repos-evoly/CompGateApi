@@ -181,11 +181,11 @@ namespace CompGateApi.Core.Repositories
             foreach (var user in users)
             {
                 // Reuse your existing logic to fetch additional auth info.
-                var authUser = await FetchAuthUserDetails(user.Id, authToken);
+                var authUser = await FetchAuthUserDetails(user.AuthUserId, authToken);
                 userDetailsList.Add(new UserDetailsDto
                 {
                     UserId = user.Id,
-                    AuthUserId = authUser?.Id ?? 0,
+                    AuthUserId = user.AuthUserId,
                     Username = authUser?.Username,
                     CompanyId = user.CompanyId,
                     IsCompanyAdmin = user.IsCompanyAdmin,   // â† set it here
