@@ -622,7 +622,7 @@ namespace CompGateApi.Endpoints
                 authToken: token
             );
             var ours = all
-               .Where(u => u.CompanyId == company.Id && u.AuthUserId != me.AuthUserId)
+               .Where(u => u.CompanyId == company.Id)
                 .Select(u => new CompanyEmployeeDetailsDto
                 {
                     Id = u.UserId,

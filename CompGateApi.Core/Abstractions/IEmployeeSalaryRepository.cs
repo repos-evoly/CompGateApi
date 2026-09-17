@@ -18,6 +18,7 @@ public interface IEmployeeSalaryRepository
 
     Task<PagedResult<SalaryCycleDto>> GetSalaryCyclesAsync(int companyId, int page, int limit);
     Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto);
+    Task<bool> DeleteDraftSalaryCycleAsync(int companyId, int cycleId);
     // IEmployeeSalaryRepository.cs
     Task<SalaryCycleDto?> PostSalaryCycleAsync(int companyId, int cycleId, int postedBy);
     Task<SalaryCycleDto?> RepostFailedEntriesAsync(int companyId, int cycleId, int postedBy, SalaryRepostIdsRequestDto dto);

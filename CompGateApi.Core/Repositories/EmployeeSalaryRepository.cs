@@ -409,6 +409,28 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         };
     }
 
+    public async Task<bool> DeleteDraftSalaryCycleAsync(int companyId, int cycleId)
+    {
+        var cycle = await _db.SalaryCycles
+            .Include(s => s.Entries)
+            .FirstOrDefaultAsync(s =>
+                s.Id == cycleId &&
+                s.CompanyId == companyId &&
+                s.PostedAt == null &&
+                !s.Entries.Any(entry =>
+                    entry.IsTransferred ||
+                    entry.TransferResultCode != null ||
+                    entry.TransferResultReason != null));
+
+        if (cycle is null)
+            return false;
+
+        _db.SalaryEntries.RemoveRange(cycle.Entries);
+        _db.SalaryCycles.Remove(cycle);
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto)
     {
         List<(Employee emp, decimal amount)> list;

@@ -41,6 +41,7 @@ namespace CompGateApi.Endpoints
 
             group.MapGet("/salarycycles", GetSalaryCycles);
             group.MapPost("/salarycycles", CreateSalaryCycle);
+            group.MapDelete("/salarycycles/{id:int}", DeleteDraftSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/post", PostSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/repost", RepostFailedEntries);
             group.MapGet("/salarycycles/{id:int}/entries/failed", GetFailedEntries);
@@ -306,6 +307,39 @@ namespace CompGateApi.Endpoints
                 log.LogError(ex, "Unhandled error in CreateSalaryCycle");
                 return Results.StatusCode(StatusCodes.Status500InternalServerError);
             }
+        }
+
+        public static async Task<IResult> DeleteDraftSalaryCycle(
+            int id,
+            HttpContext ctx,
+            [FromServices] IEmployeeSalaryRepository repo,
+            [FromServices] IUserRepository userRepo)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!user.IsCompanyAdmin &&
+                !user.Permissions.Contains(
+                    "canCreateOrEditSalaryCycle",
+                    StringComparer.OrdinalIgnoreCase))
+                return Results.Forbid();
+
+            var existing = await repo.GetSalaryCycleAsync(user.CompanyId.Value, id);
+            if (existing is null)
+                return Results.NotFound(new { error = "Salary cycle not found for this company.", cycleId = id });
+            if (existing.PostedAt is not null)
+                return Results.Conflict(new { error = "A posted salary cycle cannot be deleted.", cycleId = id });
+            if (existing.Entries.Any(entry =>
+                    entry.IsTransferred ||
+                    !string.IsNullOrWhiteSpace(entry.TransferResultCode) ||
+                    !string.IsNullOrWhiteSpace(entry.TransferResultReason)))
+                return Results.Conflict(new { error = "A salary cycle with posting results cannot be deleted.", cycleId = id });
+
+            var deleted = await repo.DeleteDraftSalaryCycleAsync(user.CompanyId.Value, id);
+            return deleted
+                ? Results.Ok(new { cycleId = id, deleted = true })
+                : Results.Conflict(new { error = "The salary cycle changed before it could be deleted.", cycleId = id });
         }
 
         public static async Task<IResult> PostSalaryCycle(
