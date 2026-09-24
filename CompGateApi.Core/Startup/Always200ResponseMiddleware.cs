@@ -13,6 +13,7 @@ namespace CompGateApi.Core.Startup
     {
       "/swagger",
       "/notificationHub",
+      "/api/mobile-internal",
       "/api/mobile-notifications",
       "/api/mobile-notification-deliveries"
     };

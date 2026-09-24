@@ -261,7 +261,7 @@ namespace CompGateApi.Endpoints
                 "transfer",
                 result.Entity!.Id.ToString(),
                 "Transfer awaiting approval",
-                "A company transfer is ready for review.",
+                $"A transfer of {await NotificationMessageText.TransferDetailsAsync(result.Entity, db, repo, log, ctx.RequestAborted)} is awaiting your approval.",
                 $"transfer:{result.Entity.Id}:pending",
                 ctx.RequestAborted);
             await transaction.CommitAsync(ctx.RequestAborted);
@@ -374,7 +374,7 @@ namespace CompGateApi.Endpoints
                 "transfer",
                 ent.Id.ToString(),
                 "Transfer status updated",
-                $"Your transfer status is now {dto.Status.Trim()}.",
+                $"Your transfer of {await NotificationMessageText.TransferDetailsAsync(ent, db, repo, log, ctx.RequestAborted)} is now {dto.Status.Trim()}.",
                 $"transfer:{ent.Id}:status:{dto.Status.Trim().ToLowerInvariant()}",
                 ctx.RequestAborted);
             await transaction.CommitAsync(ctx.RequestAborted);
@@ -389,6 +389,7 @@ namespace CompGateApi.Endpoints
             IUserRepository userRepo,
             IMapper mapper,
             INotificationEventWriter notificationWriter,
+            CompGateApiDbContext db,
             ILogger<TransferRequestEndpoints> log)
         {
             if (!TryGetAuthUserId(ctx, out var authId))
@@ -416,7 +417,7 @@ namespace CompGateApi.Endpoints
                     "transfer",
                     ent.Id.ToString(),
                     "Transfer approved",
-                    "Your transfer was approved and submitted successfully.",
+                    $"Your transfer of {await NotificationMessageText.TransferDetailsAsync(exec.Entity ?? ent, db, repo, log, ctx.RequestAborted)} was approved and submitted successfully.",
                     $"transfer:{ent.Id}:approved",
                     ctx.RequestAborted);
             }

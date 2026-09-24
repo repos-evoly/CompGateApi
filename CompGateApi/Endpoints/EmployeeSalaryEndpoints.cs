@@ -75,17 +75,32 @@ namespace CompGateApi.Endpoints
         public static async Task<IResult> GetAllEmployees(
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo,
+            [FromServices] CompGateApiDbContext db,
             [FromQuery] string? searchTerm,
             [FromQuery] int page = 1,
             [FromQuery] int limit = 50)
         {
-            var authId = GetAuthUserId(ctx);
-            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-            var user = await userRepo.GetUserByAuthId(authId, bearer);
-            if (user?.CompanyId == null) return Results.Unauthorized();
+            if (page < 1 || limit is < 1 or > 100)
+            {
+                return Results.BadRequest(new
+                {
+                    error = "Page must be positive and limit must be between 1 and 100."
+                });
+            }
 
-            var employees = await repo.GetAllEmployeesAsync(user.CompanyId.Value, searchTerm, page, limit);
+            var authId = GetAuthUserId(ctx);
+            var companyId = await db.Users
+                .AsNoTracking()
+                .Where(user => user.AuthUserId == authId)
+                .Select(user => user.CompanyId)
+                .FirstOrDefaultAsync(ctx.RequestAborted);
+            if (companyId == null) return Results.Unauthorized();
+
+            var employees = await repo.GetAllEmployeesAsync(
+                companyId.Value,
+                searchTerm,
+                page,
+                limit);
             return Results.Ok(employees);
         }
 
@@ -288,7 +303,7 @@ namespace CompGateApi.Endpoints
                     "salary",
                     cycle.Id.ToString(),
                     "Salary cycle awaiting approval",
-                    "A salary cycle is ready for review.",
+                    $"Salaries for {NotificationMessageText.SalaryPeriod(cycle.SalaryMonth, cycle.AdditionalMonth)} are awaiting your approval.",
                     $"salary:{cycle.Id}:pending",
                     ctx.RequestAborted);
                 await transaction.CommitAsync(ctx.RequestAborted);
@@ -369,7 +384,7 @@ namespace CompGateApi.Endpoints
                         "salary",
                         id.ToString(),
                         "Salary cycle approved",
-                        "Your salary cycle was approved and submitted successfully.",
+                        $"Your salary cycle for {NotificationMessageText.SalaryPeriod(result.SalaryMonth, result.AdditionalMonth)} was approved and submitted successfully.",
                         $"salary:{id}:approved",
                         ctx.RequestAborted);
                 }
@@ -523,7 +538,7 @@ namespace CompGateApi.Endpoints
                     "salary",
                     id.ToString(),
                     "Salary cycle updated",
-                    "A salary cycle was updated and is ready for review.",
+                    $"Salaries for {NotificationMessageText.SalaryPeriod(saved.SalaryMonth, saved.AdditionalMonth)} were updated and are ready for review.",
                     $"salary:{id}:edited:{Guid.NewGuid():N}",
                     ctx.RequestAborted);
                 await transaction.CommitAsync(ctx.RequestAborted);

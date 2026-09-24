@@ -14,6 +14,17 @@ public sealed class MobileServiceTokenValidatorTests : IDisposable
     private readonly RSA _rsa = RSA.Create(2048);
 
     [Fact]
+    public void Validate_RepeatedRequestsWithSameTokenSucceed()
+    {
+        var validator = CreateValidator();
+        var token = CreateToken();
+        for (var i = 0; i < 10; i++)
+        {
+            Assert.Equal(ClientId, validator.Validate(token).FindFirst("client_id")?.Value);
+        }
+    }
+
+    [Fact]
     public void Validate_AcceptsExpectedUatServiceIdentity()
     {
         var validator = CreateValidator();

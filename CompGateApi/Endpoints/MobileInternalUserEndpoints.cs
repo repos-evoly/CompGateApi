@@ -14,6 +14,21 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
 {
     public void RegisterEndpoints(WebApplication app)
     {
+        // Pre-login policy lookup: service identity only, no user token exists yet.
+        // No credentials, permissions or personal details are returned.
+        app.MapGet("/api/mobile-internal/company-access/{authUserId:int}", async (
+            int authUserId, CompGateApiDbContext db, CancellationToken cancellationToken) =>
+        {
+            var access = await db.Users.AsNoTracking()
+                .Where(user => user.AuthUserId == authUserId)
+                .Select(user => new {
+                    user.AuthUserId,
+                    CompanyCode = user.Company != null ? user.Company.Code : null,
+                    user.IsActive, user.IsCompanyAdmin
+                }).SingleOrDefaultAsync(cancellationToken);
+            return access is null ? Results.NotFound() : Results.Ok(access);
+        }).RequireAuthorization(MobileServiceAuthenticationDefaults.RequireMobileBffServicePolicy);
+
         var users = app.MapGroup("/api/mobile-internal/users")
             .RequireAuthorization(
                 MobileServiceAuthenticationDefaults.RequireCompanyUserAndMobileBffServicePolicy)

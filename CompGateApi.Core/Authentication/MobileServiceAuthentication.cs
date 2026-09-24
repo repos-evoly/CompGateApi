@@ -73,7 +73,15 @@ public sealed class MobileServiceTokenValidator(
             new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new RsaSecurityKey(rsa),
+                // The RSA belongs to this validation call, so a signature
+                // provider must not cache it beyond the using scope.
+                IssuerSigningKey = new RsaSecurityKey(rsa)
+                {
+                    CryptoProviderFactory = new CryptoProviderFactory
+                    {
+                        CacheSignatureProviders = false
+                    }
+                },
                 RequireSignedTokens = true,
                 ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
                 ValidateIssuer = true,
