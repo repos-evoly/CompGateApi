@@ -62,6 +62,7 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
                 user.Id,
                 user.AuthUserId,
                 user.CompanyId,
+                Role = user.Role != null ? user.Role.NameLT : null,
                 CompanyCode = user.Company != null ? user.Company.Code : null,
                 user.IsActive,
                 user.IsCompanyAdmin
@@ -116,7 +117,8 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
             target.CompanyCode,
             target.IsActive,
             target.IsCompanyAdmin,
-            permissions));
+            permissions,
+            target.Role));
     }
 
     private static bool TryGetAuthUserId(
@@ -136,4 +138,5 @@ public sealed record MobileUserAccessContextResponse(
     string? CompanyCode,
     bool IsActive,
     bool IsCompanyAdmin,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    string? Role = null);

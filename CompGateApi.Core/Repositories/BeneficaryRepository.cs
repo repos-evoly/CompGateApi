@@ -14,11 +14,10 @@ public class BeneficiaryRepository : IBeneficiaryRepository
 
     public async Task<List<Beneficiary>> GetAllByCompanyAsync(int companyId)
     {
-        return await _db.Beneficiaries
+        return await (await LegacyBeneficiaryQueries.NormalAsync(_db))
             .AsNoTracking()
             .Where(b =>
                 b.CompanyId == companyId &&
-                b.PaymentRail == PaymentRail.Normal &&
                 !b.IsDeleted)
             .ToListAsync();
     }
@@ -31,11 +30,11 @@ public class BeneficiaryRepository : IBeneficiaryRepository
         int page,
         int limit)
     {
-        var query = _db.Beneficiaries
+        RequireNormalRail(paymentRail);
+        var query = (await LegacyBeneficiaryQueries.NormalAsync(_db))
             .AsNoTracking()
             .Where(beneficiary =>
                 beneficiary.CompanyId == companyId &&
-                beneficiary.PaymentRail == paymentRail &&
                 !beneficiary.IsDeleted);
 
         var search = searchTerm?.Trim();
@@ -48,14 +47,10 @@ public class BeneficiaryRepository : IBeneficiaryRepository
                 "accountnumber" => query.Where(beneficiary =>
                     beneficiary.AccountNumber.Contains(search)),
                 "bank" => query.Where(beneficiary =>
-                    (beneficiary.Bank != null && beneficiary.Bank.Contains(search)) ||
-                    (beneficiary.InstitutionName != null && beneficiary.InstitutionName.Contains(search)) ||
-                    (beneficiary.InstitutionId != null && beneficiary.InstitutionId.Contains(search))),
+                    (beneficiary.Bank != null && beneficiary.Bank.Contains(search))),
                 _ => query.Where(beneficiary =>
                     beneficiary.Name.Contains(search) ||
                     beneficiary.AccountNumber.Contains(search) ||
-                    (beneficiary.InstitutionId != null && beneficiary.InstitutionId.Contains(search)) ||
-                    (beneficiary.InstitutionName != null && beneficiary.InstitutionName.Contains(search)) ||
                     (beneficiary.Bank != null && beneficiary.Bank.Contains(search)))
             };
         }
@@ -73,35 +68,34 @@ public class BeneficiaryRepository : IBeneficiaryRepository
 
     public async Task<Beneficiary?> GetByIdAsync(int id)
     {
-        return await _db.Beneficiaries.FindAsync(id);
+        return await (await LegacyBeneficiaryQueries.NormalAsync(_db))
+            .SingleOrDefaultAsync(b => b.Id == id && !b.IsDeleted);
     }
 
-    public async Task<bool> ActiveDestinationExistsAsync(
-        int companyId,
-        PaymentRail paymentRail,
-        string institutionId,
-        string accountNumber,
-        int? excludingId = null)
+    // Retained only for dormant provider source compatibility; never query an absent rail column.
+    public Task<bool> ActiveDestinationExistsAsync(
+        int companyId, PaymentRail paymentRail, string institutionId,
+        string accountNumber, int? excludingId = null) =>
+        throw new NotSupportedException("Payment-rail beneficiary operations are disabled.");
+
+    private static void RequireNormalRail(PaymentRail rail)
     {
-        return await _db.Beneficiaries.AnyAsync(beneficiary =>
-            beneficiary.CompanyId == companyId &&
-            beneficiary.PaymentRail == paymentRail &&
-            !beneficiary.IsDeleted &&
-            beneficiary.InstitutionId == institutionId &&
-            beneficiary.AccountNumber == accountNumber &&
-            (!excludingId.HasValue || beneficiary.Id != excludingId.Value));
+        if (rail != PaymentRail.Normal)
+            throw new NotSupportedException("OnePay and LyPay are disabled.");
     }
 
     public async Task CreateAsync(Beneficiary entity)
     {
+        RequireNormalRail(entity.PaymentRail);
         _db.Beneficiaries.Add(entity);
         await _db.SaveChangesAsync();
     }
 
     public async Task UpdateAsync(Beneficiary entity, byte[]? expectedRowVersion = null)
     {
+        RequireNormalRail(entity.PaymentRail);
         if (expectedRowVersion is not null)
-            _db.Entry(entity).Property(beneficiary => beneficiary.RowVersion).OriginalValue = expectedRowVersion;
+            throw new NotSupportedException("Rail row-version updates are disabled.");
 
         _db.Beneficiaries.Update(entity);
         await _db.SaveChangesAsync();

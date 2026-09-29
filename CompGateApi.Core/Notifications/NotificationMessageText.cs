@@ -39,8 +39,9 @@ public static class NotificationMessageText
                 .Select(c => c.Code).FirstOrDefaultAsync(cancellationToken);
         var account = transfer.ToAccount.Trim();
         // Resolve only this company's active normal-transfer beneficiary, never another company's label.
-        var name = await db.Beneficiaries.AsNoTracking()
-            .Where(b => b.CompanyId == transfer.CompanyId && !b.IsDeleted && b.PaymentRail == PaymentRail.Normal &&
+        var beneficiaries = await LegacyBeneficiaryQueries.NormalAsync(db, cancellationToken);
+        var name = await beneficiaries.AsNoTracking()
+            .Where(b => b.CompanyId == transfer.CompanyId && !b.IsDeleted &&
                 b.AccountNumber.Trim() == account)
             .OrderBy(b => b.Id).Select(b => b.Name).FirstOrDefaultAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(name))

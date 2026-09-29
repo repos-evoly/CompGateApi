@@ -24,4 +24,10 @@
     <ProjectReference Include="..\CompGateApi.Core\CompGateApi.Core.csproj" />
   </ItemGroup>
 
+  <!-- Retain integration source/history without exposing disabled payment routes. -->
+  <ItemGroup>
+    <Compile Remove="Endpoints\OnePayEndpoints.cs" />
+    <Compile Remove="Endpoints\LyPayEndpoints.cs" />
+  </ItemGroup>
+
 </Project>

@@ -410,3 +410,5 @@ KycApi/Attachments/
 
 # Accidental Windows-style log paths created on macOS
 /CompGateApi/c:*
+# Local production configuration contains deployment secrets.
+**/appsettings.Production.json

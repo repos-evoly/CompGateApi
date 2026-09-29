@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CompGateApi.Core\CompGateApi.Core.csproj" />
+    <ProjectReference Include="..\CompGateApi\CompGateApi.csproj" />
   </ItemGroup>
 </Project>

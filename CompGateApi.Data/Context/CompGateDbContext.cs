@@ -192,39 +192,18 @@ namespace CompGateApi.Data.Context
                      // ── BENEFICIARIES ─────────────────────────────────────────────────────
                      builder.Entity<Beneficiary>(b =>
                      {
-                            b.Property(x => x.PaymentRail)
-                             .HasConversion<string>()
-                             .HasMaxLength(20)
-                             .HasDefaultValue(PaymentRail.Normal);
-                            b.Property(x => x.RowVersion).IsRowVersion();
-
-                            // Keep the existing FK index explicitly. The composite rail
-                            // index supplements it and should not make EF treat it as removed.
+                            // Legacy production schema does not contain the rail migration columns.
+                            // Keep historical types/migrations, but never select or write those columns.
+                            b.Ignore(x => x.PaymentRail);
+                            b.Ignore(x => x.RowVersion);
+                            b.Ignore(x => x.CreatedByUserId);
+                            b.Ignore(x => x.CreatedByUser);
+                            b.Ignore(x => x.InstitutionId);
+                            b.Ignore(x => x.ProviderInstitutionReference);
+                            b.Ignore(x => x.InstitutionName);
                             b.HasIndex(x => x.CompanyId);
-
-                            b.HasIndex(x => new { x.CompanyId, x.PaymentRail, x.IsDeleted })
-                             .HasDatabaseName("IX_Beneficiaries_CompanyId_PaymentRail_IsDeleted");
-
-                            b.HasIndex(x => new
-                             {
-                                    x.CompanyId,
-                                    x.PaymentRail,
-                                    x.InstitutionId,
-                                    x.AccountNumber
-                             })
-                             .IsUnique()
-                             .HasFilter("[IsDeleted] = 0 AND [InstitutionId] IS NOT NULL AND [PaymentRail] IN (N'OnePay', N'LyPay')")
-                             .HasDatabaseName("UX_Beneficiaries_ActiveRailDestination");
-
-                            b.HasOne(x => x.Company)
-                             .WithMany()
-                             .HasForeignKey(x => x.CompanyId)
-                             .OnDelete(DeleteBehavior.Cascade);
-
-                            b.HasOne(x => x.CreatedByUser)
-                             .WithMany()
-                             .HasForeignKey(x => x.CreatedByUserId)
-                             .OnDelete(DeleteBehavior.Restrict);
+                            b.HasOne(x => x.Company).WithMany()
+                             .HasForeignKey(x => x.CompanyId).OnDelete(DeleteBehavior.Cascade);
                      });
 
                      // ── ATTACHMENTS ─────────────────────────────────────────────────────
