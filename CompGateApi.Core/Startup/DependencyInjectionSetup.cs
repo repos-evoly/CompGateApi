@@ -28,6 +28,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using CompGateApi.Core.OnePay;
 using CompGateApi.Core.LyPay;
+using CompGateApi.Core.WalletSalary;
 using CompGateApi.Core.Authentication;
 using CompGateApi.Core.Notifications;
 using Microsoft.AspNetCore.Authentication;
@@ -322,6 +323,18 @@ namespace CompGateApi.Core.Startup
     {
       services.AddEndpointsApiExplorer();
       services.AddMemoryCache();
+
+      services.Configure<WalletSalaryOptions>(config.GetSection(WalletSalaryOptions.SectionName));
+      services.AddHttpClient("WalletSalaryProvider", (provider, client) =>
+      {
+        var options = provider.GetRequiredService<IOptions<WalletSalaryOptions>>().Value;
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        client.DefaultRequestHeaders.Accept.Add(
+          new MediaTypeWithQualityHeaderValue("application/json"));
+      });
+      services.AddScoped<IWalletSalaryProviderClient, WalletSalaryProviderClient>();
+      services.AddScoped<WalletSalaryService>();
+      services.AddHostedService<WalletSalaryReconciliationWorker>();
 
       services.Configure<OnePayOptions>(config.GetSection(OnePayOptions.SectionName));
       services.Configure<OnePayReconciliationOptions>(config.GetSection(OnePayReconciliationOptions.SectionName));

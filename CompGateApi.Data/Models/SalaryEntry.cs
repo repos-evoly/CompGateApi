@@ -30,4 +30,7 @@ public class SalaryEntry:Auditable
 
     // No per-entry override fields; edits are applied to Employee
 
+    public ICollection<SalaryEntryAllocation> Allocations { get; set; } =
+        new List<SalaryEntryAllocation>();
+
 }

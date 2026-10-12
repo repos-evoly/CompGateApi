@@ -56,6 +56,11 @@ namespace CompGateApi.Data.Context
               public DbSet<Employee> Employees => Set<Employee>();
               public DbSet<SalaryCycle> SalaryCycles => Set<SalaryCycle>();
               public DbSet<SalaryEntry> SalaryEntries => Set<SalaryEntry>();
+              public DbSet<SalaryEntryAllocation> SalaryEntryAllocations => Set<SalaryEntryAllocation>();
+              public DbSet<SalaryWalletBatch> SalaryWalletBatches => Set<SalaryWalletBatch>();
+              public DbSet<SalaryWalletBatchItem> SalaryWalletBatchItems => Set<SalaryWalletBatchItem>();
+              public DbSet<SalaryWalletBatchAttempt> SalaryWalletBatchAttempts => Set<SalaryWalletBatchAttempt>();
+              public DbSet<SalaryWalletManualReview> SalaryWalletManualReviews => Set<SalaryWalletManualReview>();
               public DbSet<Pricing> Pricings => Set<Pricing>();
               public DbSet<OnePayTransfer> OnePayTransfers => Set<OnePayTransfer>();
               public DbSet<OnePayValidationSession> OnePayValidationSessions => Set<OnePayValidationSession>();
@@ -740,9 +745,16 @@ namespace CompGateApi.Data.Context
                             b.Property(e => e.Name).HasMaxLength(100).IsRequired();
                             b.Property(e => e.Email).HasMaxLength(100);
                             b.Property(e => e.Phone).HasMaxLength(20);
-                            b.Property(e => e.Salary).HasPrecision(18, 2);
-                            b.Property(e => e.AccountNumber).HasMaxLength(34).IsRequired();
+                            b.Property(e => e.Salary).HasPrecision(18, 3);
+                            b.Property(e => e.BankAllocationAmount)
+                             .HasColumnName("AccountAllocationAmount")
+                             .HasPrecision(18, 3);
+                            b.Property(e => e.EvoAllocationAmount).HasPrecision(18, 3);
+                            b.Property(e => e.BcdAllocationAmount).HasPrecision(18, 3);
+                            b.Property(e => e.AccountNumber).HasMaxLength(34);
                             b.Property(e => e.AccountType).HasMaxLength(20).IsRequired();
+                            b.Property(e => e.EvoWalletRecipientType).HasMaxLength(20);
+                            b.Property(e => e.BcdWalletRecipientType).HasMaxLength(20);
                             b.Property(e => e.SendSalary);
                             b.Property(e => e.CanPost);
                             b.Property(e => e.IsDeleted).HasDefaultValue(false);
@@ -760,9 +772,14 @@ namespace CompGateApi.Data.Context
                             b.HasKey(s => s.Id);
                             b.Property(s => s.SalaryMonth).HasMaxLength(20).IsRequired();
                             b.Property(s => s.AdditionalMonth).HasMaxLength(10);
-                            b.Property(s => s.TotalAmount).HasPrecision(18, 2);
+                            b.Property(s => s.TotalAmount).HasPrecision(18, 3);
                             b.Property(s => s.CreatedAt);
                             b.Property(s => s.PostedAt);
+                            b.Property(s => s.PostingStatus).HasMaxLength(32).IsRequired();
+                            b.Property(s => s.PostingStatus).HasDefaultValue("notPosted");
+                            b.Property(s => s.BankFeeStatus).HasMaxLength(32).HasDefaultValue("notRequired");
+                            b.Property(s => s.RowVersion).IsRowVersion();
+                            b.HasIndex(s => new { s.CompanyId, s.PostingStatus });
 
                             b.HasOne(s => s.Company)
                      .WithMany(c => c.SalaryPosts)
@@ -775,7 +792,7 @@ namespace CompGateApi.Data.Context
                      {
                             b.ToTable("SalaryEntries");
                             b.HasKey(e => e.Id);
-                            b.Property(e => e.Amount).HasPrecision(18, 2);
+                            b.Property(e => e.Amount).HasPrecision(18, 3);
                             b.Property(e => e.IsTransferred);
                             b.Property(e => e.CreatedAt);
 
@@ -788,6 +805,86 @@ namespace CompGateApi.Data.Context
                             .WithMany(emp => emp.SalaryEntries)
                             .HasForeignKey(e => e.EmployeeId)
                             .OnDelete(DeleteBehavior.Cascade); // keep this
+                     });
+
+                     builder.Entity<SalaryEntryAllocation>(b =>
+                     {
+                            b.ToTable("SalaryEntryAllocations");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.Amount).HasPrecision(18, 3);
+                            b.Property(x => x.CommissionAmount).HasPrecision(18, 3);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+                            b.HasIndex(x => new { x.SalaryEntryId, x.PaymentChannel }).IsUnique();
+                            b.HasIndex(x => new { x.Status, x.PaymentChannel });
+
+                            b.HasOne(x => x.SalaryEntry)
+                             .WithMany(x => x.Allocations)
+                             .HasForeignKey(x => x.SalaryEntryId)
+                             .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     builder.Entity<SalaryWalletBatch>(b =>
+                     {
+                            b.ToTable("SalaryWalletBatches");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.RequestedTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.SuccessfulTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.FailedTotalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.TotalCommission).HasPrecision(18, 3);
+                            b.Property(x => x.SenderCommission).HasPrecision(18, 3);
+                            b.Property(x => x.ReceiverCommission).HasPrecision(18, 3);
+                            b.Property(x => x.DebitAmount).HasPrecision(18, 3);
+                            b.Property(x => x.ReversalAmount).HasPrecision(18, 3);
+                            b.Property(x => x.RowVersion).IsRowVersion();
+                            b.HasIndex(x => new { x.SalaryCycleId, x.Rail, x.Purpose, x.SequenceNumber }).IsUnique();
+                            b.HasIndex(x => new { x.Status, x.NextCheckAt });
+
+                            b.HasOne(x => x.SalaryCycle)
+                             .WithMany(x => x.WalletBatches)
+                             .HasForeignKey(x => x.SalaryCycleId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
+
+                     builder.Entity<SalaryWalletBatchItem>(b =>
+                     {
+                            b.ToTable("SalaryWalletBatchItems");
+                            b.HasKey(x => x.Id);
+                            b.Property(x => x.Amount).HasPrecision(18, 3);
+                            b.Property(x => x.CommissionAmount).HasPrecision(18, 3);
+                            b.HasIndex(x => new { x.SalaryWalletBatchId, x.RequestIndex }).IsUnique();
+                            b.HasIndex(x => new { x.SalaryWalletBatchId, x.SalaryEntryAllocationId }).IsUnique();
+
+                            b.HasOne(x => x.SalaryWalletBatch)
+                             .WithMany(x => x.Items)
+                             .HasForeignKey(x => x.SalaryWalletBatchId)
+                             .OnDelete(DeleteBehavior.Cascade);
+
+                            b.HasOne(x => x.SalaryEntryAllocation)
+                             .WithMany(x => x.WalletBatchItems)
+                             .HasForeignKey(x => x.SalaryEntryAllocationId)
+                             .OnDelete(DeleteBehavior.Restrict);
+                     });
+
+                     builder.Entity<SalaryWalletBatchAttempt>(b =>
+                     {
+                            b.ToTable("SalaryWalletBatchAttempts");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => new { x.SalaryWalletBatchId, x.AttemptNumber }).IsUnique();
+                            b.HasOne(x => x.SalaryWalletBatch)
+                             .WithMany(x => x.Attempts)
+                             .HasForeignKey(x => x.SalaryWalletBatchId)
+                             .OnDelete(DeleteBehavior.Cascade);
+                     });
+
+                     builder.Entity<SalaryWalletManualReview>(b =>
+                     {
+                            b.ToTable("SalaryWalletManualReviews");
+                            b.HasKey(x => x.Id);
+                            b.HasIndex(x => new { x.Status, x.CreatedAt });
+                            b.HasOne(x => x.SalaryWalletBatch)
+                             .WithMany(x => x.ManualReviews)
+                             .HasForeignKey(x => x.SalaryWalletBatchId)
+                             .OnDelete(DeleteBehavior.Cascade);
                      });
 
 

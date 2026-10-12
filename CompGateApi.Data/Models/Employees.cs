@@ -22,10 +22,19 @@ public class Employee
     [Column(TypeName = "decimal(18,3)")]
     public decimal Salary { get; set; }
 
+    [Column("AccountAllocationAmount", TypeName = "decimal(18,3)")]
+    public decimal BankAllocationAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal EvoAllocationAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal BcdAllocationAmount { get; set; }
+
     public DateTime Date { get; set; }
 
     [MaxLength(34)]
-    public string AccountNumber { get; set; } = null!;
+    public string? AccountNumber { get; set; }
 
     [MaxLength(20)]
     public string AccountType { get; set; } = "account"; // or "wallet"
@@ -33,8 +42,15 @@ public class Employee
     // Optional wallets
     [MaxLength(34)]
     public string? EvoWallet { get; set; }
+
+    [MaxLength(20)]
+    public string? EvoWalletRecipientType { get; set; }
+
     [MaxLength(34)]
     public string? BcdWallet { get; set; }
+
+    [MaxLength(20)]
+    public string? BcdWalletRecipientType { get; set; }
 
     public bool SendSalary { get; set; }
     public bool CanPost { get; set; }

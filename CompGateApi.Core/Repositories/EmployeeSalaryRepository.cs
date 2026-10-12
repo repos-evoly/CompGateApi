@@ -7,6 +7,7 @@ using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
+using CompGateApi.Core.WalletSalary;
 using Microsoft.EntityFrameworkCore;
 
 public class EmployeeSalaryRepository : IEmployeeSalaryRepository
@@ -14,10 +15,15 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     private readonly CompGateApiDbContext _db;
     private readonly IHttpClientFactory _http;
     private readonly IMapper _mapper;
+    private readonly WalletSalaryService _walletSalary;
 
-    public EmployeeSalaryRepository(CompGateApiDbContext db, IHttpClientFactory http, IMapper mapper)
+    public EmployeeSalaryRepository(
+        CompGateApiDbContext db,
+        IHttpClientFactory http,
+        IMapper mapper,
+        WalletSalaryService walletSalary)
     {
-        _db = db; _http = http; _mapper = mapper;
+        _db = db; _http = http; _mapper = mapper; _walletSalary = walletSalary;
     }
 
 
@@ -36,6 +42,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var ccy3 = acc.Substring(10, 3); // last 3
         return $"{branch}932702{ccy3}";
     }
+
+    private static void ValidateCompanyDebitAccount(string? account, string companyCode)
+        => SalaryAllocationRules.ValidateCompanyDebitAccount(account, companyCode);
 
     public async Task<PagedResult<EmployeeDto>> GetAllEmployeesAsync(int companyId, string? searchTerm, int page, int limit)
     {
@@ -65,9 +74,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Email = e.Email,
                 Phone = e.Phone,
                 Salary = e.Salary,
+                BankAllocationAmount = e.BankAllocationAmount,
+                EvoAllocationAmount = e.EvoAllocationAmount,
+                BcdAllocationAmount = e.BcdAllocationAmount,
                 Date = e.Date,
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
+                EvoWallet = e.EvoWallet,
+                EvoWalletRecipientType = e.EvoWalletRecipientType,
+                BcdWallet = e.BcdWallet,
+                BcdWalletRecipientType = e.BcdWalletRecipientType,
                 SendSalary = e.SendSalary,
                 CanPost = e.CanPost,
                 IsDeleted = e.IsDeleted
@@ -77,6 +93,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<EmployeeDto> CreateEmployeeAsync(int companyId, EmployeeCreateDto dto)
     {
+        SalaryAllocationRules.NormalizeAndValidateEmployee(dto);
         var e = new Employee
         {
             CompanyId = companyId,
@@ -84,11 +101,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Email = NormalizeOptionalText(dto.Email),
             Phone = NormalizeOptionalText(dto.Phone),
             Salary = dto.Salary,
+            BankAllocationAmount = dto.BankAllocationAmount,
+            EvoAllocationAmount = dto.EvoAllocationAmount,
+            BcdAllocationAmount = dto.BcdAllocationAmount,
             Date = dto.Date,
             AccountNumber = dto.AccountNumber,
             AccountType = dto.AccountType,
             EvoWallet = dto.EvoWallet,
+            EvoWalletRecipientType = dto.EvoWalletRecipientType,
             BcdWallet = dto.BcdWallet,
+            BcdWalletRecipientType = dto.BcdWalletRecipientType,
             SendSalary = dto.SendSalary,
             CanPost = dto.CanPost,
             IsDeleted = false
@@ -104,11 +126,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Email = e.Email,
             Phone = e.Phone,
             Salary = e.Salary,
+            BankAllocationAmount = e.BankAllocationAmount,
+            EvoAllocationAmount = e.EvoAllocationAmount,
+            BcdAllocationAmount = e.BcdAllocationAmount,
             Date = e.Date,
             AccountNumber = e.AccountNumber,
             AccountType = e.AccountType,
             EvoWallet = e.EvoWallet,
+            EvoWalletRecipientType = e.EvoWalletRecipientType,
             BcdWallet = e.BcdWallet,
+            BcdWalletRecipientType = e.BcdWalletRecipientType,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost,
             IsDeleted = e.IsDeleted
@@ -117,6 +144,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<EmployeeDto?> UpdateEmployeeAsync(int companyId, int id, EmployeeCreateDto dto)
     {
+        SalaryAllocationRules.NormalizeAndValidateEmployee(dto);
         var e = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId && !x.IsDeleted);
         if (e == null) return null;
 
@@ -124,11 +152,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         e.Email = NormalizeOptionalText(dto.Email);
         e.Phone = NormalizeOptionalText(dto.Phone);
         e.Salary = dto.Salary;
+        e.BankAllocationAmount = dto.BankAllocationAmount;
+        e.EvoAllocationAmount = dto.EvoAllocationAmount;
+        e.BcdAllocationAmount = dto.BcdAllocationAmount;
         e.Date = dto.Date;
         e.AccountNumber = dto.AccountNumber;
         e.AccountType = dto.AccountType;
         e.EvoWallet = dto.EvoWallet;
+        e.EvoWalletRecipientType = dto.EvoWalletRecipientType;
         e.BcdWallet = dto.BcdWallet;
+        e.BcdWalletRecipientType = dto.BcdWalletRecipientType;
         e.SendSalary = dto.SendSalary;
         e.CanPost = dto.CanPost;
 
@@ -141,11 +174,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Email = e.Email,
             Phone = e.Phone,
             Salary = e.Salary,
+            BankAllocationAmount = e.BankAllocationAmount,
+            EvoAllocationAmount = e.EvoAllocationAmount,
+            BcdAllocationAmount = e.BcdAllocationAmount,
             Date = e.Date,
             AccountNumber = e.AccountNumber,
             AccountType = e.AccountType,
             EvoWallet = e.EvoWallet,
+            EvoWalletRecipientType = e.EvoWalletRecipientType,
             BcdWallet = e.BcdWallet,
+            BcdWalletRecipientType = e.BcdWalletRecipientType,
             SendSalary = e.SendSalary,
             CanPost = e.CanPost,
             IsDeleted = e.IsDeleted
@@ -157,7 +195,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         var e = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId);
         if (e == null) return false;
 
-        _db.Employees.Remove(e);
+        // Employee records are referenced by immutable salary snapshots and
+        // financial audit history. Never physically delete them.
+        e.IsDeleted = true;
+        e.SendSalary = false;
         await _db.SaveChangesAsync();
         return true;
     }
@@ -170,6 +211,26 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         foreach (var e in employees)
         {
             var updated = updates.First(x => x.Id == e.Id);
+            var candidate = new EmployeeCreateDto
+            {
+                Name = e.Name,
+                Email = e.Email,
+                Phone = e.Phone,
+                Salary = e.Salary,
+                BankAllocationAmount = e.BankAllocationAmount,
+                EvoAllocationAmount = e.EvoAllocationAmount,
+                BcdAllocationAmount = e.BcdAllocationAmount,
+                Date = e.Date,
+                AccountNumber = e.AccountNumber,
+                AccountType = e.AccountType,
+                EvoWallet = e.EvoWallet,
+                EvoWalletRecipientType = e.EvoWalletRecipientType,
+                BcdWallet = e.BcdWallet,
+                BcdWalletRecipientType = e.BcdWalletRecipientType,
+                SendSalary = updated.SendSalary,
+                CanPost = updated.CanPost
+            };
+            SalaryAllocationRules.NormalizeAndValidateEmployee(candidate);
             e.SendSalary = updated.SendSalary;
             e.CanPost = updated.CanPost;
         }
@@ -201,7 +262,20 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         var byAccount = existingEmployees
             .Where(e => !string.IsNullOrWhiteSpace(e.AccountNumber))
-            .ToDictionary(e => NormalizeImportedAccount(e.AccountNumber), StringComparer.OrdinalIgnoreCase);
+            .Select(e => new
+            {
+                Employee = e,
+                Account = NormalizeImportedAccount(e.AccountNumber!)
+            })
+            .GroupBy(x => x.Account, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(x => x.Employee.IsDeleted)
+                    .ThenByDescending(x => x.Employee.Id)
+                    .First()
+                    .Employee,
+                StringComparer.OrdinalIgnoreCase);
 
         var seenAccountsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var accountsPresentInExcel = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -255,10 +329,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 continue;
             }
 
-            if (salary < 0)
+            if (salary <= 0)
             {
                 result.SkippedCount++;
-                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) cannot be negative." });
+                result.Errors.Add(new EmployeeExcelImportRowErrorDto { RowNumber = rowNumber, Message = "Salary (Column C) must be greater than zero." });
                 continue;
             }
 
@@ -276,6 +350,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 existing.Name = cleanedName;
                 existing.Salary = roundedSalary;
+                existing.BankAllocationAmount = roundedSalary;
+                existing.EvoAllocationAmount = 0m;
+                existing.BcdAllocationAmount = 0m;
                 existing.Date = now;
                 existing.AccountType = "account";
                 existing.SendSalary = true;
@@ -292,6 +369,9 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Email = null,
                 Phone = null,
                 Salary = roundedSalary,
+                BankAllocationAmount = roundedSalary,
+                EvoAllocationAmount = 0m,
+                BcdAllocationAmount = 0m,
                 Date = now,
                 AccountNumber = account,
                 AccountType = "account",
@@ -307,13 +387,14 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         foreach (var existing in existingEmployees)
         {
-            var existingAccount = NormalizeImportedAccount(existing.AccountNumber);
+            var existingAccount = NormalizeImportedAccount(existing.AccountNumber ?? string.Empty);
             if (string.IsNullOrWhiteSpace(existingAccount))
                 continue;
 
             if (!accountsPresentInExcel.Contains(existingAccount) && !existing.IsDeleted)
             {
                 existing.IsDeleted = true;
+                existing.SendSalary = false;
                 result.DeletedCount++;
             }
         }
@@ -391,11 +472,27 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Currency = s.Currency,
                 CreatedAt = s.CreatedAt,
                 PostedAt = s.PostedAt,
+                PostingStatus = s.PostingStatus,
+                PostingStartedAt = s.PostingStartedAt,
+                PostingCompletedAt = s.PostingCompletedAt,
                 CreatedByUserId = s.CreatedByUserId,
                 PostedByUserId = s.PostedByUserId,
                 TotalAmount = s.TotalAmount,
                 BankReference = s.BankReference,
-                EntryCount = s.Entries.Count()
+                BankFeeStatus = s.BankFeeStatus,
+                BankFeeError = s.BankFeeError,
+                CanEdit = s.PostedAt == null && s.PostingStatus == "notPosted",
+                CanPost = s.PostedAt == null && s.PostingStatus == "notPosted",
+                EntryCount = s.Entries.Count(),
+                HasPendingWalletBatches = s.WalletBatches.Any(b =>
+                    b.Status == "pendingProvider" || b.Status == "dispatching" ||
+                    b.Status == "funding" || b.Status == "funded"),
+                RequiresManualReview = s.PostingStatus == "unknown" ||
+                    s.BankFeeStatus == "unknown" || s.BankFeeStatus == "failed" ||
+                    s.WalletBatches.Any(b => b.Status == "unknown" ||
+                        b.Status == "failed" || b.Status == "partiallyCompleted" ||
+                        b.ManualReviews.Any(r => r.Status == "open")),
+                HasPartialFailure = s.PostingStatus == "partiallyCompleted"
             })
             .ToListAsync();
 
@@ -411,7 +508,22 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<SalaryCycleDto> CreateSalaryCycleAsync(int companyId, int createdByUserId, SalaryCycleCreateDto dto)
     {
-        List<(Employee emp, decimal amount)> list;
+        var companyCode = await _db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Code)
+            .SingleAsync();
+        ValidateCompanyDebitAccount(dto.DebitAccount, companyCode);
+
+        var duplicateEmployeeIds = (dto.Entries ?? new List<SalaryEntryUpsertDto>())
+            .GroupBy(x => x.EmployeeId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .OrderBy(x => x)
+            .ToList();
+        if (duplicateEmployeeIds.Count > 0)
+            throw new InvalidOperationException($"Duplicate employee IDs in salary cycle: {string.Join(", ", duplicateEmployeeIds)}.");
+
+        List<(Employee emp, decimal amount, SalaryEntryUpsertDto? request)> list;
 
         /* a) caller sent an explicit list ------------------------------- */
         if (dto.Entries is { Count: > 0 })
@@ -433,7 +545,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 throw new InvalidOperationException($"Employee(s) not found or deleted for this company: {string.Join(", ", missingEmployeeIds)}.");
 
             list = dto.Entries
-                     .Select(e => (empMap[e.EmployeeId], e.Salary))
+                     .Select(e => (empMap[e.EmployeeId], e.Salary, (SalaryEntryUpsertDto?)e))
                      .ToList();
         }
         /* b) legacy behaviour ------------------------------------------ */
@@ -443,13 +555,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                  .Where(e => e.CompanyId == companyId && e.SendSalary && !e.IsDeleted)
                  .ToListAsync();
 
-            list = employees.Select(e => (e, e.Salary)).ToList();
+            list = employees.Select(e => (e, e.Salary, (SalaryEntryUpsertDto?)null)).ToList();
         }
 
         // Round per-currency: LYD -> 3dp, others -> 2dp
         var decimals = string.Equals(dto.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
-        list = list.Select(x => (emp: x.emp, amount: Math.Round(x.amount, decimals))).ToList();
-        var total = Math.Round(list.Sum(x => x.amount), decimals);
+        list = list.Select(x => (
+            emp: x.emp,
+            amount: Math.Round(x.amount, decimals, MidpointRounding.AwayFromZero),
+            request: x.request)).ToList();
+        var total = Math.Round(list.Sum(x => x.amount), decimals, MidpointRounding.AwayFromZero);
         // normalize additionalMonth: only keep if between 13 and 24 (inclusive)
         string? additionalMonthStr = null;
         if (dto.AdditionalMonth.HasValue && dto.AdditionalMonth.Value >= 13 && dto.AdditionalMonth.Value <= 24)
@@ -467,7 +582,15 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Entries = list.Select(x => new SalaryEntry
             {
                 EmployeeId = x.emp.Id,
-                Amount = Math.Round(x.amount, decimals)
+                Amount = Math.Round(x.amount, decimals, MidpointRounding.AwayFromZero),
+                Allocations = SalaryAllocationRules.BuildAllocationSnapshots(
+                    x.emp,
+                    x.request ?? new SalaryEntryUpsertDto
+                    {
+                        EmployeeId = x.emp.Id,
+                        Salary = x.amount
+                    },
+                    dto.Currency).ToList()
             }).ToList()
         };
 
@@ -481,10 +604,17 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         // 1) Load cycle
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
+            .Include(c => c.WalletBatches).ThenInclude(b => b.Items).ThenInclude(i => i.SalaryEntryAllocation)
+            .Include(c => c.WalletBatches).ThenInclude(b => b.Attempts)
+            .Include(c => c.WalletBatches).ThenInclude(b => b.ManualReviews)
             .Include(c => c.Company).ThenInclude(c => c.ServicePackage)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
         if (cycle is null) return null;
+        ValidateCompanyDebitAccount(cycle.DebitAccount, cycle.Company.Code);
+        if (cycle.Entries.Any(e => e.Allocations.Count > 0))
+            return await PostAllocatedSalaryCycleAsync(cycle, postedBy);
         if (cycle.PostedAt != null) return null;
 
         // 2) Package rule (Salary Payment enabled)
@@ -791,9 +921,494 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         // 9) Mark cycle posted
         cycle.PostedAt = DateTime.UtcNow;
         cycle.PostedByUserId = postedBy;
+        cycle.PostingStartedAt ??= DateTimeOffset.UtcNow;
+        cycle.PostingCompletedAt = DateTimeOffset.UtcNow;
+        cycle.PostingStatus = cycle.Entries.All(e => e.IsTransferred)
+            ? "completed"
+            : "partiallyCompleted";
+        cycle.BankFeeStatus = string.IsNullOrWhiteSpace(cycle.BankFeeReference)
+            ? "notRequired"
+            : "legacyRecorded";
 
         await _db.SaveChangesAsync();
         return _mapper.Map<SalaryCycleDto>(cycle);
+    }
+
+    private async Task<SalaryCycleDto?> PostAllocatedSalaryCycleAsync(
+        SalaryCycle cycle,
+        int postedBy)
+    {
+        if (cycle.PostedAt is not null ||
+            !string.Equals(cycle.PostingStatus, "notPosted", StringComparison.OrdinalIgnoreCase))
+            return await GetSalaryCycleAsync(cycle.CompanyId, cycle.Id);
+
+        var detail = await _db.ServicePackageDetails
+            .Include(x => x.TransactionCategory)
+            .FirstOrDefaultAsync(x =>
+                x.ServicePackageId == cycle.Company.ServicePackageId &&
+                x.TransactionCategory.Name == "Salary Payment");
+        if (detail is null || !detail.IsEnabledForPackage)
+            throw new PayrollException("Salary payments are not enabled for your service package.");
+
+        var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
+        foreach (var entry in cycle.Entries)
+        {
+            if (entry.Employee.IsDeleted)
+                throw new PayrollException($"Employee #{entry.EmployeeId} is deleted and cannot be posted.");
+            if (entry.Allocations.Count == 0)
+                throw new PayrollException($"Employee #{entry.EmployeeId} has no salary allocations.");
+            var allocationTotal = Math.Round(
+                entry.Allocations.Sum(x => x.Amount),
+                decimals,
+                MidpointRounding.AwayFromZero);
+            if (allocationTotal != Math.Round(entry.Amount, decimals, MidpointRounding.AwayFromZero))
+                throw new PayrollException($"Salary allocations for employee #{entry.EmployeeId} no longer equal the salary entry amount.");
+        }
+
+        _walletSalary.ValidateWalletPreflight(cycle);
+        var bankAllocations = cycle.Entries
+            .SelectMany(x => x.Allocations)
+            .Where(x => string.Equals(x.PaymentChannel, WalletSalaryChannels.BankAccount, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (bankAllocations.Count == 0 &&
+            !cycle.Entries.SelectMany(x => x.Allocations).Any(x => WalletSalaryChannels.Wallets.Contains(x.PaymentChannel)))
+            throw new PayrollException("Salary cycle has no payable allocations.");
+        if (bankAllocations.Count > 0)
+            await ValidateBankAllocationPreflightAsync(cycle, bankAllocations);
+
+        var now = DateTimeOffset.UtcNow;
+        var claimed = await _db.SalaryCycles
+            .Where(x =>
+                x.Id == cycle.Id &&
+                x.CompanyId == cycle.CompanyId &&
+                x.PostedAt == null &&
+                x.PostingStatus == "notPosted")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.PostingStatus, "posting")
+                .SetProperty(x => x.PostingStartedAt, now)
+                .SetProperty(x => x.PostingClaimedAt, now)
+                .SetProperty(x => x.PostedAt, now.UtcDateTime)
+                .SetProperty(x => x.PostedByUserId, postedBy));
+        if (claimed != 1)
+            return await GetSalaryCycleAsync(cycle.CompanyId, cycle.Id);
+
+        // ExecuteUpdate bypasses the tracked instance and advances SQL rowversion.
+        // Reload before any SaveChanges so later persistence uses the new token.
+        await _db.Entry(cycle).ReloadAsync();
+        cycle.PostingStatus = "posting";
+        cycle.PostingStartedAt = now;
+        cycle.PostingClaimedAt = now;
+        cycle.PostedAt = now.UtcDateTime;
+        cycle.PostedByUserId = postedBy;
+
+        try
+        {
+            var walletBatches = await _walletSalary.PrepareInitialBatchesAsync(cycle, postedBy);
+            if (bankAllocations.Count > 0)
+                await PostBankAllocationsAsync(cycle, bankAllocations, postedBy);
+
+            foreach (var batch in walletBatches)
+                await _walletSalary.ProcessInitialBatchAsync(batch, cycle, postedBy);
+
+            RecomputeAllocatedCycleState(cycle);
+            await _db.SaveChangesAsync();
+            return await GetSalaryCycleAsync(cycle.CompanyId, cycle.Id);
+        }
+        catch
+        {
+            // Once claimed, a crash/error may have happened around a financial
+            // boundary. Fail closed: never make the ordinary post endpoint
+            // eligible again and never leave the cycle indefinitely "posting".
+            try
+            {
+                _db.ChangeTracker.Clear();
+                await _db.SalaryCycles
+                    .Where(x => x.Id == cycle.Id && x.CompanyId == cycle.CompanyId)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(x => x.PostingStatus, "unknown")
+                        .SetProperty(x => x.PostingClaimedAt, (DateTimeOffset?)null)
+                        .SetProperty(x => x.PostingCompletedAt, DateTimeOffset.UtcNow));
+            }
+            catch
+            {
+                // The stale-claim sweep performs the same fail-closed recovery.
+            }
+            throw;
+        }
+    }
+
+    private async Task ValidateBankAllocationPreflightAsync(
+        SalaryCycle cycle,
+        IReadOnlyCollection<SalaryEntryAllocation> allocations)
+    {
+        const int salaryFeeCategoryId = 17;
+        var feePricing = await _db.Pricings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TrxCatId == salaryFeeCategoryId && x.Unit == 1);
+        if (feePricing?.Price is null || feePricing.Price <= 0m)
+            throw new PayrollException("Pricing for salary fixed fee (TrxCatId=17, Unit=1) is not configured correctly.");
+
+        var source = NormalizeAcc13(cycle.DebitAccount);
+        if (source.Length != 13 || !source.All(char.IsDigit))
+            throw new PayrollException("Debit account must be 13 digits.");
+        var feeGl = !string.IsNullOrWhiteSpace(feePricing.GL1)
+            ? NormalizeAcc13(feePricing.GL1)
+            : BuildCommissionGlFromSender(source);
+        if (feeGl.Length != 13 || !feeGl.All(char.IsDigit))
+            throw new PayrollException("Configured salary fee GL must be a 13-digit account.");
+
+        foreach (var allocation in allocations)
+        {
+            if (allocation.Destination.Length != 13 || !allocation.Destination.All(char.IsDigit))
+                throw new PayrollException($"Salary bank destination is invalid for allocation #{allocation.Id}.");
+            if (allocation.Amount < feePricing.Price.Value)
+                throw new PayrollException($"Salary allocation {allocation.Amount:0.###} is less than the fixed fee for allocation #{allocation.Id}.");
+        }
+    }
+
+    private async Task PostBankAllocationsAsync(
+        SalaryCycle cycle,
+        List<SalaryEntryAllocation> allocations,
+        int postedBy)
+    {
+        const int salaryFeeCategoryId = 17;
+        var feePricing = await _db.Pricings.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.TrxCatId == salaryFeeCategoryId && x.Unit == 1);
+        if (feePricing?.Price is null || feePricing.Price <= 0m)
+            throw new PayrollException("Pricing for salary fixed fee (TrxCatId=17, Unit=1) is not configured correctly.");
+
+        var source = NormalizeAcc13(cycle.DebitAccount);
+        if (source.Length != 13 || !source.All(char.IsDigit))
+            throw new PayrollException("Debit account must be 13 digits.");
+        var feeGl = !string.IsNullOrWhiteSpace(feePricing.GL1)
+            ? NormalizeAcc13(feePricing.GL1)
+            : BuildCommissionGlFromSender(source);
+        if (feeGl.Length != 13 || !feeGl.All(char.IsDigit))
+            throw new PayrollException("Configured salary fee GL must be a 13-digit account.");
+
+        foreach (var allocation in allocations)
+        {
+            if (allocation.Destination.Length != 13 || !allocation.Destination.All(char.IsDigit))
+                throw new PayrollException($"Salary bank destination is invalid for allocation #{allocation.Id}.");
+            if (allocation.Amount < feePricing.Price.Value)
+                throw new PayrollException($"Salary allocation {allocation.Amount:0.###} is less than the fixed fee for allocation #{allocation.Id}.");
+        }
+
+        var scale = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 1000 : 100;
+        const int pad = 15;
+        var reference = $"SAL{cycle.Id}{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+        if (reference.Length > 32) reference = reference[..32];
+        cycle.BankReference = reference;
+        foreach (var allocation in allocations) allocation.Status = "posting";
+        await _db.SaveChangesAsync();
+
+        var requestLineIds = new Dictionary<int, string>();
+        var lines = allocations.Select((allocation, index) =>
+        {
+            var detailId = CoreBatchDetailId.Create(reference, index + 1);
+            requestLineIds[allocation.Id] = detailId;
+            return new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = detailId,
+                ["YBCD10ACC"] = allocation.Destination,
+                ["YBCD10AMT"] = ((long)(Math.Round(allocation.Amount, scale == 1000 ? 3 : 2) * scale)).ToString($"D{pad}"),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"مرتبات {cycle.SalaryMonth}",
+                ["YBCD10NR2"] = cycle.AdditionalMonth is null ? string.Empty : $"Extra {cycle.AdditionalMonth}",
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            };
+        }).ToList();
+        var amountTotal = lines.Sum(x => long.Parse(x["YBCD10AMT"]));
+        var payload = new
+        {
+            Header = new
+            {
+                system = "CompanyGateway",
+                referenceId = reference,
+                userName = "CompanyGateway",
+                customerNumber = source.Substring(4, 6),
+                language = "AR"
+            },
+            Details = new Dictionary<string, object>
+            {
+                ["@UNIT"] = "LIV",
+                ["@HID"] = reference,
+                ["@TYPE"] = "D",
+                ["@FORCPAY"] = "N",
+                ["@ACCOUNT"] = source,
+                ["@TRFAMT"] = amountTotal.ToString($"D{pad}"),
+                ["@TRFCCY"] = cycle.Currency,
+                ["@DTCD"] = "021",
+                ["@CTCD"] = "521",
+                ["@TRFREF"] = reference,
+                ["@NR1"] = $"مرتبات {cycle.SalaryMonth}",
+                ["@NR2"] = cycle.AdditionalMonth is null ? string.Empty : $"Extra {cycle.AdditionalMonth}",
+                ["@NR3"] = string.Empty,
+                ["@NR4"] = string.Empty,
+                ["JournalEntries"] = lines
+            }
+        };
+
+        string raw;
+        try
+        {
+            var client = _http.CreateClient("BankApi");
+            var uri = new Uri(client.BaseAddress!, "api/mobile/PostBatchApply");
+            using var response = await client.PostAsJsonAsync(uri, payload);
+            raw = await response.Content.ReadAsStringAsync();
+            cycle.BankResponseRaw = raw;
+            if (!response.IsSuccessStatusCode)
+            {
+                MarkBankAllocationsUnknown(allocations, $"Bank HTTP {(int)response.StatusCode}; posting outcome is unknown.");
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
+        {
+            MarkBankAllocationsUnknown(allocations, "Bank salary posting outcome is unknown because no readable response was received.");
+            return;
+        }
+
+        var outcomes = ParseBankAllocationOutcomes(raw);
+        var successful = new List<SalaryEntryAllocation>();
+        foreach (var allocation in allocations)
+        {
+            var detailId = requestLineIds[allocation.Id];
+            var outcome = outcomes.TryGetValue(detailId, out var matched) &&
+                          string.Equals(matched.Account, allocation.Destination, StringComparison.Ordinal)
+                ? matched
+                : default;
+            allocation.ProviderResponseRaw = outcome.Raw;
+            allocation.TransferResultCode = outcome.Code;
+            allocation.TransferResultReason = outcome.Reason;
+            if (string.Equals(outcome.Code, "S", StringComparison.OrdinalIgnoreCase))
+            {
+                allocation.Status = "completed";
+                allocation.IsTransferred = true;
+                allocation.TransferredAt = DateTimeOffset.UtcNow;
+                allocation.PostedByUserId = postedBy;
+                allocation.CommissionAmount = feePricing.Price.Value;
+                successful.Add(allocation);
+            }
+            else if (!string.IsNullOrWhiteSpace(outcome.Code))
+            {
+                allocation.Status = "failed";
+                allocation.IsTransferred = false;
+            }
+            else
+            {
+                allocation.Status = "unknown";
+                allocation.TransferResultCode = "CORE_RESULT_UNKNOWN";
+                allocation.TransferResultReason = "Core banking did not return a result for this allocation.";
+            }
+        }
+
+        if (successful.Count > 0)
+            await PostBankSalaryFeesAsync(cycle, successful, feePricing.Price.Value, feeGl, source, scale, pad);
+
+        foreach (var entry in cycle.Entries)
+        {
+            entry.IsTransferred = entry.Allocations.All(x => x.IsTransferred);
+            entry.TransferredAt = entry.IsTransferred ? DateTime.UtcNow : null;
+            entry.PostedByUserId = entry.IsTransferred ? postedBy : null;
+            entry.CommissionAmount = entry.Allocations.Sum(x => x.CommissionAmount);
+        }
+    }
+
+    private async Task PostBankSalaryFeesAsync(
+        SalaryCycle cycle,
+        List<SalaryEntryAllocation> successful,
+        decimal fixedFee,
+        string feeGl,
+        string source,
+        int scale,
+        int pad)
+    {
+        var reference = $"SLF{cycle.Id}{DateTimeOffset.UtcNow:yyyyMMddHHmmss}";
+        if (reference.Length > 32) reference = reference[..32];
+        var requestLineIds = new Dictionary<int, string>();
+        var lines = successful.Select((allocation, index) =>
+        {
+            var detailId = CoreBatchDetailId.Create(reference, index + 1);
+            requestLineIds[allocation.Id] = detailId;
+            return new Dictionary<string, string>
+            {
+                ["YBCD10DID"] = detailId,
+                ["YBCD10ACC"] = allocation.Destination,
+                ["YBCD10AMT"] = ((long)(Math.Round(fixedFee, scale == 1000 ? 3 : 2) * scale)).ToString($"D{pad}"),
+                ["YBCD10CCY"] = cycle.Currency,
+                ["YBCD10NR1"] = $"عمولة مرتبات {cycle.SalaryMonth}",
+                ["YBCD10NR2"] = cycle.AdditionalMonth is null ? string.Empty : $"Extra {cycle.AdditionalMonth}",
+                ["YBCD10NR3"] = string.Empty,
+                ["YBCD10NR4"] = string.Empty
+            };
+        }).ToList();
+        var total = lines.Sum(x => long.Parse(x["YBCD10AMT"]));
+        var payload = new
+        {
+            Header = new
+            {
+                system = "CompanyGateway",
+                referenceId = reference,
+                userName = "CompanyGateway",
+                customerNumber = source.Substring(4, 6),
+                language = "AR"
+            },
+            Details = new Dictionary<string, object>
+            {
+                ["@UNIT"] = "LIV",
+                ["@HID"] = reference,
+                ["@TYPE"] = "C",
+                ["@FORCPAY"] = "N",
+                ["@ACCOUNT"] = feeGl,
+                ["@TRFAMT"] = total.ToString($"D{pad}"),
+                ["@TRFCCY"] = cycle.Currency,
+                ["@DTCD"] = "021",
+                ["@CTCD"] = "521",
+                ["@TRFREF"] = reference,
+                ["@NR1"] = $"عمولة مرتبات {cycle.SalaryMonth}",
+                ["@NR2"] = cycle.AdditionalMonth is null ? string.Empty : $"Extra {cycle.AdditionalMonth}",
+                ["@NR3"] = string.Empty,
+                ["@NR4"] = string.Empty,
+                ["JournalEntries"] = lines
+            }
+        };
+
+        cycle.BankFeeReference = reference;
+        cycle.BankFeeStatus = "dispatching";
+        cycle.BankFeeError = null;
+        await _db.SaveChangesAsync();
+        try
+        {
+            var client = _http.CreateClient("BankApi");
+            var uri = new Uri(client.BaseAddress!, "api/mobile/PostBatchApply");
+            using var response = await client.PostAsJsonAsync(uri, payload);
+            cycle.BankFeeResponseRaw = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                cycle.BankFeeStatus = "unknown";
+                cycle.BankFeeError = $"Fixed-fee settlement returned HTTP {(int)response.StatusCode}; its financial outcome is unknown.";
+                return;
+            }
+
+            var outcomes = ParseBankAllocationOutcomes(cycle.BankFeeResponseRaw);
+            var explicitFailure = false;
+            var missingResult = false;
+            foreach (var allocation in successful)
+            {
+                var detailId = requestLineIds[allocation.Id];
+                var outcome = outcomes.TryGetValue(detailId, out var matched) &&
+                              string.Equals(matched.Account, allocation.Destination, StringComparison.Ordinal)
+                    ? matched
+                    : default;
+                if (string.IsNullOrWhiteSpace(outcome.Code))
+                    missingResult = true;
+                else if (!string.Equals(outcome.Code, "S", StringComparison.OrdinalIgnoreCase))
+                    explicitFailure = true;
+            }
+
+            if (missingResult)
+            {
+                cycle.BankFeeStatus = "unknown";
+                cycle.BankFeeError = "Core banking did not return one confirmed fixed-fee result line per successful salary credit.";
+            }
+            else if (explicitFailure)
+            {
+                cycle.BankFeeStatus = "failed";
+                cycle.BankFeeError = "Core banking explicitly rejected one or more fixed-fee settlement lines. Salary credits are not reversed automatically.";
+            }
+            else
+            {
+                cycle.BankFeeStatus = "completed";
+                cycle.BankFeeError = null;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
+        {
+            cycle.BankFeeResponseRaw = null;
+            cycle.BankFeeStatus = "unknown";
+            cycle.BankFeeError = "Salary credits succeeded, but the fixed-fee settlement outcome is unknown and requires manual review.";
+        }
+    }
+
+    private static Dictionary<string, (string? Code, string? Reason, string Raw, string? Account)> ParseBankAllocationOutcomes(string raw)
+    {
+        var result = new Dictionary<string, (string? Code, string? Reason, string Raw, string? Account)>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            if (!document.RootElement.TryGetProperty("Details", out var details) ||
+                !details.TryGetProperty("Lines", out var lines) ||
+                lines.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return result;
+            foreach (var line in lines.EnumerateArray())
+            {
+                var detailId = line.TryGetProperty("YBCD10DID", out var detailIdElement)
+                    ? detailIdElement.GetString()
+                    : null;
+                var account = line.TryGetProperty("YBCD10ACC", out var accountElement) ? accountElement.GetString() : null;
+                if (string.IsNullOrWhiteSpace(detailId)) continue;
+                var code = line.TryGetProperty("YBCD10RESP", out var codeElement) ? codeElement.GetString() : null;
+                var reason = line.TryGetProperty("YBCD10REAS", out var reasonElement) ? reasonElement.GetString() :
+                    line.TryGetProperty("REASON", out var fallbackReason) ? fallbackReason.GetString() :
+                    line.TryGetProperty("MESSAGE", out var message) ? message.GetString() : null;
+                var key = detailId.Trim();
+                if (!result.TryAdd(key, (code, reason, line.GetRawText(), account?.Trim())))
+                {
+                    result[key] = (
+                        null,
+                        "Core banking returned a duplicate detail ID.",
+                        line.GetRawText(),
+                        account?.Trim());
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+        return result;
+    }
+
+    private static void MarkBankAllocationsUnknown(
+        IEnumerable<SalaryEntryAllocation> allocations,
+        string reason)
+    {
+        foreach (var allocation in allocations)
+        {
+            allocation.Status = "unknown";
+            allocation.TransferResultCode = "CORE_OUTCOME_UNKNOWN";
+            allocation.TransferResultReason = reason;
+        }
+    }
+
+    private static void RecomputeAllocatedCycleState(SalaryCycle cycle)
+    {
+        var allocations = cycle.Entries.SelectMany(x => x.Allocations).ToList();
+        foreach (var entry in cycle.Entries)
+        {
+            entry.IsTransferred = entry.Allocations.Count > 0 && entry.Allocations.All(x => x.Status == "completed");
+            if (entry.IsTransferred) entry.TransferredAt ??= DateTime.UtcNow;
+        }
+
+        if (cycle.BankFeeStatus == "dispatching")
+            cycle.PostingStatus = "posting";
+        else if (cycle.BankFeeStatus == "unknown" || allocations.Any(x => x.Status == "unknown"))
+            cycle.PostingStatus = "unknown";
+        else if (cycle.BankFeeStatus == "failed" && allocations.Any(x => x.Status == "completed"))
+            cycle.PostingStatus = "partiallyCompleted";
+        else if (allocations.Any(x => x.Status is "posting" or "funding" or "funded" or "dispatching" or "pendingProvider" or "pending"))
+            cycle.PostingStatus = "pendingProvider";
+        else if (allocations.Count > 0 && allocations.All(x => x.Status == "completed"))
+            cycle.PostingStatus = "completed";
+        else if (allocations.Any(x => x.Status == "completed"))
+            cycle.PostingStatus = "partiallyCompleted";
+        else
+            cycle.PostingStatus = "failed";
+
+        cycle.PostingClaimedAt = null;
+        if (cycle.PostingStatus is "completed" or "partiallyCompleted" or "failed" or "unknown")
+            cycle.PostingCompletedAt = DateTimeOffset.UtcNow;
+        cycle.TotalAmount = allocations.Where(x => x.Status == "completed").Sum(x => x.Amount);
     }
 
 
@@ -812,9 +1427,16 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                 Email = e.Email,
                 Phone = e.Phone,
                 Salary = e.Salary,
+                BankAllocationAmount = e.BankAllocationAmount,
+                EvoAllocationAmount = e.EvoAllocationAmount,
+                BcdAllocationAmount = e.BcdAllocationAmount,
                 Date = e.Date,
                 AccountNumber = e.AccountNumber,
                 AccountType = e.AccountType,
+                EvoWallet = e.EvoWallet,
+                EvoWalletRecipientType = e.EvoWalletRecipientType,
+                BcdWallet = e.BcdWallet,
+                BcdWalletRecipientType = e.BcdWalletRecipientType,
                 SendSalary = e.SendSalary,
                 CanPost = e.CanPost,
                 IsDeleted = e.IsDeleted
@@ -823,50 +1445,23 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<SalaryCycleDto?> GetSalaryCycleAsync(int companyId, int cycleId)
     {
-        return await _db.SalaryCycles
+        var cycle = await _db.SalaryCycles
             .AsNoTracking()
-            .Where(c => c.CompanyId == companyId && c.Id == cycleId)
-            .Select(s => new SalaryCycleDto
-            {
-                Id = s.Id,
-                SalaryMonth = s.SalaryMonth,
-                AdditionalMonth = s.AdditionalMonth,
-                DebitAccount = s.DebitAccount,
-                Currency = s.Currency,
-                CreatedAt = s.CreatedAt,
-                PostedAt = s.PostedAt,
-                CreatedByUserId = s.CreatedByUserId,
-                PostedByUserId = s.PostedByUserId,
-                TotalAmount = s.TotalAmount,
-                EntryCount = s.Entries.Count(),
-                BankReference = s.BankReference,
-                Entries = s.Entries.Select(en => new SalaryEntryDto
-                {
-                    Id = en.Id,
-                    EmployeeId = en.EmployeeId,
-                    Name = en.Employee.Name,
-                    Email = en.Employee.Email,
-                    Phone = en.Employee.Phone,
-                    Salary = en.Amount,
-                    Date = en.Employee.Date,
-                    AccountNumber = en.Employee.AccountNumber,
-                    AccountType = en.Employee.AccountType,
-                    SendSalary = en.Employee.SendSalary,
-                    CanPost = en.Employee.CanPost,
-                    IsDeleted = en.Employee.IsDeleted,
-                    IsTransferred = en.IsTransferred,
-                    TransferResultCode = en.TransferResultCode,
-                    TransferResultReason = en.TransferResultReason,
-                    TransferredAt = en.TransferredAt
-                }).ToList()
-            })
-            .FirstOrDefaultAsync();
+            .AsSplitQuery()
+            .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
+            .Include(c => c.WalletBatches).ThenInclude(b => b.Items)
+            .Include(c => c.WalletBatches).ThenInclude(b => b.ManualReviews)
+            .FirstOrDefaultAsync(c => c.CompanyId == companyId && c.Id == cycleId);
+
+        return cycle is null ? null : _mapper.Map<SalaryCycleDto>(cycle);
     }
 
     public async Task<SalaryEntryDto?> GetSalaryEntryAsync(int companyId, int cycleId, int entryId)
     {
         var en = await _db.SalaryEntries
                           .Include(e => e.Employee)
+                          .Include(e => e.Allocations)
                           .Include(e => e.SalaryCycle)
                           .AsNoTracking()
                           .FirstOrDefaultAsync(e =>
@@ -874,31 +1469,19 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
                               e.SalaryCycleId == cycleId &&
                               e.SalaryCycle.CompanyId == companyId);
 
-        return en == null ? null : new SalaryEntryDto
-        {
-            Id = en.Id,
-            EmployeeId = en.EmployeeId,
-            /* identical employee fields */
-            Name = en.Employee.Name,
-            Email = en.Employee.Email,
-            Phone = en.Employee.Phone,
-            Salary = en.Amount,
-            Date = en.Employee.Date,
-            AccountNumber = en.Employee.AccountNumber,
-            AccountType = en.Employee.AccountType,
-            SendSalary = en.Employee.SendSalary,
-            CanPost = en.Employee.CanPost,
-            IsDeleted = en.Employee.IsDeleted,
-            /* payroll-specific */
-            IsTransferred = en.IsTransferred,
-            TransferResultCode = en.TransferResultCode,
-            TransferResultReason = en.TransferResultReason,
-            TransferredAt = en.TransferredAt
-        };
+        return en == null ? null : _mapper.Map<SalaryEntryDto>(en);
     }
 
     public async Task<List<SalaryEntryDto>> GetFailedEntriesAsync(int companyId, int cycleId)
     {
+        var hasAllocations = await _db.SalaryCycles
+            .Where(c => c.CompanyId == companyId && c.Id == cycleId)
+            .Select(c => c.Entries.Any(e => e.Allocations.Any()))
+            .SingleOrDefaultAsync();
+        if (hasAllocations)
+            throw new PayrollException(
+                "Allocation-backed salary cycles do not support the legacy failed-entry endpoint. Use wallet batch refresh or the explicit safe retry action.");
+
         var list = await _db.SalaryEntries
             .Include(e => e.Employee)
             .Include(e => e.SalaryCycle)
@@ -935,6 +1518,12 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             .FirstOrDefaultAsync(e => e.Id == entryId && e.SalaryCycleId == cycleId && e.SalaryCycle.CompanyId == companyId);
 
         if (en == null) return null;
+        var hasAllocations = await _db.SalaryEntryAllocations
+            .AnyAsync(a => a.SalaryEntry.SalaryCycleId == cycleId &&
+                           a.SalaryEntry.SalaryCycle.CompanyId == companyId);
+        if (hasAllocations)
+            throw new PayrollException(
+                "Allocation-backed salary cycles are immutable here. Edit the complete cycle before it is posted.");
         if (en.IsTransferred) throw new PayrollException("Cannot edit an entry that has already been transferred.");
 
         if (dto.Amount.HasValue)
@@ -975,10 +1564,15 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     {
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
             .Include(c => c.Company).ThenInclude(c => c.ServicePackage)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
         if (cycle is null) return null;
+        ValidateCompanyDebitAccount(cycle.DebitAccount, cycle.Company.Code);
+        if (cycle.Entries.Any(e => e.Allocations.Count > 0))
+            throw new PayrollException(
+                "Allocation-backed salary cycles cannot use the legacy repost endpoint. Use wallet batch refresh or the explicit safe retry action.");
 
         var pkgId = cycle.Company.ServicePackageId;
         var detail = await _db.ServicePackageDetails
@@ -1144,6 +1738,17 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         }
         catch { }
 
+        if (successCount > 0)
+        {
+            cycle.PostingStatus = cycle.Entries.All(e => e.IsTransferred)
+                ? "completed"
+                : "partiallyCompleted";
+            cycle.PostingCompletedAt = DateTimeOffset.UtcNow;
+            cycle.BankFeeStatus = string.IsNullOrWhiteSpace(cycle.BankFeeReference)
+                ? cycle.BankFeeStatus
+                : "legacyRecorded";
+        }
+
         await _db.SaveChangesAsync();
         return await GetSalaryCycleAsync(companyId, cycleId);
     }
@@ -1155,18 +1760,56 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         var cycle = await _db.SalaryCycles
             .Include(c => c.Entries).ThenInclude(e => e.Employee)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
-        if (cycle == null || cycle.PostedAt != null)
+        if (cycle == null ||
+            cycle.PostedAt != null ||
+            !string.Equals(cycle.PostingStatus, "notPosted", StringComparison.OrdinalIgnoreCase))
             return null;
+
+        var companyCode = await _db.Companies
+            .Where(c => c.Id == companyId)
+            .Select(c => c.Code)
+            .SingleAsync();
+        ValidateCompanyDebitAccount(dto.DebitAccount ?? cycle.DebitAccount, companyCode);
+
+        var editClaimedAt = DateTimeOffset.UtcNow;
+        var editClaimed = await _db.SalaryCycles
+            .Where(c => c.Id == cycleId &&
+                        c.CompanyId == companyId &&
+                        c.PostedAt == null &&
+                        c.PostingStatus == "notPosted")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.PostingStatus, "editing")
+                .SetProperty(c => c.PostingClaimedAt, editClaimedAt));
+        if (editClaimed != 1)
+            return null;
+
+        try
+        {
+            // ExecuteUpdate advances rowversion outside the tracked instance. A
+            // reload synchronizes the token before child allocations are replaced.
+            await _db.Entry(cycle).ReloadAsync();
+            cycle.PostingStatus = "editing";
+            cycle.PostingClaimedAt = editClaimedAt;
 
         if (dto.SalaryMonth is not null) cycle.SalaryMonth = dto.SalaryMonth;
         if (dto.AdditionalMonth is not null) cycle.AdditionalMonth = dto.AdditionalMonth.Value.ToString();
         if (dto.DebitAccount is not null) cycle.DebitAccount = dto.DebitAccount;
         if (dto.Currency is not null) cycle.Currency = dto.Currency;
 
+        var duplicateEmployeeIds = (dto.Entries ?? new List<SalaryEntryUpsertDto>())
+            .GroupBy(x => x.EmployeeId)
+            .Where(x => x.Count() > 1)
+            .Select(x => x.Key)
+            .OrderBy(x => x)
+            .ToList();
+        if (duplicateEmployeeIds.Count > 0)
+            throw new InvalidOperationException($"Duplicate employee IDs in salary cycle: {string.Join(", ", duplicateEmployeeIds)}.");
+
         var incoming = (dto.Entries ?? Enumerable.Empty<SalaryEntryUpsertDto>())
-                       .ToDictionary(e => e.EmployeeId, e => e);
+            .ToDictionary(e => e.EmployeeId, e => e);
 
         if (incoming.Count > 0)
         {
@@ -1190,7 +1833,12 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             {
                 // Round per cycle currency precision (LYD=3dp, others=2dp)
                 var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
-                existing.Amount = Math.Round(inc.Salary, decimals);
+                existing.Amount = Math.Round(inc.Salary, decimals, MidpointRounding.AwayFromZero);
+                _db.SalaryEntryAllocations.RemoveRange(existing.Allocations);
+                existing.Allocations = SalaryAllocationRules.BuildAllocationSnapshots(
+                    existing.Employee,
+                    inc,
+                    cycle.Currency).ToList();
                 incoming.Remove(existing.EmployeeId);
             }
             else
@@ -1212,26 +1860,66 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             cycle.Entries.Add(new SalaryEntry
             {
                 EmployeeId = emp.Id,
-                Amount = Math.Round(inc.Salary, decimals)
+                Employee = emp,
+                Amount = Math.Round(inc.Salary, decimals, MidpointRounding.AwayFromZero),
+                Allocations = SalaryAllocationRules.BuildAllocationSnapshots(
+                    emp,
+                    inc,
+                    cycle.Currency).ToList()
             });
         }
 
         {
             var decimals = string.Equals(cycle.Currency, "LYD", StringComparison.OrdinalIgnoreCase) ? 3 : 2;
-            cycle.TotalAmount = Math.Round(cycle.Entries.Sum(e => e.Amount), decimals);
+            cycle.TotalAmount = Math.Round(
+                cycle.Entries.Sum(e => e.Amount),
+                decimals,
+                MidpointRounding.AwayFromZero);
         }
 
-        await _db.SaveChangesAsync();
-        return _mapper.Map<SalaryCycleDto>(cycle);
+        cycle.PostingStatus = "notPosted";
+        cycle.PostingClaimedAt = null;
+
+            await _db.SaveChangesAsync();
+            return _mapper.Map<SalaryCycleDto>(cycle);
+        }
+        catch
+        {
+            // Validation may fail after the atomic edit claim. Release that
+            // database-only lock immediately; no financial boundary is crossed
+            // by save/edit operations.
+            _db.ChangeTracker.Clear();
+            try
+            {
+                await _db.SalaryCycles
+                    .Where(c => c.Id == cycleId &&
+                                c.CompanyId == companyId &&
+                                c.PostedAt == null &&
+                                c.PostingStatus == "editing" &&
+                                c.PostingClaimedAt == editClaimedAt)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(c => c.PostingStatus, "notPosted")
+                        .SetProperty(c => c.PostingClaimedAt, (DateTimeOffset?)null));
+            }
+            catch
+            {
+                // The reconciliation sweep can safely release a stale edit
+                // claim if the immediate cleanup itself cannot be persisted.
+            }
+            throw;
+        }
     }
 
     public async Task<SalaryCycleDto?> AddEntriesToPostedCycleAsync(int companyId, int cycleId, SalaryCycleAddEntriesDto dto)
     {
         var cycle = await _db.SalaryCycles
-            .Include(c => c.Entries)
+            .Include(c => c.Entries).ThenInclude(e => e.Allocations)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.CompanyId == companyId);
 
         if (cycle == null) return null;
+        if (cycle.Entries.Any(e => e.Allocations.Count > 0))
+            throw new PayrollException(
+                "Allocation-backed salary cycles cannot use the legacy add-entry endpoint. Edit the complete cycle before it is posted.");
         if (cycle.PostedAt == null)
             throw new PayrollException("Salary cycle is not posted. Use the save endpoint before posting.");
 

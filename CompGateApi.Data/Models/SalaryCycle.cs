@@ -22,6 +22,13 @@ public class SalaryCycle : Auditable
     public int? PostedByUserId { get; set; }
     public DateTime? PostedAt { get; set; }
 
+    [MaxLength(32)]
+    public string PostingStatus { get; set; } = "notPosted";
+
+    public DateTimeOffset? PostingStartedAt { get; set; }
+    public DateTimeOffset? PostingCompletedAt { get; set; }
+    public DateTimeOffset? PostingClaimedAt { get; set; }
+
     [Column(TypeName = "decimal(18,3)")]
     public decimal TotalAmount { get; set; }
 
@@ -34,12 +41,20 @@ public class SalaryCycle : Auditable
     [MaxLength(32)] public string? BankFeeReference { get; set; }
     public string? BankFeeResponseRaw { get; set; }
 
+    [MaxLength(32)]
+    public string BankFeeStatus { get; set; } = "notRequired";
+
+    [MaxLength(1024)]
+    public string? BankFeeError { get; set; }
+
     // Accumulates repost attempts with salary + fee references
     // JSON array of objects: [{"attemptAtUtc": "...", "entryIds": [..], "salaryRef": "...", "feeRef": "..."}, ...]
     [Column(TypeName = "nvarchar(max)")]
     public string? BankBatchHistoryJson { get; set; }
 
     public ICollection<SalaryEntry> Entries { get; set; } = new List<SalaryEntry>();
+    public ICollection<SalaryWalletBatch> WalletBatches { get; set; } = new List<SalaryWalletBatch>();
+
+    [Timestamp]
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }
-
-

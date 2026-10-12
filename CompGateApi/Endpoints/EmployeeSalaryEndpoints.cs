@@ -5,6 +5,7 @@ using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
 using CompGateApi.Core.Notifications;
+using CompGateApi.Core.WalletSalary;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.AspNetCore.Builder;
@@ -40,8 +41,11 @@ namespace CompGateApi.Endpoints
                          GetSalaryEntryById);
 
             group.MapGet("/salarycycles", GetSalaryCycles);
+            group.MapGet("/salary-wallet/capabilities", GetSalaryWalletCapabilities);
             group.MapPost("/salarycycles", CreateSalaryCycle);
             group.MapPost("/salarycycles/{id:int}/post", PostSalaryCycle);
+            group.MapPost("/salarycycles/{cycleId:int}/wallet-batches/{batchId:int}/refresh", RefreshWalletSalaryBatch);
+            group.MapPost("/salarycycles/{cycleId:int}/wallet-batches/{batchId:int}/retry", RetryWalletSalaryBatch);
             group.MapPost("/salarycycles/{id:int}/repost", RepostFailedEntries);
             group.MapGet("/salarycycles/{id:int}/entries/failed", GetFailedEntries);
             group.MapPost("/salarycycles/{cycleId:int}/entries/{entryId:int}/edit", EditEntryAndEmployee);
@@ -53,7 +57,7 @@ namespace CompGateApi.Endpoints
 
             var admin = app.MapGroup("/api/admin/salarycycles")
                         .WithTags("Employees & Salaries (Admin)")
-                        .RequireAuthorization("RequireAdminUser");
+                        .RequireAuthorization("AdminAccess");
 
             admin.MapGet("/", AdminGetSalaryCycles)
                  .Produces<PagedResult<SalaryCycleAdminListItemDto>>(200);
@@ -70,6 +74,19 @@ namespace CompGateApi.Endpoints
             if (int.TryParse(raw, out var id)) return id;
             throw new UnauthorizedAccessException("Missing/invalid 'nameid' claim.");
         }
+
+        private static async Task<bool> HasAnySalaryPermissionAsync(
+            int userId,
+            WalletSalaryService service,
+            CancellationToken cancellationToken) =>
+            await service.HasPermissionAsync(
+                userId,
+                WalletSalaryService.CreateOrEditPermission,
+                cancellationToken) ||
+            await service.HasPermissionAsync(
+                userId,
+                WalletSalaryService.PostPermission,
+                cancellationToken);
 
         public static async Task<IResult> GetAllEmployees(
             HttpContext ctx,
@@ -92,15 +109,28 @@ namespace CompGateApi.Endpoints
             [FromBody] EmployeeCreateDto dto,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.EmployeeManagementPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
-            var employee = await repo.CreateEmployeeAsync(user.CompanyId.Value, dto);
-            return Results.Ok(employee);
+            try
+            {
+                var employee = await repo.CreateEmployeeAsync(user.CompanyId.Value, dto);
+                return Results.Ok(employee);
+            }
+            catch (PayrollException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
+            }
         }
 
         public static async Task<IResult> ImportEmployeesFromExcel(
@@ -109,28 +139,32 @@ namespace CompGateApi.Endpoints
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
             [FromServices] ILogger<EmployeeSalaryEndpoints> log,
-            [FromServices] CompGateApiDbContext db,
-            [FromServices] INotificationEventWriter notificationWriter)
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.EmployeeManagementPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             try
             {
                 if (!request.HasFormContentType)
-                    return Results.BadRequest(new { error = "Request must be multipart/form-data." });
+                    return Results.BadRequest(new { message = "Request must be multipart/form-data.", error = "Request must be multipart/form-data." });
 
                 var form = await request.ReadFormAsync();
                 var file = form.Files.GetFile("files") ?? form.Files.FirstOrDefault();
 
                 if (file == null || file.Length == 0)
-                    return Results.BadRequest(new { error = "Please upload a non-empty .xlsx file." });
+                    return Results.BadRequest(new { message = "Please upload a non-empty .xlsx file.", error = "Please upload a non-empty .xlsx file." });
 
                 var extension = Path.GetExtension(file.FileName);
                 if (!string.Equals(extension, ".xlsx", StringComparison.OrdinalIgnoreCase))
-                    return Results.BadRequest(new { error = "Only .xlsx files are supported." });
+                    return Results.BadRequest(new { message = "Only .xlsx files are supported.", error = "Only .xlsx files are supported." });
 
                 await using var stream = file.OpenReadStream();
                 var result = await repo.ImportEmployeesFromExcelAsync(user.CompanyId.Value, stream);
@@ -138,7 +172,7 @@ namespace CompGateApi.Endpoints
             }
             catch (InvalidDataException ex)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -152,27 +186,46 @@ namespace CompGateApi.Endpoints
             [FromBody] EmployeeCreateDto dto,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.EmployeeManagementPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
-            var updated = await repo.UpdateEmployeeAsync(user.CompanyId.Value, id, dto);
-            return updated == null ? Results.NotFound() : Results.Ok(updated);
+            try
+            {
+                var updated = await repo.UpdateEmployeeAsync(user.CompanyId.Value, id, dto);
+                return updated == null ? Results.NotFound() : Results.Ok(updated);
+            }
+            catch (PayrollException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
+            }
         }
 
         public static async Task<IResult> DeleteEmployee(
             int id,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.EmployeeManagementPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             var result = await repo.DeleteEmployeeAsync(user.CompanyId.Value, id);
             return result ? Results.NoContent() : Results.NotFound();
@@ -182,12 +235,18 @@ namespace CompGateApi.Endpoints
             [FromBody] List<EmployeeDto> updates,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.EmployeeManagementPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             var success = await repo.BatchUpdateAsync(user.CompanyId.Value, updates);
             return success ? Results.Ok("Batch updated successfully.") : Results.BadRequest("Failed to update batch.");
@@ -213,12 +272,15 @@ namespace CompGateApi.Endpoints
             int id,
             HttpContext ctx,
             IEmployeeSalaryRepository repo,
-            IUserRepository userRepo)
+            IUserRepository userRepo,
+            WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await HasAnySalaryPermissionAsync(user.UserId, walletSalary, ctx.RequestAborted))
+                return Results.Forbid();
 
             var dto = await repo.GetSalaryCycleAsync(user.CompanyId.Value, id);
             return dto == null ? Results.NotFound() : Results.Ok(dto);
@@ -229,12 +291,15 @@ namespace CompGateApi.Endpoints
             int entryId,
             HttpContext ctx,
             IEmployeeSalaryRepository repo,
-            IUserRepository userRepo)
+            IUserRepository userRepo,
+            WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await HasAnySalaryPermissionAsync(user.UserId, walletSalary, ctx.RequestAborted))
+                return Results.Forbid();
 
             var dto = await repo.GetSalaryEntryAsync(user.CompanyId.Value, cycleId, entryId);
             return dto == null ? Results.NotFound() : Results.Ok(dto);
@@ -244,6 +309,7 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary,
             [FromQuery] int page = 1,
             [FromQuery] int limit = 50)
         {
@@ -251,9 +317,27 @@ namespace CompGateApi.Endpoints
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await HasAnySalaryPermissionAsync(user.UserId, walletSalary, ctx.RequestAborted))
+                return Results.Forbid();
 
             var cycles = await repo.GetSalaryCyclesAsync(user.CompanyId.Value, page, limit);
             return Results.Ok(cycles);
+        }
+
+        public static async Task<IResult> GetSalaryWalletCapabilities(
+            HttpContext ctx,
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+
+            var capabilities = await walletSalary.GetCapabilitiesAsync(
+                user.UserId,
+                ctx.RequestAborted);
+            return Results.Ok(capabilities);
         }
 
         public static async Task<IResult> CreateSalaryCycle(
@@ -263,7 +347,8 @@ namespace CompGateApi.Endpoints
             [FromServices] IUserRepository userRepo,
             [FromServices] ILogger<EmployeeSalaryEndpoints> log,
             [FromServices] CompGateApiDbContext db,
-            [FromServices] INotificationEventWriter notificationWriter)
+            [FromServices] INotificationEventWriter notificationWriter,
+            [FromServices] WalletSalaryService walletSalary)
         {
             try
             {
@@ -273,6 +358,11 @@ namespace CompGateApi.Endpoints
 
                 if (user?.CompanyId == null)
                     return Results.Unauthorized();
+                if (!await walletSalary.HasPermissionAsync(
+                        user.UserId,
+                        WalletSalaryService.CreateOrEditPermission,
+                        ctx.RequestAborted))
+                    return Results.Forbid();
 
                 await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
                 var cycle = await repo.CreateSalaryCycleAsync(
@@ -295,10 +385,10 @@ namespace CompGateApi.Endpoints
                 return Results.Ok(cycle);
             }
             /* -- domain / validation errors we want to surface to caller -- */
-            catch (InvalidOperationException ex)
+            catch (Exception ex) when (ex is InvalidOperationException or PayrollException)
             {
                 log.LogWarning(ex, "CreateSalaryCycle business-rule failure");
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
             }
             /* -- anything else is still a 500, but now **logged** -- */
             catch (Exception ex)
@@ -314,12 +404,18 @@ namespace CompGateApi.Endpoints
     [FromServices] IEmployeeSalaryRepository repo,
     [FromServices] IUserRepository userRepo,
     ILogger<EmployeeSalaryEndpoints> log,
-    [FromServices] INotificationEventWriter notificationWriter)
+    [FromServices] INotificationEventWriter notificationWriter,
+    [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.PostPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             try
             {
@@ -328,21 +424,22 @@ namespace CompGateApi.Endpoints
 
                 try
                 {
+                    var notification = BuildPostingNotification(result.PostingStatus);
                     await notificationWriter.CreateForUserAsync(
                         result.CreatedByUserId,
                         user.UserId,
-                        "salary_cycle_approved",
+                        notification.EventType,
                         "salary",
                         id.ToString(),
-                        "Salary cycle approved",
-                        "Your salary cycle was approved and submitted successfully.",
-                        $"salary:{id}:approved",
+                        notification.Title,
+                        notification.Body,
+                        $"salary:{id}:posted:{result.PostingStatus}",
                         ctx.RequestAborted);
                 }
                 catch (Exception exception)
                 {
-                    // Salary posting is an external financial operation and has already
-                    // succeeded; a push-enqueue failure must not change that outcome.
+                    // Posting has already crossed its financial state boundary; a
+                    // notification failure must not alter the persisted outcome.
                     log.LogError(
                         exception,
                         "Failed to enqueue the approval notification for salary cycle {CycleId}.",
@@ -350,9 +447,10 @@ namespace CompGateApi.Endpoints
                 }
 
                 // shape: include your cycle and the bank’s per-entry outcome
-                return Results.Ok(new
+                return Results.Ok(new SalaryPostingResponseDto
                 {
-                    cycle = result,
+                    Cycle = result,
+                    Summary = BuildPostingSummary(result)
                 });
             }
             catch (PayrollException ex)
@@ -365,11 +463,11 @@ namespace CompGateApi.Endpoints
                     var token2 = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
                     var user2 = await userRepo.GetUserByAuthId(authId2, token2);
                     var cycleDto = user2?.CompanyId != null ? await repo.GetSalaryCycleAsync(user2.CompanyId.Value, id) : null;
-                    return Results.BadRequest(new { error = ex.Message, cycle = cycleDto });
+                    return Results.BadRequest(new { message = ex.Message, error = ex.Message, cycle = cycleDto });
                 }
                 catch
                 {
-                    return Results.BadRequest(new { error = ex.Message });
+                    return Results.BadRequest(new { message = ex.Message, error = ex.Message });
                 }
             }
             catch (Exception ex)
@@ -379,18 +477,86 @@ namespace CompGateApi.Endpoints
             }
         }
 
+        public static async Task<IResult> RefreshWalletSalaryBatch(
+            int cycleId,
+            int batchId,
+            HttpContext ctx,
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await HasAnySalaryPermissionAsync(user.UserId, walletSalary, ctx.RequestAborted))
+                return Results.Forbid();
+
+            try
+            {
+                var result = await walletSalary.RefreshBatchAsync(
+                    user.CompanyId.Value,
+                    cycleId,
+                    batchId,
+                    ctx.RequestAborted);
+                return result is null ? Results.NotFound() : Results.Ok(result);
+            }
+            catch (PayrollException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
+            }
+        }
+
+        public static async Task<IResult> RetryWalletSalaryBatch(
+            int cycleId,
+            int batchId,
+            HttpContext ctx,
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
+        {
+            var authId = GetAuthUserId(ctx);
+            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
+            var user = await userRepo.GetUserByAuthId(authId, bearer);
+            if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.PostPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
+
+            try
+            {
+                var result = await walletSalary.RetryBatchAsync(
+                    user.CompanyId.Value,
+                    cycleId,
+                    batchId,
+                    user.UserId,
+                    ctx.RequestAborted);
+                return result is null ? Results.NotFound() : Results.Ok(result);
+            }
+            catch (PayrollException ex)
+            {
+                return Results.Conflict(new { message = ex.Message, error = ex.Message });
+            }
+        }
+
         public static async Task<IResult> RepostFailedEntries(
             int id,
             [FromBody] SalaryRepostIdsRequestDto dto,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
-            ILogger<EmployeeSalaryEndpoints> log)
+            ILogger<EmployeeSalaryEndpoints> log,
+            WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.PostPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             try
             {
@@ -401,7 +567,7 @@ namespace CompGateApi.Endpoints
             catch (PayrollException ex)
             {
                 log.LogWarning(ex, "RepostFailedEntries business-rule failure");
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -414,15 +580,25 @@ namespace CompGateApi.Endpoints
             int id,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo)
+            [FromServices] IUserRepository userRepo,
+            [FromServices] WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await HasAnySalaryPermissionAsync(user.UserId, walletSalary, ctx.RequestAborted))
+                return Results.Forbid();
 
-            var list = await repo.GetFailedEntriesAsync(user.CompanyId.Value, id);
-            return Results.Ok(list);
+            try
+            {
+                var list = await repo.GetFailedEntriesAsync(user.CompanyId.Value, id);
+                return Results.Ok(list);
+            }
+            catch (PayrollException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
+            }
         }
 
         public static async Task<IResult> EditEntryAndEmployee(
@@ -432,12 +608,18 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
             [FromServices] IUserRepository userRepo,
-            ILogger<EmployeeSalaryEndpoints> log)
+            ILogger<EmployeeSalaryEndpoints> log,
+            WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    user.UserId,
+                    WalletSalaryService.CreateOrEditPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             try
             {
@@ -448,7 +630,7 @@ namespace CompGateApi.Endpoints
             catch (PayrollException ex)
             {
                 log.LogWarning(ex, "EditEntryAndEmployee failure");
-                return Results.BadRequest(new { error = ex.Message });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -462,26 +644,33 @@ namespace CompGateApi.Endpoints
         int id, SalaryCycleSaveDto dto, HttpContext ctx,
         IEmployeeSalaryRepository repo, IUserRepository userRepo,
         CompGateApiDbContext db,
-        INotificationEventWriter notificationWriter)
+        INotificationEventWriter notificationWriter,
+        WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var me = await userRepo.GetUserByAuthId(authId, token);
             if (me?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    me.UserId,
+                    WalletSalaryService.CreateOrEditPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             // Provide clear feedback: does cycle exist? is it already posted?
             var existing = await repo.GetSalaryCycleAsync(me.CompanyId.Value, id);
             if (existing == null)
-                return Results.NotFound(new { error = "Salary cycle not found for this company.", cycleId = id });
-            if (existing.PostedAt != null)
-                return Results.BadRequest(new { error = "Salary cycle is already posted and cannot be edited.", cycleId = id });
+                return Results.NotFound(new { message = "Salary cycle not found for this company.", error = "Salary cycle not found for this company.", cycleId = id });
+            if (existing.PostedAt != null ||
+                !string.Equals(existing.PostingStatus, "notPosted", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { message = "Salary cycle is already posted and cannot be edited.", error = "Salary cycle is already posted and cannot be edited.", cycleId = id });
 
             try
             {
                 await using var transaction = await db.Database.BeginTransactionAsync(ctx.RequestAborted);
                 var saved = await repo.SaveSalaryCycleAsync(me.CompanyId.Value, id, dto);
                 if (saved == null)
-                    return Results.BadRequest(new { error = "Unable to save salary cycle (validation failed).", cycleId = id });
+                    return Results.BadRequest(new { message = "Unable to save salary cycle (validation failed).", error = "Unable to save salary cycle (validation failed).", cycleId = id });
                 await notificationWriter.CreateForCompanyApproversAsync(
                     me.CompanyId.Value,
                     me.UserId,
@@ -495,9 +684,9 @@ namespace CompGateApi.Endpoints
                 await transaction.CommitAsync(ctx.RequestAborted);
                 return Results.Ok(saved);
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex) when (ex is InvalidOperationException or PayrollException)
             {
-                return Results.BadRequest(new { error = ex.Message, cycleId = id });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message, cycleId = id });
             }
         }
 
@@ -509,24 +698,30 @@ namespace CompGateApi.Endpoints
             HttpContext ctx,
             IEmployeeSalaryRepository repo,
             IUserRepository userRepo,
-            ILogger<EmployeeSalaryEndpoints> log)
+            ILogger<EmployeeSalaryEndpoints> log,
+            WalletSalaryService walletSalary)
         {
             var authId = GetAuthUserId(ctx);
             var token = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
             var me = await userRepo.GetUserByAuthId(authId, token);
             if (me?.CompanyId == null) return Results.Unauthorized();
+            if (!await walletSalary.HasPermissionAsync(
+                    me.UserId,
+                    WalletSalaryService.CreateOrEditPermission,
+                    ctx.RequestAborted))
+                return Results.Forbid();
 
             try
             {
                 var updated = await repo.AddEntriesToPostedCycleAsync(me.CompanyId.Value, id, dto);
                 if (updated == null)
-                    return Results.NotFound(new { error = "Salary cycle not found for this company.", cycleId = id });
+                    return Results.NotFound(new { message = "Salary cycle not found for this company.", error = "Salary cycle not found for this company.", cycleId = id });
                 return Results.Ok(updated);
             }
             catch (PayrollException ex)
             {
                 log.LogWarning(ex, "AddEntriesToPostedSalaryCycle business-rule failure");
-                return Results.BadRequest(new { error = ex.Message, cycleId = id });
+                return Results.BadRequest(new { message = ex.Message, error = ex.Message, cycleId = id });
             }
             catch (Exception ex)
             {
@@ -564,6 +759,62 @@ namespace CompGateApi.Endpoints
         {
             var dto = await repo.AdminGetSalaryCycleAsync(id);
             return dto == null ? Results.NotFound() : Results.Ok(dto);
+        }
+
+        private static SalaryPostingSummaryDto BuildPostingSummary(SalaryCycleDto cycle)
+        {
+            var allocations = cycle.Entries.SelectMany(x => x.Allocations).ToList();
+            return new SalaryPostingSummaryDto
+            {
+                OverallStatus = cycle.PostingStatus,
+                BankAccount = Summarize(allocations, WalletSalaryChannels.BankAccount),
+                EvoWallet = Summarize(allocations, WalletSalaryChannels.EvoWallet),
+                BcdWallet = Summarize(allocations, WalletSalaryChannels.BcdWallet)
+            };
+        }
+
+        private static (string EventType, string Title, string Body) BuildPostingNotification(string status) =>
+            status switch
+            {
+                "completed" => (
+                    "salary_cycle_completed",
+                    "Salary cycle completed",
+                    "The approved salary cycle completed successfully."),
+                "pendingProvider" => (
+                    "salary_cycle_pending_provider",
+                    "Salary cycle awaiting provider results",
+                    "The salary cycle was approved and submitted; one or more wallet batches are still processing."),
+                "partiallyCompleted" => (
+                    "salary_cycle_partially_completed",
+                    "Salary cycle partially completed",
+                    "The salary cycle has both completed and failed results and requires review."),
+                "failed" => (
+                    "salary_cycle_failed",
+                    "Salary cycle failed",
+                    "The salary cycle was approved, but no salary allocation completed."),
+                _ => (
+                    "salary_cycle_manual_review",
+                    "Salary cycle requires manual review",
+                    "The salary cycle outcome is not fully known. Do not submit it again until it is reviewed.")
+            };
+
+        private static SalaryPostingChannelSummaryDto Summarize(
+            IEnumerable<SalaryEntryAllocationDto> allocations,
+            string channel)
+        {
+            var selected = allocations
+                .Where(x => string.Equals(x.PaymentChannel, channel, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            return new SalaryPostingChannelSummaryDto
+            {
+                Total = selected.Count,
+                Completed = selected.Count(x => x.Status == "completed"),
+                Failed = selected.Count(x => x.Status is "failed" or "fundingFailed" or "failedBeforeDispatch"),
+                Pending = selected.Count(x => x.Status is "pending" or "posting" or "funding" or "funded" or "dispatching" or "pendingProvider"),
+                Unknown = selected.Count(x => x.Status == "unknown"),
+                Amount = selected.Sum(x => x.Amount),
+                Commission = selected.Sum(x => x.CommissionAmount)
+            };
         }
 
     }

@@ -75,23 +75,63 @@ namespace CompGateApi
                 .ForMember(d => d.Name, c => c.MapFrom(s => s.Employee.Name))
                 .ForMember(d => d.Email, c => c.MapFrom(s => s.Employee.Email))
                 .ForMember(d => d.Phone, c => c.MapFrom(s => s.Employee.Phone))
-                .ForMember(d => d.Salary, c => c.MapFrom(s => s.Employee.Salary))
+                .ForMember(d => d.Salary, c => c.MapFrom(s => s.Amount))
+                .ForMember(d => d.BankAllocationAmount, c => c.MapFrom(s => s.Employee.BankAllocationAmount))
+                .ForMember(d => d.EvoAllocationAmount, c => c.MapFrom(s => s.Employee.EvoAllocationAmount))
+                .ForMember(d => d.BcdAllocationAmount, c => c.MapFrom(s => s.Employee.BcdAllocationAmount))
                 .ForMember(d => d.Date, c => c.MapFrom(s => s.Employee.Date))
                 .ForMember(d => d.AccountNumber, c => c.MapFrom(s => s.Employee.AccountNumber))
                 .ForMember(d => d.AccountType, c => c.MapFrom(s => s.Employee.AccountType))
+                .ForMember(d => d.EvoWallet, c => c.MapFrom(s => s.Employee.EvoWallet))
+                .ForMember(d => d.EvoWalletRecipientType, c => c.MapFrom(s => s.Employee.EvoWalletRecipientType))
+                .ForMember(d => d.BcdWallet, c => c.MapFrom(s => s.Employee.BcdWallet))
+                .ForMember(d => d.BcdWalletRecipientType, c => c.MapFrom(s => s.Employee.BcdWalletRecipientType))
                 .ForMember(d => d.SendSalary, c => c.MapFrom(s => s.Employee.SendSalary))
                 .ForMember(d => d.CanPost, c => c.MapFrom(s => s.Employee.CanPost))
                 .ForMember(d => d.IsDeleted, c => c.MapFrom(s => s.Employee.IsDeleted))
                 .ForMember(d => d.TransferResultCode, c => c.MapFrom(s => s.TransferResultCode))
                 .ForMember(d => d.TransferResultReason, c => c.MapFrom(s => s.TransferResultReason))
-                .ForMember(d => d.TransferredAt, c => c.MapFrom(s => s.TransferredAt));
+                .ForMember(d => d.TransferredAt, c => c.MapFrom(s => s.TransferredAt))
+                .ForMember(d => d.Allocations, c => c.MapFrom(s => s.Allocations));
+
+            CreateMap<SalaryEntryAllocation, SalaryEntryAllocationDto>();
+
+            CreateMap<SalaryWalletBatchItem, SalaryWalletBatchItemDto>()
+                .ForMember(d => d.AllocationId, c => c.MapFrom(s => s.SalaryEntryAllocationId));
+
+            CreateMap<SalaryWalletBatch, SalaryWalletBatchDto>()
+                .ForMember(d => d.CanRetry, c => c.MapFrom(s => s.RetryAllowed))
+                .ForMember(d => d.ManualReconciliationAmount, c => c.MapFrom(s => s.ReversalAmount))
+                .ForMember(d => d.OutcomeKnown, c => c.MapFrom(s =>
+                    s.DispatchClassification != "outcomeUnknown"))
+                .ForMember(d => d.RequiresManualReview, c => c.MapFrom(s =>
+                    s.Status == "unknown" || s.ManualReviews.Any(r => r.Status == "open")))
+                .ForMember(d => d.CanRefreshStatus, c => c.MapFrom(s =>
+                    s.ProviderBatchId != null &&
+                    (s.Status == "pendingProvider" || s.Status == "unknown")));
 
             // map SalaryCycle -> SalaryCycleDto
             CreateMap<SalaryCycle, SalaryCycleDto>()
             .ForMember(d => d.EntryCount,
                     c => c.MapFrom(src => src.Entries.Count))
             .ForMember(d => d.Entries,
-                    c => c.MapFrom(src => src.Entries));
+                    c => c.MapFrom(src => src.Entries))
+            .ForMember(d => d.WalletBatches,
+                    c => c.MapFrom(src => src.WalletBatches))
+            .ForMember(d => d.CanEdit, c => c.MapFrom(src =>
+                src.PostedAt == null && src.PostingStatus == "notPosted"))
+            .ForMember(d => d.CanPost, c => c.MapFrom(src =>
+                src.PostedAt == null && src.PostingStatus == "notPosted"))
+            .ForMember(d => d.HasPendingWalletBatches,
+                    c => c.MapFrom(src => src.WalletBatches.Any(b => b.Status == "pendingProvider")))
+            .ForMember(d => d.RequiresManualReview,
+                    c => c.MapFrom(src =>
+                        src.BankFeeStatus == "unknown" || src.BankFeeStatus == "failed" ||
+                        src.WalletBatches.Any(b => b.Status == "unknown" ||
+                            b.Status == "failed" || b.Status == "partiallyCompleted" ||
+                            b.ManualReviews.Any(r => r.Status == "open"))))
+            .ForMember(d => d.HasPartialFailure,
+                    c => c.MapFrom(src => src.PostingStatus == "partiallyCompleted"));
         }
     }
 

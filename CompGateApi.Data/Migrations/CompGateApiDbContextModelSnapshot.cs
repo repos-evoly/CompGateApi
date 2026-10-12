@@ -1816,6 +1816,19 @@ namespace CompGateApi.Data.Migrations
                     b.Property<DateTimeOffset?>("NextStatusCheckAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("ProviderGeneralError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool?>("ProviderIsFinished")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ProviderIsTransactionSuccess")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ProviderMainSuccess")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ProviderReturnMessage")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1823,6 +1836,9 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("ProviderReturnMessageCode")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool?>("ProviderStillUnderProcessing")
+                        .HasColumnType("bit");
 
                     b.Property<string>("ProviderTransactionStatus")
                         .HasMaxLength(1000)
@@ -2924,7 +2940,6 @@ namespace CompGateApi.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AccountNumber")
-                        .IsRequired()
                         .HasMaxLength(34)
                         .HasColumnType("nvarchar(34)");
 
@@ -2936,6 +2951,19 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("BcdWallet")
                         .HasMaxLength(34)
                         .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("BcdWalletRecipientType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("BcdAllocationAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("BankAllocationAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("AccountAllocationAmount");
 
                     b.Property<bool>("CanPost")
                         .HasColumnType("bit");
@@ -2954,6 +2982,14 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(34)
                         .HasColumnType("nvarchar(34)");
 
+                    b.Property<string>("EvoWalletRecipientType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("EvoAllocationAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -2969,7 +3005,7 @@ namespace CompGateApi.Data.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<decimal>("Salary")
-                        .HasPrecision(18, 2)
+                        .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
                     b.Property<bool>("SendSalary")
@@ -2997,12 +3033,23 @@ namespace CompGateApi.Data.Migrations
                     b.Property<string>("BankBatchHistoryJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("BankFeeError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
                     b.Property<string>("BankFeeReference")
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("BankFeeResponseRaw")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BankFeeStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("notRequired");
 
                     b.Property<string>("BankReference")
                         .HasMaxLength(32)
@@ -3036,13 +3083,35 @@ namespace CompGateApi.Data.Migrations
                     b.Property<int?>("PostedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<DateTimeOffset?>("PostingClaimedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PostingCompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("PostingStartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PostingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasDefaultValue("notPosted");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<string>("SalaryMonth")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
+                        .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -3050,7 +3119,7 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyId");
+                    b.HasIndex("CompanyId", "PostingStatus");
 
                     b.ToTable("SalaryCycles", (string)null);
                 });
@@ -3064,7 +3133,7 @@ namespace CompGateApi.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
+                        .HasPrecision(18, 3)
                         .HasColumnType("decimal(18,3)");
 
                     b.Property<string>("BankLineResponseRaw")
@@ -3109,6 +3178,447 @@ namespace CompGateApi.Data.Migrations
                     b.HasIndex("SalaryCycleId");
 
                     b.ToTable("SalaryEntries", (string)null);
+                });
+
+            modelBuilder.Entity("SalaryEntryAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<bool>("IsTransferred")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PaymentChannel")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<int?>("PostedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProviderResponseRaw")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderTxCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("RecipientNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RecipientType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ReversalError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("ReversalReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ReversalStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SalaryEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TransferResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TransferResultReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<DateTimeOffset?>("TransferredAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalaryEntryId", "PaymentChannel")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "PaymentChannel");
+
+                    b.ToTable("SalaryEntryAllocations", (string)null);
+                });
+
+            modelBuilder.Entity("SalaryWalletBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset?>("CheckClaimedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("CoreFundingReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CoreFundingResponseRaw")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CoreFundingStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("DebitAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("DispatchClassification")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("DispatchCompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DispatchStartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal>("FailedTotalAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset?>("LastCheckedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset?>("NextCheckAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProviderBatchId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderRequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ProviderRequestJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderResponseJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Rail")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<decimal>("ReceiverCommission")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("RequestedTotalAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<bool>("RetryAllowed")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("ReversalAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("ReversalError")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("ReversalReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ReversalResponseRaw")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReversalStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SalaryCycleId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("SenderCommission")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ShadowAccount")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("SuccessfulTotalAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("TotalCommission")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextCheckAt");
+
+                    b.HasIndex("SalaryCycleId", "Rail", "Purpose", "SequenceNumber")
+                        .IsUnique();
+
+                    b.ToTable("SalaryWalletBatches", (string)null);
+                });
+
+            modelBuilder.Entity("SalaryWalletBatchAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AttemptType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DispatchClassification")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("ResultStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<int>("SalaryWalletBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalaryWalletBatchId", "AttemptNumber")
+                        .IsUnique();
+
+                    b.ToTable("SalaryWalletBatchAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("SalaryWalletBatchItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(34)
+                        .HasColumnType("nvarchar(34)");
+
+                    b.Property<string>("ProviderResponseRaw")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderTxCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("RecipientType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("RequestIndex")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalaryEntryAllocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SalaryWalletBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalaryEntryAllocationId");
+
+                    b.HasIndex("SalaryWalletBatchId", "RequestIndex")
+                        .IsUnique();
+
+                    b.HasIndex("SalaryWalletBatchId", "SalaryEntryAllocationId")
+                        .IsUnique();
+
+                    b.ToTable("SalaryWalletBatchItems", (string)null);
+                });
+
+            modelBuilder.Entity("SalaryWalletManualReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("SalaryWalletBatchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SalaryWalletBatchId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("SalaryWalletManualReviews", (string)null);
                 });
 
             modelBuilder.Entity("CompGateApi.Data.Models.Attachment", b =>
@@ -3849,6 +4359,69 @@ namespace CompGateApi.Data.Migrations
                     b.Navigation("SalaryCycle");
                 });
 
+            modelBuilder.Entity("SalaryEntryAllocation", b =>
+                {
+                    b.HasOne("SalaryEntry", "SalaryEntry")
+                        .WithMany("Allocations")
+                        .HasForeignKey("SalaryEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SalaryEntry");
+                });
+
+            modelBuilder.Entity("SalaryWalletBatch", b =>
+                {
+                    b.HasOne("SalaryCycle", "SalaryCycle")
+                        .WithMany("WalletBatches")
+                        .HasForeignKey("SalaryCycleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SalaryCycle");
+                });
+
+            modelBuilder.Entity("SalaryWalletBatchAttempt", b =>
+                {
+                    b.HasOne("SalaryWalletBatch", "SalaryWalletBatch")
+                        .WithMany("Attempts")
+                        .HasForeignKey("SalaryWalletBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SalaryWalletBatch");
+                });
+
+            modelBuilder.Entity("SalaryWalletBatchItem", b =>
+                {
+                    b.HasOne("SalaryEntryAllocation", "SalaryEntryAllocation")
+                        .WithMany("WalletBatchItems")
+                        .HasForeignKey("SalaryEntryAllocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SalaryWalletBatch", "SalaryWalletBatch")
+                        .WithMany("Items")
+                        .HasForeignKey("SalaryWalletBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SalaryEntryAllocation");
+
+                    b.Navigation("SalaryWalletBatch");
+                });
+
+            modelBuilder.Entity("SalaryWalletManualReview", b =>
+                {
+                    b.HasOne("SalaryWalletBatch", "SalaryWalletBatch")
+                        .WithMany("ManualReviews")
+                        .HasForeignKey("SalaryWalletBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SalaryWalletBatch");
+                });
+
             modelBuilder.Entity("CompGateApi.Data.Models.CblRequest", b =>
                 {
                     b.Navigation("Attachments");
@@ -3980,6 +4553,27 @@ namespace CompGateApi.Data.Migrations
             modelBuilder.Entity("SalaryCycle", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("WalletBatches");
+                });
+
+            modelBuilder.Entity("SalaryEntry", b =>
+                {
+                    b.Navigation("Allocations");
+                });
+
+            modelBuilder.Entity("SalaryEntryAllocation", b =>
+                {
+                    b.Navigation("WalletBatchItems");
+                });
+
+            modelBuilder.Entity("SalaryWalletBatch", b =>
+                {
+                    b.Navigation("Attempts");
+
+                    b.Navigation("Items");
+
+                    b.Navigation("ManualReviews");
                 });
 #pragma warning restore 612, 618
         }
