@@ -5,6 +5,7 @@ using ClosedXML.Excel;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
 using CompGateApi.Core.Errors;
+using CompGateApi.Core.Employees;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
@@ -77,6 +78,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
     public async Task<EmployeeDto> CreateEmployeeAsync(int companyId, EmployeeCreateDto dto)
     {
+        var account = await ValidateActiveAccountAsync(companyId, dto.AccountNumber);
         var e = new Employee
         {
             CompanyId = companyId,
@@ -85,7 +87,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             Phone = NormalizeOptionalText(dto.Phone),
             Salary = dto.Salary,
             Date = dto.Date,
-            AccountNumber = dto.AccountNumber,
+            AccountNumber = account,
             AccountType = dto.AccountType,
             EvoWallet = dto.EvoWallet,
             BcdWallet = dto.BcdWallet,
@@ -95,7 +97,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
         };
 
         _db.Employees.Add(e);
-        await _db.SaveChangesAsync();
+        await SaveEmployeeChangesAsync();
 
         return new EmployeeDto
         {
@@ -119,20 +121,21 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
     {
         var e = await _db.Employees.FirstOrDefaultAsync(x => x.Id == id && x.CompanyId == companyId && !x.IsDeleted);
         if (e == null) return null;
+        var account = await ValidateActiveAccountAsync(companyId, dto.AccountNumber, id);
 
         e.Name = dto.Name;
         e.Email = NormalizeOptionalText(dto.Email);
         e.Phone = NormalizeOptionalText(dto.Phone);
         e.Salary = dto.Salary;
         e.Date = dto.Date;
-        e.AccountNumber = dto.AccountNumber;
+        e.AccountNumber = account;
         e.AccountType = dto.AccountType;
         e.EvoWallet = dto.EvoWallet;
         e.BcdWallet = dto.BcdWallet;
         e.SendSalary = dto.SendSalary;
         e.CanPost = dto.CanPost;
 
-        await _db.SaveChangesAsync();
+        await SaveEmployeeChangesAsync();
 
         return new EmployeeDto
         {
@@ -192,16 +195,14 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
         var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
         if (lastRow == 0)
-            return result;
+            throw new InvalidDataException("The Excel file contains no employee rows. No employees were changed.");
 
         var now = DateTime.UtcNow;
         var existingEmployees = await _db.Employees
-            .Where(e => e.CompanyId == companyId)
+            .Where(e => e.CompanyId == companyId && !string.IsNullOrEmpty(e.AccountNumber))
             .ToListAsync();
 
-        var byAccount = existingEmployees
-            .Where(e => !string.IsNullOrWhiteSpace(e.AccountNumber))
-            .ToDictionary(e => NormalizeImportedAccount(e.AccountNumber), StringComparer.OrdinalIgnoreCase);
+        var byAccount = EmployeeAccountRules.SelectImportTargets(existingEmployees);
 
         var seenAccountsInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var accountsPresentInExcel = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -274,6 +275,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
 
             if (byAccount.TryGetValue(account, out var existing))
             {
+                existing.AccountNumber = account;
                 existing.Name = cleanedName;
                 existing.Salary = roundedSalary;
                 existing.Date = now;
@@ -305,6 +307,10 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             result.CreatedCount++;
         }
 
+        if (result.CreatedCount + result.UpdatedCount == 0)
+            throw new InvalidDataException(
+                "The Excel file contains no valid employee rows. Check Name, the 13-digit Account Number and Salary. No employees were changed.");
+
         foreach (var existing in existingEmployees)
         {
             var existingAccount = NormalizeImportedAccount(existing.AccountNumber);
@@ -318,7 +324,7 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             }
         }
 
-        await _db.SaveChangesAsync();
+        await SaveEmployeeChangesAsync();
         return result;
     }
 
@@ -350,15 +356,39 @@ public class EmployeeSalaryRepository : IEmployeeSalaryRepository
             out salary);
     }
 
-    private static string NormalizeImportedAccount(string rawAccount)
-    {
-        if (string.IsNullOrWhiteSpace(rawAccount))
-            return string.Empty;
+    private static string NormalizeImportedAccount(string rawAccount) => EmployeeAccountRules.Normalize(rawAccount);
 
-        var normalized = rawAccount.Trim().Replace(" ", "");
-        if (normalized.EndsWith(".0", StringComparison.Ordinal))
-            normalized = normalized[..^2];
-        return normalized;
+    private async Task<string> ValidateActiveAccountAsync(int companyId, string? rawAccount, int? excludeId = null)
+    {
+        var account = EmployeeAccountRules.Normalize(rawAccount);
+        if (account.Length == 0 || account.Length > 34)
+            throw new InvalidDataException("Account number is required and must contain no more than 34 characters.");
+
+        var candidates = await _db.Employees.AsNoTracking()
+            .Where(e => e.CompanyId == companyId && !e.IsDeleted && !string.IsNullOrEmpty(e.AccountNumber)
+                && (!excludeId.HasValue || e.Id != excludeId.Value))
+            .Select(e => new { e.Id, e.AccountNumber }).ToListAsync();
+        var conflict = candidates.FirstOrDefault(e =>
+            string.Equals(EmployeeAccountRules.Normalize(e.AccountNumber), account, StringComparison.OrdinalIgnoreCase));
+        if (conflict != null)
+            throw new EmployeeAccountConflictException(
+                $"Account {account} is already assigned to active employee ID {conflict.Id} in this company.");
+        return account;
+    }
+
+    private async Task SaveEmployeeChangesAsync()
+    {
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is Microsoft.Data.SqlClient.SqlException sql
+            && sql.Number is 2601 or 2627
+            && sql.Message.Contains(EmployeeAccountRules.ActiveAccountIndex, StringComparison.Ordinal))
+        {
+            throw new EmployeeAccountConflictException(
+                "An active employee already uses this account number in this company. Refresh the employee list and retry. No employees were changed.", ex);
+        }
     }
 
     private static string? NormalizeOptionalText(string? value)

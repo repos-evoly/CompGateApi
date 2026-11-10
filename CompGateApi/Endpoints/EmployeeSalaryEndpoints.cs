@@ -115,23 +115,36 @@ namespace CompGateApi.Endpoints
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
 
-            var employee = await repo.CreateEmployeeAsync(user.CompanyId.Value, dto);
-            return Results.Ok(employee);
+            try
+            {
+                var employee = await repo.CreateEmployeeAsync(user.CompanyId.Value, dto);
+                return Results.Ok(employee);
+            }
+            catch (EmployeeAccountConflictException ex)
+            {
+                return Results.Conflict(new { code = "employee_account_conflict", message = ex.Message });
+            }
+            catch (InvalidDataException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
         }
 
         public static async Task<IResult> ImportEmployeesFromExcel(
             HttpRequest request,
             HttpContext ctx,
             [FromServices] IEmployeeSalaryRepository repo,
-            [FromServices] IUserRepository userRepo,
             [FromServices] ILogger<EmployeeSalaryEndpoints> log,
-            [FromServices] CompGateApiDbContext db,
-            [FromServices] INotificationEventWriter notificationWriter)
+            [FromServices] CompGateApiDbContext db)
         {
             var authId = GetAuthUserId(ctx);
-            var bearer = ctx.Request.Headers["Authorization"].FirstOrDefault() ?? "";
-            var user = await userRepo.GetUserByAuthId(authId, bearer);
-            if (user?.CompanyId == null) return Results.Unauthorized();
+            // An employee import only needs the authenticated user's company.
+            // Do not make its availability depend on AuthApi or BankApi calls.
+            var companyId = await db.Users.AsNoTracking()
+                .Where(user => user.AuthUserId == authId)
+                .Select(user => user.CompanyId)
+                .FirstOrDefaultAsync(ctx.RequestAborted);
+            if (companyId == null) return Results.Unauthorized();
 
             try
             {
@@ -149,8 +162,12 @@ namespace CompGateApi.Endpoints
                     return Results.BadRequest(new { error = "Only .xlsx files are supported." });
 
                 await using var stream = file.OpenReadStream();
-                var result = await repo.ImportEmployeesFromExcelAsync(user.CompanyId.Value, stream);
+                var result = await repo.ImportEmployeesFromExcelAsync(companyId.Value, stream);
                 return Results.Ok(result);
+            }
+            catch (EmployeeAccountConflictException ex)
+            {
+                return Results.Conflict(new { code = "employee_account_conflict", message = ex.Message });
             }
             catch (InvalidDataException ex)
             {
@@ -158,8 +175,12 @@ namespace CompGateApi.Endpoints
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Unhandled error while importing employee excel for company {CompanyId}", user.CompanyId.Value);
-                return Results.StatusCode(StatusCodes.Status500InternalServerError);
+                log.LogError(ex, "Unhandled error while importing employee excel for company {CompanyId}", companyId.Value);
+                return Results.Json(new
+                {
+                    message = "The employee Excel import could not be completed. Contact support with the reference below.",
+                    reference = ctx.TraceIdentifier
+                }, statusCode: StatusCodes.Status500InternalServerError);
             }
         }
 
@@ -175,8 +196,19 @@ namespace CompGateApi.Endpoints
             var user = await userRepo.GetUserByAuthId(authId, bearer);
             if (user?.CompanyId == null) return Results.Unauthorized();
 
-            var updated = await repo.UpdateEmployeeAsync(user.CompanyId.Value, id, dto);
-            return updated == null ? Results.NotFound() : Results.Ok(updated);
+            try
+            {
+                var updated = await repo.UpdateEmployeeAsync(user.CompanyId.Value, id, dto);
+                return updated == null ? Results.NotFound() : Results.Ok(updated);
+            }
+            catch (EmployeeAccountConflictException ex)
+            {
+                return Results.Conflict(new { code = "employee_account_conflict", message = ex.Message });
+            }
+            catch (InvalidDataException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
         }
 
         public static async Task<IResult> DeleteEmployee(

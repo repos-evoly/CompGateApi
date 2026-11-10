@@ -725,6 +725,10 @@ namespace CompGateApi.Data.Context
                             b.Property(e => e.SendSalary);
                             b.Property(e => e.CanPost);
                             b.Property(e => e.IsDeleted).HasDefaultValue(false);
+                            b.HasIndex(e => new { e.CompanyId, e.AccountNumber })
+                             .HasDatabaseName("UX_Employees_CompanyId_AccountNumber_Active")
+                             .IsUnique()
+                             .HasFilter("[IsDeleted] = 0 AND [AccountNumber] IS NOT NULL AND [AccountNumber] <> N''");
 
                             b.HasOne(e => e.Company)
                             .WithMany(c => c.Employees)

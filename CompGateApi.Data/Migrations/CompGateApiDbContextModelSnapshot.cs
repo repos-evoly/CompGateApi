@@ -2979,6 +2979,11 @@ namespace CompGateApi.Data.Migrations
 
                     b.HasIndex("CompanyId");
 
+                    b.HasIndex("CompanyId", "AccountNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Employees_CompanyId_AccountNumber_Active")
+                        .HasFilter("[IsDeleted] = 0 AND [AccountNumber] IS NOT NULL AND [AccountNumber] <> N''");
+
                     b.ToTable("Employees", (string)null);
                 });
 

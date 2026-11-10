@@ -45,6 +45,16 @@ Import behavior:
   - `canPost = true`
   - `isDeleted = false`
 
+### Duplicate accounts and rejected uploads
+
+- If one active employee and archived employees share an account, the active employee is updated. Archived records and their salary history are retained.
+- If all matching employees are archived, the matching record with the highest employee ID is reactivated. No employee records or salary entries are merged.
+- Multiple active employees with the same account reject the import before anything is saved. The response identifies the account and conflicting employee IDs.
+- A blank, header-only, or entirely invalid file is rejected without deleting employees. Individual invalid or repeated rows in a file containing valid employees continue to appear in the import summary.
+- Creating or editing an employee rejects an account already used by another active employee in the same company. Account numbers are trimmed, internal spaces removed, and a trailing Excel `.0` removed consistently.
+- `20261104120000_AddUniqueActiveEmployeeAccount` adds the unique filtered index `UX_Employees_CompanyId_AccountNumber_Active` on `(CompanyId, AccountNumber)` for active employees with a non-null, non-empty account number. Wallet-only employees with no bank account are excluded. Review active duplicates before applying it. The migration does not archive or merge employees automatically.
+- For a database with unrelated pending migrations, generate and review the SQL for this migration alone rather than applying all pending migrations. Its only changes are the index and its migration-history record.
+
 ## 3) Verify imported employees
 
 Use:
