@@ -53,7 +53,7 @@ namespace CompGateApi.Core.Repositories
             }
 
             // 2) Internal transfers commissions: sum TransferRequests.CommissionAmount where CommissionAmount > 0
-            //    Commission receiver accounts are in Settings (LYD/other)
+            //    Keep the legacy aggregate and provide separate LYD/USD/EUR totals.
             {
                 var q = _db.TransferRequests
                     .Include(t => t.Currency)
@@ -68,12 +68,13 @@ namespace CompGateApi.Core.Repositories
                 decimal other = list.Where(t => (t.Currency.Code ?? "").ToUpper() != "LYD").Sum(t => t.CommissionAmount);
 
                 // Commission accounts from Settings
-                var settings = await _db.Settings.AsNoTracking().OrderByDescending(s => s.Id).FirstOrDefaultAsync();
+                var settings = await _db.Settings.AsNoTracking().FirstOrDefaultAsync();
                 var accs = new List<string>();
                 if (settings != null)
                 {
                     if (!string.IsNullOrWhiteSpace(settings.CommissionAccount)) accs.Add(settings.CommissionAccount);
                     if (!string.IsNullOrWhiteSpace(settings.CommissionAccountUSD)) accs.Add(settings.CommissionAccountUSD);
+                    if (!string.IsNullOrWhiteSpace(settings.CommissionAccountEUR)) accs.Add(settings.CommissionAccountEUR);
                 }
 
                 result.CommissionBoxes.Add(new CommissionBox
@@ -81,7 +82,19 @@ namespace CompGateApi.Core.Repositories
                     Type = "transfers",
                     AccountNumbers = accs.Distinct().ToList(),
                     LydValue = lyd,
-                    OtherCurrenciesValue = other
+                    OtherCurrenciesValue = other,
+                    CurrencyTotals = new[]
+                    {
+                        (Code: "LYD", Account: settings?.CommissionAccount),
+                        (Code: "USD", Account: settings?.CommissionAccountUSD),
+                        (Code: "EUR", Account: settings?.CommissionAccountEUR)
+                    }.Select(item => new CommissionCurrencyTotal
+                    {
+                        CurrencyCode = item.Code,
+                        AccountNumber = item.Account,
+                        Value = list.Where(t => string.Equals(t.Currency.Code?.Trim(), item.Code, StringComparison.OrdinalIgnoreCase))
+                            .Sum(t => t.CommissionAmount)
+                    }).ToList()
                 });
             }
 

@@ -21,6 +21,15 @@ namespace CompGateApi.Core.Abstractions
         public List<string> AccountNumbers { get; set; } = new();
         public decimal LydValue { get; set; }
         public decimal OtherCurrenciesValue { get; set; }
+        // Explicit currency/account pairs for new clients; legacy totals remain available.
+        public List<CommissionCurrencyTotal>? CurrencyTotals { get; set; }
+    }
+
+    public class CommissionCurrencyTotal
+    {
+        public string CurrencyCode { get; set; } = string.Empty;
+        public string? AccountNumber { get; set; }
+        public decimal Value { get; set; }
     }
 
     public class DashboardTotalsSummary

@@ -14,6 +14,9 @@ namespace CompGateApi.Data.Models
 
         public string CommissionAccountUSD { get; set; } = string.Empty;
 
+        [MaxLength(13)]
+        public string? CommissionAccountEUR { get; set; }
+
         public decimal GlobalLimit { get; set; }
 
         public string? EvoWallet { get; set; } = null!;

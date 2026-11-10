@@ -5,6 +5,7 @@ using CompGateApi.Data.Abstractions;
 using AutoMapper;
 using CompGateApi.Data.Models;
 using CompGateApi.Abstractions;
+using CompGateApi.Core.Transfers;
 
 namespace CompGateApi.Endpoints
 {
@@ -40,6 +41,14 @@ namespace CompGateApi.Endpoints
             if (settings == null) return TypedResults.NotFound("Settings not found.");
 
             // Only update the fields that are provided
+            if (settingsDto.CommissionAccountEUR != null)
+            {
+                var eurAccount = TransferCommissionAccounts.Normalize(settingsDto.CommissionAccountEUR);
+                if (eurAccount.Length > 0 && !TransferCommissionAccounts.IsValid(eurAccount))
+                    return TypedResults.BadRequest(new { message = "EUR commission account must contain exactly 13 digits." });
+                settings.CommissionAccountEUR = eurAccount.Length == 0 ? null : eurAccount;
+            }
+
             if (!string.IsNullOrEmpty(settingsDto.CommissionAccount))
                 settings.CommissionAccount = settingsDto.CommissionAccount;
 

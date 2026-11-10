@@ -68,6 +68,7 @@ namespace CompGateApi
             CreateMap<Settings, SettingsDto>()
               .ForMember(dest => dest.CommissionAccount, opt => opt.MapFrom(src => src.CommissionAccount))
               .ForMember(dest => dest.CommissionAccountUSD, opt => opt.MapFrom(src => src.CommissionAccountUSD))
+              .ForMember(dest => dest.CommissionAccountEUR, opt => opt.MapFrom(src => src.CommissionAccountEUR))
 
               .ReverseMap();
 

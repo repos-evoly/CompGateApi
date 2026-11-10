@@ -2496,6 +2496,10 @@ namespace CompGateApi.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("CommissionAccountEUR")
+                        .HasMaxLength(13)
+                        .HasColumnType("nvarchar(13)");
+
                     b.Property<string>("CommissionAccountUSD")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");

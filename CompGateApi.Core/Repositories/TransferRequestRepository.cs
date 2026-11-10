@@ -1,5 +1,6 @@
 ﻿using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
+using CompGateApi.Core.Transfers;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
@@ -274,10 +275,11 @@ namespace CompGateApi.Data.Repositories
                 var settings = await _db.Settings.FirstOrDefaultAsync(ct);
                 if (settings == null)
                     return (false, "System settings missing", null, "0.000", "0.000");
-                string commissionAccount = currencyCode == "USD" ? settings.CommissionAccountUSD : settings.CommissionAccount;
 
                 var amtRounded = Math.Round(ent.Amount, decimals);
                 var commRounded = Math.Round(ent.CommissionAmount, decimals);
+                if (!TransferCommissionAccounts.TryResolve(settings, currencyCode, commRounded, out var commissionAccount, out var accountError))
+                    return (false, accountError, null, "0.000", "0.000");
                 string amountStr = ((long)(amtRounded * scale)).ToString("D15");
                 string commStr = ((long)(commRounded * scale)).ToString("D15");
                 string applyTrn2 = commRounded > 0m ? "Y" : "N";
@@ -474,9 +476,8 @@ namespace CompGateApi.Data.Repositories
                             ? (dto.Amount - commission).ToString("0.000")
                             : dto.Amount.ToString("0.000");
 
-                string commissionAccount = currencyCode == "USD"
-                    ? settings.CommissionAccountUSD
-                    : settings.CommissionAccount;
+                if (!TransferCommissionAccounts.TryResolve(settings, currencyCode, commRounded, out var commissionAccount, out var accountError))
+                    return Fail(accountError!);
 
                 // 8) Call bank API
                 var referenceId = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
