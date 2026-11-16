@@ -166,7 +166,7 @@ public sealed class EurCommissionTests
     }
 
     [Fact]
-    public async Task DashboardSeparatesUsdAndEurAndAppliesDateFilter()
+    public async Task DashboardSeparatesCompletedUsdAndEurCommissionsAndAppliesDateFilter()
     {
         await using var db = NewDb();
         db.Settings.Add(Accounts());
@@ -176,10 +176,10 @@ public sealed class EurCommissionTests
             db.Currencies.Add(new Currency { Id = i + 1, Code = codes[i], Rate = 1 });
             db.TransferRequests.Add(new TransferRequest
             {
-                CurrencyId = i + 1, CommissionAmount = (i + 1) * 10, RequestedAt = new DateTime(2026, 11, 9), TransactionCategoryId = 2
+                CurrencyId = i + 1, Status = "Completed", CommissionAmount = (i + 1) * 10, RequestedAt = new DateTime(2026, 11, 9), TransactionCategoryId = 2
             });
         }
-        db.TransferRequests.Add(new TransferRequest { CurrencyId = 3, CommissionAmount = 999, RequestedAt = new DateTime(2026, 11, 1), TransactionCategoryId = 2 });
+        db.TransferRequests.Add(new TransferRequest { CurrencyId = 3, Status = "Completed", CommissionAmount = 999, RequestedAt = new DateTime(2026, 11, 1), TransactionCategoryId = 2 });
         await db.SaveChangesAsync();
         var summary = await new DashboardRepository(db).GetCommissionSummaryAsync(new DateTime(2026, 11, 9), new DateTime(2026, 11, 9));
         var transfer = Assert.Single(summary.CommissionBoxes.Where(b => b.Type == "transfers"));

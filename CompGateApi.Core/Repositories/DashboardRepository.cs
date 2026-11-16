@@ -23,11 +23,11 @@ namespace CompGateApi.Core.Repositories
             var (start, end) = NormalizeRange(from, to);
             var result = new DashboardCommissionSummary();
 
-            // 1) Statement of Account commissions (service fees): sum TransferRequests.Amount where category = TRXCAT_CERT_STMT
+            // 1) Collected statement service fees: only completed postings contribute.
             {
                 var q = _db.TransferRequests
                     .Include(t => t.Currency)
-                    .Where(t => t.TransactionCategoryId == TRXCAT_CERT_STMT);
+                    .Where(t => t.Status == "Completed" && t.TransactionCategoryId == TRXCAT_CERT_STMT);
 
                 if (start != null) q = q.Where(t => t.RequestedAt >= start);
                 if (end != null) q = q.Where(t => t.RequestedAt < end);
@@ -52,12 +52,12 @@ namespace CompGateApi.Core.Repositories
                 });
             }
 
-            // 2) Internal transfers commissions: sum TransferRequests.CommissionAmount where CommissionAmount > 0
+            // 2) Collected transfer commissions: draft fees are estimates until posting completes.
             //    Keep the legacy aggregate and provide separate LYD/USD/EUR totals.
             {
                 var q = _db.TransferRequests
                     .Include(t => t.Currency)
-                    .Where(t => t.CommissionAmount > 0);
+                    .Where(t => t.Status == "Completed" && t.CommissionAmount > 0);
 
                 if (start != null) q = q.Where(t => t.RequestedAt >= start);
                 if (end != null) q = q.Where(t => t.RequestedAt < end);
@@ -144,9 +144,9 @@ namespace CompGateApi.Core.Repositories
 
             var totals = new DashboardTotalsSummary();
 
-            // Internal transfers: TransferRequests with CommissionAmount > 0
+            // Completed transfers matching the collected-commission summary above.
             {
-                var q = _db.TransferRequests.Where(t => t.CommissionAmount > 0);
+                var q = _db.TransferRequests.Where(t => t.Status == "Completed" && t.CommissionAmount > 0);
                 if (start != null) q = q.Where(t => t.RequestedAt >= start);
                 if (end != null) q = q.Where(t => t.RequestedAt < end);
                 totals.InternalTransfers = await q.AsNoTracking().CountAsync();
