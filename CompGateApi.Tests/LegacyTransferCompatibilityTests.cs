@@ -2,12 +2,15 @@ using System.Reflection;
 using System.Security.Claims;
 using CompGateApi.Core.Abstractions;
 using CompGateApi.Core.Dtos;
+using CompGateApi.Core.LyPay;
+using CompGateApi.Core.OnePay;
 using CompGateApi.Core.Startup;
 using CompGateApi.Data.Context;
 using CompGateApi.Data.Models;
 using CompGateApi.Endpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -22,56 +25,59 @@ public sealed class LegacyTransferCompatibilityTests
             .Options);
 
     [Fact]
-    public void LegacyModelDoesNotReadOrWriteUnappliedBeneficiaryColumns()
+    public void RailBeneficiaryMappingIsRestoredWithoutWalletSalaryModels()
     {
         using var db = NewDb();
         var entity = db.Model.FindEntityType(typeof(Beneficiary))!;
         foreach (var name in new[] { "PaymentRail", "RowVersion", "CreatedByUserId",
                      "InstitutionId", "InstitutionName", "ProviderInstitutionReference" })
-            Assert.Null(entity.FindProperty(name));
-        Assert.Null(entity.FindNavigation("CreatedByUser"));
+            Assert.NotNull(entity.FindProperty(name));
+        Assert.NotNull(entity.FindNavigation("CreatedByUser"));
+        Assert.True(entity.FindProperty("RowVersion")!.IsConcurrencyToken);
         Assert.NotNull(entity.FindProperty("CompanyId"));
         Assert.NotNull(entity.FindProperty("AccountNumber"));
         Assert.NotNull(db.Model.FindEntityType(typeof(NotificationOutbox)));
+        Assert.DoesNotContain(db.Model.GetEntityTypes(), type =>
+            type.ClrType.Name.StartsWith("SalaryWallet") || type.ClrType.Name == "SalaryEntryAllocation");
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void OrdinaryQueriesSupportBothSchemasAndKeepCompanyAndArchiveFilters(bool upgraded)
+    public void NotificationNameProjectionSupportsBothSchemasAndKeepsCompanyAndArchiveFilters(bool upgraded)
     {
         using var db = NewDb();
         var query = LegacyBeneficiaryQueries.ForSchema(db, upgraded)
             .Where(b => b.CompanyId == 27 && !b.IsDeleted);
-        var listSql = query.OrderBy(b => b.Id).Skip(0).Take(10).ToQueryString();
         var nameSql = query.Where(b => b.AccountNumber.Trim() == "123456")
             .Select(b => b.Name).ToQueryString();
-        foreach (var sql in new[] { listSql, nameSql })
-        {
-            Assert.Contains("[CompanyId]", sql);
-            Assert.Contains("[IsDeleted]", sql);
-            Assert.DoesNotContain("[RowVersion]", sql);
-            Assert.DoesNotContain("[InstitutionId]", sql);
-            Assert.DoesNotContain("[CreatedByUserId]", sql);
-            if (upgraded) Assert.Contains("[PaymentRail] = N'Normal'", sql);
-            else Assert.DoesNotContain("[PaymentRail]", sql);
-        }
+        Assert.Contains("[CompanyId]", nameSql);
+        Assert.Contains("[IsDeleted]", nameSql);
+        if (upgraded) Assert.Contains("[PaymentRail] = N'Normal'", nameSql);
+        else Assert.DoesNotContain("[PaymentRail]", nameSql);
+        Assert.DoesNotContain("[RowVersion]", nameSql);
+        Assert.DoesNotContain("[InstitutionId]", nameSql);
+        Assert.DoesNotContain("[CreatedByUserId]", nameSql);
     }
 
     [Fact]
-    public void IntegrationRoutesAndWorkersAreNotRegistered()
+    public void PaymentRailRoutesAndWorkersAreRegisteredWithoutWalletSalaryServices()
     {
         var assembly = typeof(BeneficiaryEndpoints).Assembly;
-        Assert.Null(assembly.GetType("CompGateApi.Endpoints.OnePayEndpoints"));
-        Assert.Null(assembly.GetType("CompGateApi.Endpoints.LyPayEndpoints"));
+        Assert.NotNull(assembly.GetType("CompGateApi.Endpoints.OnePayEndpoints"));
+        Assert.NotNull(assembly.GetType("CompGateApi.Endpoints.LyPayEndpoints"));
         Assert.NotNull(assembly.GetType("CompGateApi.Endpoints.MobileInternalUserEndpoints"));
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
         builder.Services.RegisterRepos(builder.Configuration, builder.Environment);
+        Assert.Contains(builder.Services, d => d.ServiceType == typeof(IOnePayProviderClient));
+        Assert.Contains(builder.Services, d => d.ServiceType == typeof(ILyPayProviderClient));
+        Assert.Contains(builder.Services, d => d.ServiceType == typeof(OnePayTransferService));
+        Assert.Contains(builder.Services, d => d.ServiceType == typeof(LyPayTransferService));
+        Assert.Contains(builder.Services, d => d.ImplementationType == typeof(OnePayReconciliationWorker));
+        Assert.Contains(builder.Services, d => d.ImplementationType == typeof(LyPayReconciliationWorker));
         Assert.DoesNotContain(builder.Services, d =>
-            (d.ServiceType.FullName ?? "").Contains("OnePay") ||
-            (d.ServiceType.FullName ?? "").Contains("LyPay") ||
-            (d.ImplementationType?.FullName ?? "").Contains("OnePay") ||
-            (d.ImplementationType?.FullName ?? "").Contains("LyPay"));
+            (d.ServiceType.FullName ?? "").Contains("WalletSalary") ||
+            (d.ImplementationType?.FullName ?? "").Contains("WalletSalary"));
         Assert.Contains(builder.Services, d => d.ServiceType == typeof(ITransferRequestRepository));
         Assert.Contains(builder.Services, d => d.ServiceType == typeof(IEmployeeSalaryRepository));
     }
@@ -79,13 +85,32 @@ public sealed class LegacyTransferCompatibilityTests
     [Theory]
     [InlineData(PaymentRail.OnePay)]
     [InlineData(PaymentRail.LyPay)]
-    [InlineData((PaymentRail)99)]
-    public async Task RepositoryRejectsDisabledRailsBeforeAnyDatabaseAccess(PaymentRail rail)
+    [InlineData(PaymentRail.Normal)]
+    public async Task RepositoryKeepsPaymentRailsCompanyAndArchiveStateSeparate(PaymentRail rail)
     {
-        using var db = NewDb();
+        using var db = new CompGateApiDbContext(new DbContextOptionsBuilder<CompGateApiDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        foreach (var value in new[] { PaymentRail.Normal, PaymentRail.OnePay, PaymentRail.LyPay })
+        {
+            var id = (int)value + 1;
+            db.Beneficiaries.Add(new Beneficiary
+            {
+                Id = id, CompanyId = 27, PaymentRail = value, Name = "Recipient",
+                InstitutionId = "BANK", AccountNumber = id.ToString(), RowVersion = new byte[8]
+            });
+        }
+        db.Beneficiaries.AddRange(
+            new Beneficiary { Id = 4, CompanyId = 28, PaymentRail = rail, Name = "Other company", AccountNumber = "4", RowVersion = new byte[8] },
+            new Beneficiary { Id = 5, CompanyId = 27, PaymentRail = rail, Name = "Archived", AccountNumber = "5", IsDeleted = true, RowVersion = new byte[8] });
+        await db.SaveChangesAsync();
         var repo = new BeneficiaryRepository(db);
-        await Assert.ThrowsAsync<NotSupportedException>(() => repo.GetPageByCompanyAsync(27, rail, null, null, 1, 10));
-        await Assert.ThrowsAsync<NotSupportedException>(() => repo.CreateAsync(new Beneficiary { PaymentRail = rail }));
+        var page = await repo.GetPageByCompanyAsync(27, rail, null, null, 1, 10);
+        Assert.Equal((int)rail + 1, Assert.Single(page.Items).Id);
+        Assert.Equal(1, page.Total);
+        Assert.Equal(1, Assert.Single(await repo.GetAllByCompanyAsync(27)).Id);
+        Assert.Null(await repo.GetByIdAsync(5));
+        Assert.True(await repo.ActiveDestinationExistsAsync(27, rail, "BANK", ((int)rail + 1).ToString()));
+        Assert.False(await repo.ActiveDestinationExistsAsync(28, rail, "BANK", ((int)rail + 1).ToString()));
     }
 
     [Fact]
@@ -94,14 +119,14 @@ public sealed class LegacyTransferCompatibilityTests
         var repo = new MemoryBeneficiaries();
         var created = await BeneficiaryEndpoints.CreateCompanyBeneficiary(
             new BeneficiaryCreateDto { Name = " Recipient ", AccountNumber = " 123456 " },
-            Context(), repo, Users(27));
+            Context(), repo, Users(27), null!, null!);
         Assert.Equal(201, ((IStatusCodeHttpResult)created).StatusCode);
         Assert.Equal(27, repo.Item!.CompanyId);
         Assert.Equal("Recipient", repo.Item.Name);
         Assert.Equal("123456", repo.Item.AccountNumber);
         var updated = await BeneficiaryEndpoints.UpdateCompanyBeneficiary(1,
             new BeneficiaryUpdateDto { Name = "Updated", AccountNumber = "654321" },
-            Context(), repo, Users(27));
+            Context(), repo, Users(27), null!, null!);
         Assert.Equal(200, ((IStatusCodeHttpResult)updated).StatusCode);
         Assert.Equal("Updated", repo.Item.Name);
         Assert.Equal(1, repo.Updates);
@@ -110,17 +135,21 @@ public sealed class LegacyTransferCompatibilityTests
     [Theory]
     [InlineData(PaymentRail.OnePay)]
     [InlineData(PaymentRail.LyPay)]
-    [InlineData((PaymentRail)99)]
-    public async Task ApiRejectsRailCreateEditAndList(PaymentRail rail)
+    public async Task ApiEnforcesRailPermissionsBeforeProviderCallsOrWrites(PaymentRail rail)
     {
-        var repo = new MemoryBeneficiaries { Item = new Beneficiary { Id = 1, CompanyId = 27 } };
+        var repo = new MemoryBeneficiaries { Item = new Beneficiary
+        {
+            Id = 1, CompanyId = 27, PaymentRail = rail, Name = "Recipient", AccountNumber = "123456", RowVersion = new byte[8]
+        } };
         var create = await BeneficiaryEndpoints.CreateCompanyBeneficiary(
-            new BeneficiaryCreateDto { PaymentRail = rail }, Context(), repo, Users(27));
+            new BeneficiaryCreateDto { PaymentRail = rail, Name = "Recipient", AccountNumber = "123456" }, Context(), repo, Users(27), null!, null!);
         var edit = await BeneficiaryEndpoints.UpdateCompanyBeneficiary(1,
-            new BeneficiaryUpdateDto { PaymentRail = rail }, Context(), repo, Users(27));
+            new BeneficiaryUpdateDto { PaymentRail = rail, Name = "Recipient", AccountNumber = "123456", RowVersion = Convert.ToBase64String(new byte[8]) }, Context(), repo, Users(27), null!, null!);
         var list = await BeneficiaryEndpoints.GetCompanyBeneficiaries(Context(), repo, Users(27), rail.ToString());
-        foreach (var result in new[] { create, edit, list })
-            Assert.Equal(400, ((IStatusCodeHttpResult)result).StatusCode);
+        var get = await BeneficiaryEndpoints.GetCompanyBeneficiaryById(1, Context(), repo, Users(27));
+        var archive = await BeneficiaryEndpoints.ArchiveCompanyBeneficiary(1, Context(), repo, Users(27));
+        foreach (var result in new[] { create, edit, list, get, archive })
+            Assert.IsType<ForbidHttpResult>(result);
         Assert.Equal(0, repo.Creates);
         Assert.Equal(0, repo.Updates);
     }
@@ -133,10 +162,27 @@ public sealed class LegacyTransferCompatibilityTests
         var repo = new MemoryBeneficiaries { Item = new Beneficiary { Id = 1, CompanyId = owner, IsDeleted = deleted } };
         var get = await BeneficiaryEndpoints.GetCompanyBeneficiaryById(1, Context(), repo, Users(27));
         var edit = await BeneficiaryEndpoints.UpdateCompanyBeneficiary(1,
-            new BeneficiaryUpdateDto { Name = "Changed", AccountNumber = "123" }, Context(), repo, Users(27));
+            new BeneficiaryUpdateDto { Name = "Changed", AccountNumber = "123" }, Context(), repo, Users(27), null!, null!);
         var archive = await BeneficiaryEndpoints.ArchiveCompanyBeneficiary(1, Context(), repo, Users(27));
         foreach (var result in new[] { get, edit, archive })
             Assert.Equal(404, ((IStatusCodeHttpResult)result).StatusCode);
+        Assert.Equal(0, repo.Updates);
+    }
+
+    [Fact]
+    public async Task InvalidPaymentRailIsRejectedBeforeProviderCallsOrWrites()
+    {
+        var rail = (PaymentRail)99;
+        var repo = new MemoryBeneficiaries { Item = new Beneficiary { Id = 1, CompanyId = 27 } };
+        var create = await BeneficiaryEndpoints.CreateCompanyBeneficiary(
+            new BeneficiaryCreateDto { PaymentRail = rail, Name = "Recipient", AccountNumber = "123456" },
+            Context(), repo, Users(27), null!, null!);
+        var edit = await BeneficiaryEndpoints.UpdateCompanyBeneficiary(1,
+            new BeneficiaryUpdateDto { PaymentRail = rail }, Context(), repo, Users(27), null!, null!);
+        var list = await BeneficiaryEndpoints.GetCompanyBeneficiaries(Context(), repo, Users(27), rail.ToString());
+        foreach (var result in new[] { create, edit, list })
+            Assert.Equal(400, ((IStatusCodeHttpResult)result).StatusCode);
+        Assert.Equal(0, repo.Creates);
         Assert.Equal(0, repo.Updates);
     }
 

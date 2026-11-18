@@ -1,5 +1,10 @@
 # Ordinary transfer compatibility rollback
 
+Historical record: the OnePay/LYPay-only release restores the payment routes and
+rail-aware beneficiary model. See [the release notes](onepay-lypay-only-release.md)
+for the current scope and required database preflight. The sections below describe
+the preceding disabled-integration release.
+
 ## Scope
 
 The OnePay/LyPay integration merged in c032d90 is disabled at the API and

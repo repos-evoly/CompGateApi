@@ -26,6 +26,8 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using CompGateApi.Core.OnePay;
+using CompGateApi.Core.LyPay;
 using CompGateApi.Core.Authentication;
 using CompGateApi.Core.Notifications;
 using Microsoft.AspNetCore.Authentication;
@@ -321,8 +323,29 @@ namespace CompGateApi.Core.Startup
       services.AddEndpointsApiExplorer();
       services.AddMemoryCache();
 
-      // OnePay/LyPay routes and workers are intentionally disabled. Ordinary
-      // bank transfers and mobile notifications retain their existing services.
+      services.Configure<OnePayOptions>(config.GetSection(OnePayOptions.SectionName));
+      services.Configure<OnePayReconciliationOptions>(config.GetSection(OnePayReconciliationOptions.SectionName));
+      services.AddHttpClient<IOnePayProviderClient, OnePayProviderClient>((provider, client) =>
+      {
+        var options = provider.GetRequiredService<IOptions<OnePayOptions>>().Value;
+        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+      });
+      services.AddScoped<OnePayTransferService>();
+      services.AddHostedService<OnePayReconciliationWorker>();
+
+      // LYPay shares the OnePay environment settings and provider credentials.
+      services.Configure<LyPayReconciliationOptions>(config.GetSection(LyPayReconciliationOptions.SectionName));
+      services.AddHttpClient<ILyPayProviderClient, LyPayProviderClient>((provider, client) =>
+      {
+        var options = provider.GetRequiredService<IOptions<OnePayOptions>>().Value;
+        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 5, 120));
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+      });
+      services.AddScoped<LyPayTransferService>();
+      services.AddHostedService<LyPayReconciliationWorker>();
 
       // Generic
       services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
