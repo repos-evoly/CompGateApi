@@ -2,11 +2,16 @@ using CompGateApi.Core.Startup;
 using CompGateApi.Data.Seeding;
 using CompGateApi.Extensions;
 using CompGateApi.Hubs;
+using CompGateApi.Middleware;
 
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddServiceTokenEnvironmentAliases();
 builder.RegisterServices();
+builder.Services.AddOptions<ReviewDemoAccessOptions>()
+    .BindConfiguration("ReviewDemo")
+    .Validate(options => options.AuthUserIds.All(id => id > 0), "Review account IDs must be positive.")
+    .ValidateOnStart();
 builder.Logging.ClearProviders();
 builder.Host.ConfigureSerilog();
 
@@ -50,8 +55,9 @@ app.ConfigureExceptionHandler();
 app.UseAlways200ResponseWrapper();
 
 app.UseCors("AllowSpecificOrigins");
-app.ConfigureStaticFiles();
 app.UseAuthentication();
+app.UseMiddleware<ReviewDemoAccessMiddleware>();
+app.ConfigureStaticFiles();
 
 app.UseAuthorization();
 

@@ -2,7 +2,9 @@ using System.Security.Claims;
 using CompGateApi.Abstractions;
 using CompGateApi.Core.Authentication;
 using CompGateApi.Data.Context;
+using CompGateApi.Middleware;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CompGateApi.Endpoints;
 
@@ -35,6 +37,7 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
             .WithTags("Mobile Internal Users");
 
         users.MapGet("/{authUserId:int}/access-context", GetAccessContext)
+            .WithMetadata(new ReviewDemoAccessContextAttribute())
             .WithName("GetMobileUserAccessContext")
             .Produces<MobileUserAccessContextResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
@@ -46,6 +49,7 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
         int authUserId,
         ClaimsPrincipal principal,
         CompGateApiDbContext db,
+        IOptions<ReviewDemoAccessOptions> reviewDemo,
         ILogger<MobileInternalUserEndpoints> logger,
         CancellationToken cancellationToken)
     {
@@ -64,6 +68,7 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
                 user.CompanyId,
                 Role = user.Role != null ? user.Role.NameLT : null,
                 CompanyCode = user.Company != null ? user.Company.Code : null,
+                CompanyActive = user.Company != null && user.Company.IsActive,
                 user.IsActive,
                 user.IsCompanyAdmin
             })
@@ -78,6 +83,9 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
         // an active company administrator in the same company (device enrollment).
         if (callerAuthUserId != target.AuthUserId)
         {
+            if (reviewDemo.Value.Contains(callerAuthUserId))
+                return Results.Forbid();
+
             var caller = await db.Users
                 .AsNoTracking()
                 .Where(user => user.AuthUserId == callerAuthUserId)
@@ -112,13 +120,15 @@ public sealed class MobileInternalUserEndpoints : IEndpoints
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        var isReviewDemo = reviewDemo.Value.Contains(target.AuthUserId);
         return Results.Ok(new MobileUserAccessContextResponse(
             target.AuthUserId,
             target.CompanyCode,
-            target.IsActive,
+            target.IsActive && (!isReviewDemo || target.CompanyActive),
             target.IsCompanyAdmin,
             permissions,
-            target.Role));
+            target.Role,
+            isReviewDemo));
     }
 
     private static bool TryGetAuthUserId(
@@ -139,4 +149,5 @@ public sealed record MobileUserAccessContextResponse(
     bool IsActive,
     bool IsCompanyAdmin,
     IReadOnlyList<string> Permissions,
-    string? Role = null);
+    string? Role = null,
+    bool IsReviewDemo = false);
