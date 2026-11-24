@@ -180,7 +180,7 @@ namespace CompGateApi.Core.Startup
                   logger.LogError(ctx.Exception, "JWT authentication failed");
                   return Task.CompletedTask;
                 },
-          OnTokenValidated = ctx =>
+          OnTokenValidated = async ctx =>
          {
            var logger = ctx.HttpContext.RequestServices
                                 .GetRequiredService<ILoggerFactory>()
@@ -194,7 +194,9 @@ namespace CompGateApi.Core.Startup
              ?? Array.Empty<string>();
 
            logger.LogInformation("Token validated. Roles = {Roles}", string.Join(", ", roles));
-           return Task.CompletedTask;
+           if (ctx.Principal?.HasClaim(claim => claim.Type == "sessionId") == true &&
+               !await CompAuthSessionValidation.CheckAsync(ctx.HttpContext))
+             ctx.Fail("CompAuth session is unavailable or inactive.");
          }
 
 
